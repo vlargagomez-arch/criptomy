@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { io as socketIO, Socket } from "socket.io-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Loader2, Lock, Send, ShieldAlert } from "lucide-react";
+import { Loader2, Lock, Send, ShieldAlert, Wifi, Radio } from "lucide-react";
 import { encryptMessage, decryptMessage } from "@/lib/crypto";
 import { avatarGradient, timeAgo } from "@/lib/format";
 
@@ -40,25 +40,83 @@ export default function TradeChat({
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [decrypted, setDecrypted] = useState<Record<string, string>>({});
+  const [connected, setConnected] = useState(false);
+  const [typing, setTyping] = useState(false);
+  const [counterpartTyping, setCounterpartTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const socketRef = useRef<Socket | null>(null);
 
+  // 1. Cargar historial de mensajes vía REST
   useEffect(() => {
     fetchMessages();
-    const interval = setInterval(fetchMessages, 3000);
-    return () => clearInterval(interval);
   }, [tradeId]);
 
-  // Descifrar mensajes nuevos
+  // 2. Conectar WebSocket para mensajes en tiempo real
+  useEffect(() => {
+    // Conexión vía Caddy con XTransformPort para que el gateway reenvíe al puerto 3003
+    const socket = socketIO("/?XTransformPort=3003", {
+      transports: ["websocket", "polling"],
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5,
+    });
+    socketRef.current = socket;
+
+    socket.on("connect", () => {
+      setConnected(true);
+      console.log("✓ WS conectado");
+      // Unirse a la sala del trade
+      socket.emit("join:trade", {
+        tradeId,
+        userId: currentUserId,
+        alias: currentUserId,
+      });
+    });
+
+    socket.on("disconnect", () => {
+      setConnected(false);
+      console.log("✗ WS desconectado");
+    });
+
+    socket.on("connect_error", (err) => {
+      console.warn("WS error (usando polling como fallback):", err.message);
+      setConnected(false);
+    });
+
+    // Nuevo mensaje en tiempo real
+    socket.on("message:new", (msg: ChatMessage) => {
+      setMessages((prev) => {
+        // Evitar duplicados
+        if (prev.some((m) => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
+    });
+
+    // Indicador de "escribiendo"
+    socket.on("user:typing", (data: { alias: string; isTyping: boolean }) => {
+      setCounterpartTyping(data.isTyping);
+      // Limpiar después de 3s
+      if (data.isTyping) {
+        setTimeout(() => setCounterpartTyping(false), 3000);
+      }
+    });
+
+    return () => {
+      socket.emit("leave:trade", { tradeId });
+      socket.disconnect();
+    };
+  }, [tradeId, currentUserId]);
+
+  // 3. Descifrar mensajes nuevos
   useEffect(() => {
     async function decryptAll() {
       if (!myPrivateKey) return;
       const newDecrypted: Record<string, string> = {};
       for (const m of messages) {
         if (decrypted[m.id]) continue;
-        if (m.sender.id === currentUserId) continue; // los propios ya están en claro
+        if (m.sender.id === currentUserId) continue; // propios
         if (!m.sender.publicKey) continue;
         try {
-          // Soporta dos formatos: {ciphertext, nonce} JSON o campos separados
           let ct = m.ciphertext;
           let nc = m.nonce;
           if (m.ciphertext.startsWith("{")) {
@@ -73,7 +131,7 @@ export default function TradeChat({
             myPrivateKey
           );
           newDecrypted[m.id] = pt;
-        } catch (e) {
+        } catch {
           newDecrypted[m.id] = "[No se pudo descifrar]";
         }
       }
@@ -102,6 +160,7 @@ export default function TradeChat({
     }
   }
 
+  // Enviar mensaje: REST (persistencia) + WebSocket (broadcast en tiempo real)
   async function handleSend() {
     if (!input.trim() || !counterpartPublicKey || !myPrivateKey) return;
     setSending(true);
@@ -122,8 +181,30 @@ export default function TradeChat({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
+
+      // Si el WS está conectado, retransmitir via socket
+      if (socketRef.current?.connected) {
+        socketRef.current.emit("message:sent", {
+          tradeId,
+          messageId: data.message?.id || Date.now().toString(),
+          senderId: currentUserId,
+          senderAlias: currentUserId,
+          senderAvatarSeed: null,
+          ciphertext: enc.ciphertext,
+          nonce: enc.nonce,
+        });
+      }
+
+      // Agregar el mensaje propio a la lista localmente
+      if (data.message) {
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === data.message.id)) return prev;
+          return [...prev, data.message];
+        });
+        // Guardar el texto plano para mostrarlo sin tener que descifrar
+        setDecrypted((prev) => ({ ...prev, [data.message.id]: input }));
+      }
       setInput("");
-      await fetchMessages();
     } catch (e) {
       alert("Error al enviar: " + (e as Error).message);
     } finally {
@@ -131,18 +212,44 @@ export default function TradeChat({
     }
   }
 
+  // Indicador de "escribiendo"
+  function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setInput(e.target.value);
+    if (socketRef.current?.connected && !typing) {
+      setTyping(true);
+      socketRef.current.emit("user:typing", { tradeId, isTyping: true });
+    }
+    // Si deja de escribir por 2s, apagar indicador
+    setTimeout(() => {
+      if (typing && socketRef.current?.connected) {
+        socketRef.current.emit("user:typing", { tradeId, isTyping: false });
+        setTyping(false);
+      }
+    }, 2000);
+  }
+
   const canChat = !!counterpartPublicKey && !!myPrivateKey;
 
   return (
     <div className="flex flex-col h-[500px] border border-slate-800 rounded-lg overflow-hidden bg-slate-950">
-      {/* Header */}
+      {/* Header con estado de conexión */}
       <div className="px-3 py-2 border-b border-slate-800 flex items-center justify-between bg-slate-900">
-        <div className="flex items-center gap-2 text-xs text-emerald-400">
-          <Lock className="w-3 h-3" />
-          Mensajes cifrados E2E (ECDH + AES-GCM-256)
+        <div className="flex items-center gap-2 text-xs">
+          <Lock className="w-3 h-3 text-emerald-400" />
+          <span className="text-emerald-400">Cifrado E2E (ECDH + AES-GCM-256)</span>
         </div>
-        <div className="text-[10px] text-slate-500">
-          Auto-refresh 3s
+        <div className="flex items-center gap-2 text-[10px]">
+          {connected ? (
+            <>
+              <Wifi className="w-3 h-3 text-emerald-400" />
+              <span className="text-emerald-400">WS conectado</span>
+            </>
+          ) : (
+            <>
+              <Radio className="w-3 h-3 text-yellow-400 animate-pulse" />
+              <span className="text-yellow-400">Polling (3s)</span>
+            </>
+          )}
         </div>
       </div>
 
@@ -176,9 +283,7 @@ export default function TradeChat({
             messages.map((m) => {
               const mine = m.sender.id === currentUserId;
               const text = mine
-                ? // Para mis propios mensajes tendríamos que re-cifrar para mostrar;
-                  // en MVP simplificado, mostramos como "enviado" si no podemos descifrar
-                  decrypted[m.id] || "[mensaje cifrado enviado]"
+                ? decrypted[m.id] || "[mensaje cifrado enviado]"
                 : decrypted[m.id] || "[descifrando…]";
               return (
                 <div
@@ -210,6 +315,16 @@ export default function TradeChat({
               );
             })
           )}
+          {counterpartTyping && (
+            <div className="flex gap-2 items-center text-xs text-slate-500 italic">
+              <span className="flex gap-0.5">
+                <span className="w-1 h-1 bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                <span className="w-1 h-1 bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                <span className="w-1 h-1 bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+              </span>
+              escribiendo…
+            </div>
+          )}
         </div>
       )}
 
@@ -218,7 +333,7 @@ export default function TradeChat({
         <div className="border-t border-slate-800 p-2 flex gap-2">
           <Input
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={handleInputChange}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
             placeholder="Escriba un mensaje…"
             className="bg-slate-900 border-slate-700 text-slate-100 placeholder:text-slate-600 text-sm"

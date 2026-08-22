@@ -17,16 +17,23 @@ import {
   AlertTriangle,
   Key,
   ExternalLink,
+  RefreshCw,
+  Zap,
+  Loader2,
 } from "lucide-react";
 import {
   CHAINS,
+  TOKENS,
   ChainConfig,
+  TokenConfig,
 } from "@/lib/blockchain/config";
 import {
   reputationLabel,
   avatarGradient,
   fmtDate,
+  fmtCrypto,
 } from "@/lib/format";
+import { getMarketPrice, fetchChainlinkPrice, timeSinceUpdate } from "@/lib/chainlink";
 
 interface DashboardData {
   user: {
@@ -41,6 +48,7 @@ interface DashboardData {
     avatarSeed: string | null;
     bio: string | null;
     publicKey: string | null;
+    createdAt: string;
   };
   stats: {
     activeOffers: number;
@@ -60,14 +68,28 @@ interface DashboardData {
   }>;
 }
 
+interface BalanceInfo {
+  chain: string;
+  symbol: string;
+  balance: string;
+  usdValue: number | null;
+  loading: boolean;
+  error: string | null;
+}
+
 export default function WalletView() {
   const { user, setTab } = useApp();
   const [dash, setDash] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [balances, setBalances] = useState<BalanceInfo[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [prices, setPrices] = useState<Record<string, number | null>>({});
 
   useEffect(() => {
     if (!user) return;
     fetchDashboard();
+    fetchBalances();
+    fetchPrices();
   }, [user]);
 
   async function fetchDashboard() {
@@ -79,6 +101,80 @@ export default function WalletView() {
       console.error(e);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function fetchBalances() {
+    if (!user) return;
+    setRefreshing(true);
+    const chainsToCheck: Array<{ chain: ChainConfig; tokens: TokenConfig[] }> = [];
+    for (const chain of Object.values(CHAINS)) {
+      const tokens = TOKENS.filter((t) => t.chain === chain.id);
+      chainsToCheck.push({ chain, tokens });
+    }
+
+    const newBalances: BalanceInfo[] = [];
+    for (const { chain, tokens } of chainsToCheck) {
+      for (const token of tokens) {
+        if (
+          (token.chain === "ETHEREUM" &&
+            (token.symbol === "ETH" ||
+              token.symbol === "USDT" ||
+              token.symbol === "USDC")) ||
+          (token.chain === "BITCOIN" && token.symbol === "BTC") ||
+          (token.chain === "TRON" && token.symbol === "TRX") ||
+          (token.chain === "MONERO" && token.symbol === "XMR")
+        ) {
+          newBalances.push({
+            chain: chain.name,
+            symbol: token.symbol,
+            balance: "—",
+            usdValue: null,
+            loading: true,
+            error: null,
+          });
+          try {
+            // Usar la API backend para evitar CORS
+            const url = token.contractAddress
+              ? `/api/balance?address=${user.walletAddress}&chain=${chain.id}&token=${token.contractAddress}`
+              : `/api/balance?address=${user.walletAddress}&chain=${chain.id}`;
+            const res = await fetch(url);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "RPC error");
+            const idx = newBalances.length - 1;
+            newBalances[idx] = {
+              ...newBalances[idx],
+              balance: data.balance,
+              loading: false,
+            };
+          } catch (e) {
+            const idx = newBalances.length - 1;
+            newBalances[idx] = {
+              ...newBalances[idx],
+              loading: false,
+              error: (e as Error).message.slice(0, 50),
+            };
+          }
+        }
+      }
+    }
+    setBalances(newBalances);
+    setRefreshing(false);
+  }
+
+  async function fetchPrices() {
+    try {
+      // La API devuelve todos los pares si no se especifica
+      const res = await fetch("/api/price");
+      const data = await res.json();
+      const newPrices: Record<string, number | null> = {};
+      for (const [pair, info] of Object.entries(data.prices || {})) {
+        const p = info as { price: number } | null;
+        newPrices[pair] = p?.price || null;
+      }
+      setPrices(newPrices);
+    } catch (e) {
+      console.error(e);
     }
   }
 
@@ -105,18 +201,33 @@ export default function WalletView() {
   }
 
   const rep = reputationLabel(dash.user.reputationScore);
-  const chains = Object.values(CHAINS);
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
-          <Wallet className="w-5 h-5 text-emerald-400" />
-          Mi panel
-        </h1>
-        <p className="text-sm text-slate-400">
-          Identidad pseudónima · sin datos personales
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
+            <Wallet className="w-5 h-5 text-emerald-400" />
+            Mi panel
+          </h1>
+          <p className="text-sm text-slate-400">
+            Identidad pseudónima · saldos on-chain reales
+          </p>
+        </div>
+        <Button
+          onClick={fetchBalances}
+          disabled={refreshing}
+          variant="outline"
+          size="sm"
+          className="border-slate-700 text-slate-300 hover:bg-slate-800"
+        >
+          {refreshing ? (
+            <Loader2 className="w-3 h-3 mr-2 animate-spin" />
+          ) : (
+            <RefreshCw className="w-3 h-3 mr-2" />
+          )}
+          Actualizar saldos
+        </Button>
       </div>
 
       {/* Identidad */}
@@ -164,7 +275,7 @@ export default function WalletView() {
                 ★ {dash.user.reputationScore.toFixed(0)}/100 · {rep.label}
               </span>
               <span className="text-xs text-slate-500">
-                · miembro desde {fmtDate(dash.user.createdAt || new Date())}
+                · miembro desde {fmtDate(dash.user.createdAt)}
               </span>
             </div>
           </div>
@@ -202,6 +313,74 @@ export default function WalletView() {
           color="text-red-400"
         />
       </div>
+
+      {/* Saldos on-chain reales */}
+      <Card className="bg-slate-900/60 border-slate-800 p-5">
+        <h3 className="text-sm font-semibold text-slate-100 mb-3 flex items-center gap-2">
+          <Zap className="w-4 h-4 text-emerald-400" />
+          Saldos on-chain reales (vía RPC público)
+        </h3>
+        <div className="space-y-2">
+          {balances.length === 0 && !refreshing && (
+            <p className="text-xs text-slate-500 text-center py-3">
+              No se consultaron saldos. Haga clic en "Actualizar saldos".
+            </p>
+          )}
+          {balances.map((b, i) => {
+            const usdValue =
+              b.usdValue ||
+              (prices[`${b.symbol}/USD`] &&
+                parseFloat(b.balance) * prices[`${b.symbol}/USD`!]);
+            return (
+              <div
+                key={`${b.chain}-${b.symbol}-${i}`}
+                className="flex items-center justify-between p-2 rounded-md bg-slate-950 border border-slate-800"
+              >
+                <div className="flex items-center gap-2">
+                  <span
+                    className="w-2.5 h-2.5 rounded-full"
+                    style={{
+                      background:
+                        Object.values(CHAINS).find((c) => c.name === b.chain)
+                          ?.color || "#666",
+                    }}
+                  />
+                  <div>
+                    <div className="text-sm font-medium text-slate-200">
+                      {b.symbol}
+                    </div>
+                    <div className="text-[10px] text-slate-500">{b.chain}</div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  {b.loading ? (
+                    <Loader2 className="w-3 h-3 animate-spin text-slate-500 ml-auto" />
+                  ) : b.error ? (
+                    <div className="text-[10px] text-red-400">error</div>
+                  ) : (
+                    <>
+                      <div className="text-sm font-mono text-slate-100">
+                        {fmtCrypto(parseFloat(b.balance), b.symbol === "BTC" || b.symbol === "XMR" ? 8 : 6)}{" "}
+                        {b.symbol}
+                      </div>
+                      {usdValue && usdValue > 0 && (
+                        <div className="text-[10px] text-emerald-400">
+                          ≈ ${usdValue.toFixed(2)} USD
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <p className="text-[10px] text-slate-500 mt-3">
+          Precios en tiempo real vía Chainlink (Ethereum mainnet). Saldos leídos
+          vía RPC público sin API key. Para BTC y XMR solo se muestra el balance
+          nativo.
+        </p>
+      </Card>
 
       {/* Claves */}
       <Card className="bg-slate-900/60 border-slate-800 p-5">
@@ -244,13 +423,13 @@ export default function WalletView() {
         </div>
       </Card>
 
-      {/* Multi-chain */}
+      {/* Multi-chain explorers */}
       <Card className="bg-slate-900/60 border-slate-800 p-5">
         <h3 className="text-sm font-semibold text-slate-100 mb-3">
-          Cadenas soportadas
+          Ver en exploradores
         </h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {chains.map((c) => (
+          {Object.values(CHAINS).map((c) => (
             <a
               key={c.id}
               href={`${c.explorerUrl}/address/${dash.user.walletAddress}`}
@@ -276,10 +455,6 @@ export default function WalletView() {
             </a>
           ))}
         </div>
-        <p className="text-[10px] text-slate-500 mt-3">
-          Nota: en MVP se usa una sola dirección para todas las cadenas. En
-          producción, cada cadena tendría su dirección derivada.
-        </p>
       </Card>
 
       {/* Feedbacks recientes */}

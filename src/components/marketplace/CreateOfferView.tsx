@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useApp } from "@/lib/store";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, PlusCircle, Check, Info } from "lucide-react";
+import { Loader2, PlusCircle, Check, Info, Zap, TrendingUp } from "lucide-react";
 import {
   CHAINS,
   TOKENS,
@@ -24,6 +24,7 @@ import {
   FIAT_CURRENCIES,
 } from "@/lib/blockchain/config";
 import { fmtCrypto, fmtFiat } from "@/lib/format";
+import { getMarketPrice, timeSinceUpdate } from "@/lib/chainlink";
 
 export default function CreateOfferView() {
   const { user, setTab } = useApp();
@@ -41,6 +42,27 @@ export default function CreateOfferView() {
   const [pricePerUnit, setPricePerUnit] = useState("");
   const [priceType, setPriceType] = useState<"FIXED" | "MARKET">("FIXED");
   const [marketMargin, setMarketMargin] = useState("0");
+  const [marketPrice, setMarketPrice] = useState<{
+    price: number;
+    source: string;
+    updatedAt: number;
+  } | null>(null);
+  const [loadingMarketPrice, setLoadingMarketPrice] = useState(false);
+
+  // Cargar precio de mercado de Chainlink cuando cambia el asset o currency
+  useEffect(() => {
+    if (priceType !== "MARKET") return;
+    setLoadingMarketPrice(true);
+    getMarketPrice(asset, currency)
+      .then((p) => setMarketPrice(p))
+      .catch(() => setMarketPrice(null))
+      .finally(() => setLoadingMarketPrice(false));
+  }, [asset, currency, priceType]);
+
+  // Precio calculado con margen
+  const calculatedPrice = marketPrice
+    ? marketPrice.price * (1 + (parseFloat(marketMargin) || 0) / 100)
+    : null;
   const [paymentWindowMin, setPaymentWindowMin] = useState("60");
   const [terms, setTerms] = useState("");
   const [selectedMethods, setSelectedMethods] = useState<string[]>([]);
@@ -278,8 +300,58 @@ export default function CreateOfferView() {
               placeholder="0.00"
               className="bg-slate-950 border-slate-700 text-slate-100 font-mono"
             />
+            {priceType === "MARKET" && calculatedPrice && (
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                className="text-emerald-400 text-xs h-auto p-0 mt-1"
+                onClick={() => setPricePerUnit(calculatedPrice.toFixed(2))}
+              >
+                Usar precio Chainlink: {fmtFiat(calculatedPrice, currency)}
+              </Button>
+            )}
           </div>
         </div>
+
+        {/* Precio Chainlink en tiempo real */}
+        {priceType === "MARKET" && (
+          <Card className="bg-emerald-950/20 border-emerald-900/40 p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Zap className="w-4 h-4 text-emerald-400" />
+                <div>
+                  <div className="text-xs font-medium text-emerald-300">
+                    Precio de mercado (Chainlink Oracle)
+                  </div>
+                  {loadingMarketPrice ? (
+                    <div className="text-[10px] text-slate-500">
+                      Consultando contrato…
+                    </div>
+                  ) : marketPrice ? (
+                    <div className="text-[10px] text-slate-400">
+                      {fmtFiat(marketPrice.price, currency)} / {asset}
+                      {" · "}
+                      actualizado {timeSinceUpdate(marketPrice.updatedAt)}
+                    </div>
+                  ) : (
+                    <div className="text-[10px] text-yellow-500">
+                      No hay feed Chainlink para este par. Use precio fijo.
+                    </div>
+                  )}
+                </div>
+              </div>
+              {calculatedPrice && (
+                <div className="text-right">
+                  <div className="text-[10px] text-slate-500">Con margen {marketMargin}%</div>
+                  <div className="font-mono text-emerald-400 text-sm">
+                    {fmtFiat(calculatedPrice, currency)}
+                  </div>
+                </div>
+              )}
+            </div>
+          </Card>
+        )}
 
         {/* Tipo de precio */}
         <div className="grid grid-cols-2 gap-3">

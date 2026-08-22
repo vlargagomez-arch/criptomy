@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { ethers } from "ethers";
 
 export interface CurrentUser {
   id: string;
@@ -24,17 +25,26 @@ export type TabKey =
   | "billetera"
   | "reputacion"
   | "disputas"
-  | "tor";
+  | "tor"
+  | "deploy";
 
 interface AppState {
   user: CurrentUser | null;
   tab: TabKey;
-  privateKey: string | null; // clave ECDH privada en localStorage (no servidor)
+  privateKey: string | null;
   connecting: boolean;
+  // Signer de ethers (no se persiste, se re-obtiene al reconectar)
+  signer: ethers.JsonRpcSigner | null;
+  chainId: number | null;
+  // Dirección del contrato de escrow desplegado (persistida en localStorage)
+  escrowAddress: string | null;
   setTab: (t: TabKey) => void;
   setUser: (u: CurrentUser | null) => void;
   setPrivateKey: (k: string | null) => void;
   setConnecting: (b: boolean) => void;
+  setSigner: (s: ethers.JsonRpcSigner | null) => void;
+  setChainId: (c: number | null) => void;
+  setEscrowAddress: (a: string | null) => void;
   logout: () => void;
 }
 
@@ -45,12 +55,34 @@ export const useApp = create<AppState>()(
       tab: "inicio",
       privateKey: null,
       connecting: false,
+      signer: null,
+      chainId: null,
+      escrowAddress: null,
       setTab: (t) => set({ tab: t }),
       setUser: (u) => set({ user: u }),
       setPrivateKey: (k) => set({ privateKey: k }),
       setConnecting: (b) => set({ connecting: b }),
-      logout: () => set({ user: null, privateKey: null, tab: "inicio" }),
+      setSigner: (s) => set({ signer: s }),
+      setChainId: (c) => set({ chainId: c }),
+      setEscrowAddress: (a) => set({ escrowAddress: a }),
+      logout: () =>
+        set({
+          user: null,
+          privateKey: null,
+          tab: "inicio",
+          signer: null,
+          chainId: null,
+        }),
     }),
-    { name: "p2p-crypto-no-kyc" }
+    {
+      name: "p2p-crypto-no-kyc",
+      // No persistir el signer (no es serializable)
+      partialize: (state) => ({
+        user: state.user,
+        privateKey: state.privateKey,
+        tab: state.tab,
+        escrowAddress: state.escrowAddress,
+      }),
+    }
   )
 );

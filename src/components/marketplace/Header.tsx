@@ -22,6 +22,7 @@ import {
   Star,
   AlertTriangle,
   Shield,
+  Rocket,
   ChevronDown,
   LogOut,
   Copy,
@@ -36,6 +37,7 @@ const TABS: { key: TabKey; label: string; icon: React.ElementType }[] = [
   { key: "billetera", label: "Billetera", icon: Wallet },
   { key: "reputacion", label: "Reputación", icon: Star },
   { key: "disputas", label: "Disputas", icon: AlertTriangle },
+  { key: "deploy", label: "Desplegar contrato", icon: Rocket },
   { key: "tor", label: "Guía Tor", icon: Shield },
 ];
 

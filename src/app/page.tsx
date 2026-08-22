@@ -10,6 +10,7 @@ import WalletView from "@/components/marketplace/WalletView";
 import ReputationView from "@/components/marketplace/ReputationView";
 import DisputesView from "@/components/marketplace/DisputesView";
 import TorGuideView from "@/components/marketplace/TorGuideView";
+import DeployContractView from "@/components/marketplace/DeployContractView";
 
 export default function Home() {
   const { tab } = useApp();
@@ -25,6 +26,7 @@ export default function Home() {
         {tab === "billetera" && <WalletView />}
         {tab === "reputacion" && <ReputationView />}
         {tab === "disputas" && <DisputesView />}
+        {tab === "deploy" && <DeployContractView />}
         {tab === "tor" && <TorGuideView />}
       </main>
       <Footer />

@@ -294,18 +294,35 @@ function TradeDetailModal({
   onClose: () => void;
   onUpdate: () => void;
 }) {
-  const { privateKey } = useApp();
+  const { privateKey, escrowAddress } = useApp();
   const isBuyer = trade.buyer.id === currentUserId;
   const isSeller = trade.seller.id === currentUserId;
   const counterpart = isBuyer ? trade.seller : trade.buyer;
   const chain = trade.escrowChain ? CHAINS[trade.escrowChain] : null;
   const pm = PAYMENT_METHODS.find((p) => p.id === trade.paymentMethod);
   const [actionLoading, setActionLoading] = useState(false);
+  const [actionMsg, setActionMsg] = useState("");
   const [disputeOpen, setDisputeOpen] = useState(false);
   const [disputeReason, setDisputeReason] = useState("");
 
+  async function ensureSigner() {
+    const { connectWallet } = await import("@/lib/web3");
+    const { signer, address } = await connectWallet();
+    // Verificar que la wallet conectada coincide con el usuario logueado
+    if (
+      address.toLowerCase() !==
+      (isSeller ? trade.seller : trade.buyer)?.walletAddress?.toLowerCase()
+    ) {
+      throw new Error(
+        `Wallet conectada (${address}) no coincide con su usuario. Conecte la wallet correcta.`
+      );
+    }
+    return signer;
+  }
+
   async function updateStatus(status: string, extra: Record<string, unknown> = {}) {
     setActionLoading(true);
+    setActionMsg("");
     try {
       const res = await fetch(`/api/trades/${trade.id}`, {
         method: "PATCH",
@@ -323,10 +340,138 @@ function TradeDetailModal({
     }
   }
 
-  async function openDispute() {
+  // ====== Acciones on-chain reales (vía MetaMask + ethers) ======
+
+  // Vendedor: fondear el escrow (createTrade + fundTrade)
+  async function fundEscrowOnChain() {
+    setActionLoading(true);
+    setActionMsg("Conectando MetaMask…");
+    try {
+      if (!escrowAddress) {
+        throw new Error(
+          "No hay contrato de escrow desplegado. Vaya a la pestaña Desplegar contrato primero."
+        );
+      }
+      const signer = await ensureSigner();
+
+      // 1. computeTradeId determinista
+      const { toBytes32 } = await import("@/lib/web3");
+      const tradeId = toBytes32(trade.id);
+      const tradeHash = toBytes32(`${trade.id}-${Date.now()}`);
+
+      // 2. Aprobar y fondear (createTrade + fundTrade)
+      setActionMsg("Confirmando createTrade en MetaMask…");
+      const { createTradeOnChain, fundTradeOnChain } = await import("@/lib/web3");
+
+      const tokenAddress = "0x0000000000000000000000000000000000000000"; // ETH nativo por ahora
+      const arbitrator = "0x0000000000000000000000000000000000000000"; // sin árbitro
+
+      // createTrade
+      const createTxHash = await createTradeOnChain({
+        escrowAddress,
+        signer,
+        tradeId,
+        buyer: trade.buyer.walletAddress,
+        arbitrator,
+        token: tokenAddress,
+        amount: String(trade.cryptoAmount),
+        decimals: 18,
+        paymentWindowSec: trade.offer.paymentWindowMin * 60,
+        tradeHash,
+      });
+
+      setActionMsg("Confirmando fundTrade en MetaMask (enviar ETH al contrato)…");
+      const fundTxHash = await fundTradeOnChain({
+        escrowAddress,
+        signer,
+        tradeId,
+        token: tokenAddress,
+        amount: String(trade.cryptoAmount),
+        decimals: 18,
+      });
+
+      setActionMsg("Transacción confirmada ✓");
+      await updateStatus("ESCROW_FUNDED", {
+        escrowAddress,
+        escrowTxHash: fundTxHash,
+      });
+    } catch (e) {
+      setActionMsg("");
+      alert("Error on-chain: " + (e as Error).message);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  // Vendedor: liberar fondos al comprador (releaseToBuyer)
+  async function releaseOnChain() {
+    setActionLoading(true);
+    setActionMsg("Conectando MetaMask…");
+    try {
+      if (!escrowAddress) throw new Error("No hay contrato desplegado");
+      const signer = await ensureSigner();
+      const { toBytes32, releaseToBuyerOnChain } = await import("@/lib/web3");
+      const tradeId = toBytes32(trade.id);
+
+      setActionMsg("Confirmando releaseToBuyer en MetaMask…");
+      const txHash = await releaseToBuyerOnChain({
+        escrowAddress,
+        signer,
+        tradeId,
+      });
+
+      setActionMsg("Fondos liberados ✓");
+      await updateStatus("COMPLETED", { releaseTxHash: txHash });
+    } catch (e) {
+      setActionMsg("");
+      alert("Error on-chain: " + (e as Error).message);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  // Cancelar trade on-chain
+  async function cancelOnChain() {
+    setActionLoading(true);
+    setActionMsg("Conectando MetaMask…");
+    try {
+      if (!escrowAddress) {
+        // Si no hay contrato, solo actualizamos DB
+        await updateStatus("CANCELLED");
+        return;
+      }
+      const signer = await ensureSigner();
+      const { toBytes32, cancelTradeOnChain } = await import("@/lib/web3");
+      const tradeId = toBytes32(trade.id);
+
+      setActionMsg("Confirmando cancel en MetaMask…");
+      await cancelTradeOnChain({ escrowAddress, signer, tradeId });
+
+      setActionMsg("Trade cancelado ✓");
+      await updateStatus("CANCELLED");
+    } catch (e) {
+      setActionMsg("");
+      alert("Error on-chain: " + (e as Error).message);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  // Abrir disputa on-chain + en DB
+  async function openDisputeOnChain() {
     if (!disputeReason.trim()) return;
     setActionLoading(true);
+    setActionMsg("Conectando MetaMask…");
     try {
+      if (escrowAddress) {
+        const signer = await ensureSigner();
+        const { toBytes32, raiseDisputeOnChain } = await import("@/lib/web3");
+        const tradeId = toBytes32(trade.id);
+        setActionMsg("Confirmando raiseDispute en MetaMask…");
+        await raiseDisputeOnChain({ escrowAddress, signer, tradeId });
+      }
+
+      // Abrir disputa en DB
       const res = await fetch("/api/disputes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -342,6 +487,7 @@ function TradeDetailModal({
       onUpdate();
       onClose();
     } catch (e) {
+      setActionMsg("");
       alert("Error: " + (e as Error).message);
     } finally {
       setActionLoading(false);
@@ -523,27 +669,14 @@ function TradeDetailModal({
 
               {isSeller && trade.status === "PENDING_ESCROW" && (
                 <Button
-                  onClick={() =>
-                    updateStatus("ESCROW_FUNDED", {
-                      escrowAddress:
-                        "0x" +
-                        Math.random()
-                          .toString(16)
-                          .slice(2)
-                          .padStart(40, "0"),
-                      escrowTxHash:
-                        "0x" +
-                        Math.random()
-                          .toString(16)
-                          .slice(2)
-                          .padStart(64, "0"),
-                    })
-                  }
+                  onClick={fundEscrowOnChain}
                   disabled={actionLoading}
                   className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
                 >
                   <Lock className="w-4 h-4 mr-2" />
-                  Depositar en escrow (simulado)
+                  {escrowAddress
+                    ? "Depositar en escrow (on-chain real)"
+                    : "Depositar en escrow (registro local)"}
                 </Button>
               )}
 
@@ -570,12 +703,12 @@ function TradeDetailModal({
                     Confirmar recepción del pago
                   </Button>
                   <Button
-                    onClick={() => updateStatus("COMPLETED")}
+                    onClick={releaseOnChain}
                     disabled={actionLoading}
                     className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
                   >
                     <Star className="w-4 h-4 mr-2" />
-                    Liberar fondos del escrow
+                    Liberar fondos del escrow (on-chain real)
                   </Button>
                 </>
               )}
@@ -584,7 +717,7 @@ function TradeDetailModal({
                 trade.status === "ESCROW_FUNDED" ||
                 trade.status === "PAYMENT_SENT") && (
                 <Button
-                  onClick={() => updateStatus("CANCELLED")}
+                  onClick={cancelOnChain}
                   disabled={actionLoading}
                   variant="outline"
                   className="w-full border-slate-700 text-slate-400 hover:bg-slate-800"
@@ -603,7 +736,7 @@ function TradeDetailModal({
                   className="w-full border-red-900/50 text-red-400 hover:bg-red-950/30"
                 >
                   <AlertTriangle className="w-4 h-4 mr-2" />
-                  Abrir disputa
+                  Abrir disputa{escrowAddress ? " (on-chain)" : ""}
                 </Button>
               )}
 
@@ -617,12 +750,21 @@ function TradeDetailModal({
                     rows={3}
                   />
                   <Button
-                    onClick={openDispute}
+                    onClick={openDisputeOnChain}
                     disabled={actionLoading || !disputeReason.trim()}
                     className="w-full bg-red-600 hover:bg-red-700 text-white"
                   >
-                    Confirmar apertura de disputa
+                    {escrowAddress
+                      ? "Confirmar disputa on-chain"
+                      : "Confirmar disputa"}
                   </Button>
+                </div>
+              )}
+
+              {actionMsg && (
+                <div className="flex items-center gap-2 text-xs text-emerald-300 bg-emerald-950/30 border border-emerald-900/50 p-2 rounded-md">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  {actionMsg}
                 </div>
               )}
 
