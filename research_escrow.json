@@ -1,0 +1,56 @@
+[
+  {
+    "url": "https://arxiv.org/html/2502.16017v1",
+    "name": "An Extended Pattern Collection for Blockchain-based Applications - arXiv",
+    "snippet": "Feb 22, 2025 · A common simple example of a smart contract-enabled service is escrow, which can hold funds until the obligations defined in the smart contract ...",
+    "host_name": "arxiv.org",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://research.csiro.au/blockchainpatterns/general-patterns/blockchain-payment-patterns/escrow-2",
+    "name": "Escrow – Blockchain Patterns - CSIRO Research",
+    "snippet": "An escrow smart contract reduces the risk of fraud by acting as a neutral party and ensuring proper escrow logic execution.",
+    "host_name": "research.csiro.au",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://easychair.org/publications/paper/lMgW/open",
+    "name": "[PDF] A Decentralised Escrow Protocol for Enabling Secure Transactions",
+    "snippet": "The proposed protocol takes an escrow, a third- party smart contract to receive tokens before a transaction get completed. (P2P) currency,",
+    "host_name": "easychair.org",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://pubs.aip.org/aip/acp/article/3175/1/030009/3339045/ESKROW-A-P2P-protocol-for-trustless-transactions",
+    "name": "ESKROW A P2P protocol for trustless transactions - AIP Publishing",
+    "snippet": "Mar 10, 2025 · The protocol uses a combination of smart contracts and cryptography techniques to create an escrow system that is resistant to fraud and ...",
+    "host_name": "pubs.aip.org",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC10974787",
+    "name": "DataMesh+: A Blockchain-Powered Peer-to-Peer Data Exchange Model",
+    "snippet": "Peer-to-peer (P2P) marketplaces play a crucial role in establishing direct connections between data providers and consumers. an escrow smart contract.",
+    "host_name": "pmc.ncbi.nlm.nih.gov",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://meshjs.dev/smart-contracts/escrow",
+    "name": "Escrow Contract | Mesh SDK - MeshJS",
+    "snippet": "Rating 4.8 (150) · Free · Developer The Escrow contract enables two parties to securely exchange assets. One party initiates the escrow by depositing assets, the other party deposits their assets,",
+    "host_name": "meshjs.dev",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  }
+]

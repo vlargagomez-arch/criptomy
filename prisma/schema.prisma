@@ -1,0 +1,228 @@
+// Schema Prisma - Plataforma P2P cripto sin KYC
+// Modela: usuarios pseudónimos, ofertas, trades con escrow, mensajes, reputación, disputas
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Usuario pseudónimo: sin email, sin KYC, sin datos PII.
+// Se identifica solo por alias + dirección de wallet + clave pública.
+model User {
+  id              String   @id @default(cuid())
+  alias           String   @unique // alias público tipo "satoshi_trader_87"
+  walletAddress   String   @unique // dirección on-chain principal
+  publicKey       String?  // clave pública para cifrado E2E (X25519)
+  pgpFingerprint  String?  // huella PGP opcional para verificación off-chain
+  bio             String?
+  avatarSeed      String?  // seed para avatar determinístico (identicon)
+  torOnly         Boolean  @default(false) // marca si el usuario exige conexión vía Tor
+  reputationScore Float    @default(0) // 0-100, calculado a partir de feedbacks
+  totalTrades     Int      @default(0)
+  completedTrades Int      @default(0)
+  disputedTrades  Int      @default(0)
+  createdAt       DateTime @default(now())
+  lastSeenAt      DateTime @default(now())
+
+  offers          Offer[]
+  tradesAsBuyer   Trade[]  @relation("TradeBuyer")
+  tradesAsSeller  Trade[]  @relation("TradeSeller")
+  feedbacksGiven  Feedback[]
+  feedbacksRecv   Feedback[] @relation("FeedbackReceiver")
+  messages        Message[]
+  disputesOpened  Dispute[] @relation("DisputeOpener")
+  disputesAgainst Dispute[] @relation("DisputeDefendant")
+}
+
+// Oferta P2P: "vendo X BTC por Y COP vía Nequi"
+model Offer {
+  id              String   @id @default(cuid())
+  type            OfferType // BUY o SELL
+  creatorId       String
+  creator         User     @relation(fields: [creatorId], references: [id])
+
+  // Asset en juego
+  chain           Chain    // ETH, BTC, TRON, XMR
+  asset           String   // símbolo: BTC, ETH, USDT, USDC, XMR, etc.
+  amount          Float    // cantidad de cripto
+  minAmount       Float?   // mínimo por trade parcial
+  maxAmount       Float?   // máximo por trade parcial
+
+  // Fiat o contra-asset
+  currency        String   // COP, USD, EUR, MXN, ARS, VES, etc.
+  pricePerUnit    Float    // precio en fiat por unidad de cripto
+  priceType       PriceType // FIXED o MARKET (con margen)
+  marketMargin    Float?   // % sobre/bajo precio de mercado si priceType = MARKET
+
+  // Métodos de pago aceptados (CSV: "NEQUI,DAVIPLATA,PSE,CASH_IN_PERSON")
+  paymentMethods  String
+
+  // Términos legibles por el humano
+  terms           String
+
+  // Límites y ventana de pago
+  paymentWindowMin Int     @default(60) // minutos máximos para pagar fiat
+  escrowType      EscrowType @default(SMART_CONTRACT)
+
+  // Estado
+  status          OfferStatus @default(ACTIVE)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  trades          Trade[]
+}
+
+// Trade concreto entre dos partes sobre una oferta
+model Trade {
+  id              String   @id @default(cuid())
+  offerId         String
+  offer           Offer    @relation(fields: [offerId], references: [id])
+
+  buyerId         String
+  buyer           User     @relation("TradeBuyer", fields: [buyerId], references: [id])
+  sellerId        String
+  seller          User     @relation("TradeSeller", fields: [sellerId], references: [id])
+
+  // Cantidades congeladas al abrir el trade
+  cryptoAmount    Float
+  fiatAmount      Float
+  pricePerUnit    Float
+
+  // Método de pago seleccionado y detalles de contacto (cifrados en reposo)
+  paymentMethod   String
+  paymentDetails  String   // cifrado con publicKey del vendedor
+
+  // Estado del escrow on-chain
+  escrowAddress   String?  // dirección del smart contract de escrow desplegado
+  escrowTxHash    String?  // tx hash del depósito
+  releaseTxHash   String?  // tx hash de liberación
+  escrowChain     Chain?
+  escrowAsset     String?
+
+  // Estado del trade
+  status          TradeStatus @default(PENDING_ESCROW)
+  disputeStarted  Boolean  @default(false)
+
+  // Timestamps de cada etapa para auditoría
+  escrowFundedAt  DateTime?
+  paymentSentAt   DateTime?
+  paymentConfirmedAt DateTime?
+  releasedAt      DateTime?
+  completedAt     DateTime?
+  cancelledAt     DateTime?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  messages        Message[]
+  feedbacks       Feedback[]
+  dispute         Dispute?
+}
+
+// Mensaje cifrado E2E entre las partes de un trade
+model Message {
+  id              String   @id @default(cuid())
+  tradeId         String
+  trade           Trade    @relation(fields: [tradeId], references: [id])
+  senderId        String
+  sender          User     @relation(fields: [senderId], references: [id])
+
+  // Contenido cifrado con la clave pública del destinatario (NaCl box / X25519)
+  ciphertext      String
+  nonce           String
+
+  createdAt       DateTime @default(now())
+}
+
+// Feedback posterior a un trade (estilo LocalBitcoins)
+model Feedback {
+  id              String   @id @default(cuid())
+  tradeId         String
+  trade           Trade    @relation(fields: [tradeId], references: [id])
+  fromUserId      String
+  fromUser        User     @relation(fields: [fromUserId], references: [id])
+  toUserId        String
+  toUser          User     @relation("FeedbackReceiver", fields: [toUserId], references: [id])
+
+  rating          Int      // 1-5 estrellas
+  comment         String?
+  trustScore      Int      // 0-100, subjetivo
+
+  createdAt       DateTime @default(now())
+
+  @@unique([tradeId, fromUserId]) // un feedback por usuario por trade
+}
+
+// Disputa abierta cuando las partes no se ponen de acuerdo
+model Dispute {
+  id              String   @id @default(cuid())
+  tradeId         String   @unique
+  trade           Trade    @relation(fields: [tradeId], references: [id])
+
+  openerId        String
+  opener          User     @relation("DisputeOpener", fields: [openerId], references: [id])
+  defendantId     String
+  defendant       User     @relation("DisputeDefendant", fields: [defendantId], references: [id])
+
+  reason          String
+  evidence        String?  // URL o hash IPFS de evidencia (screenshots, etc.)
+  status          DisputeStatus @default(OPEN)
+  resolution      String?  // texto explicativo de la resolución
+  resolvedBy      String?  // alias del árbitro/multisig signer
+  resolvedAt      DateTime?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// Enums
+enum OfferType {
+  BUY
+  SELL
+}
+
+enum Chain {
+  ETHEREUM
+  BITCOIN
+  TRON
+  MONERO
+}
+
+enum PriceType {
+  FIXED
+  MARKET
+}
+
+enum EscrowType {
+  SMART_CONTRACT
+  MULTISIG_2OF3
+}
+
+enum OfferStatus {
+  ACTIVE
+  PAUSED
+  CLOSED
+}
+
+enum DisputeStatus {
+  OPEN
+  RESOLVED_BUYER
+  RESOLVED_SELLER
+  CANCELLED
+}
+
+enum TradeStatus {
+  PENDING_ESCROW    // esperando que el vendedor deposite en escrow
+  ESCROW_FUNDED     // escrow activo, esperando pago fiat del comprador
+  PAYMENT_SENT      // comprador marcó pago enviado
+  PAYMENT_CONFIRMED // vendedor confirmó recepción
+  RELEASING         // liberando fondos del escrow al comprador
+  COMPLETED         // trade finalizado OK
+  CANCELLED         // cancelado por una de las partes
+  DISPUTED          // en disputa
+}
