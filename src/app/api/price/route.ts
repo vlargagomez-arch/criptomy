@@ -1,15 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ethers, Contract, formatUnits } from "ethers";
 
 // GET /api/price?pair=ETH/USD
-// Lee precios en tiempo real desde contratos Chainlink en Ethereum mainnet.
-// Se hace desde el backend para evitar problemas de CORS en el navegador.
+// Lee precios en tiempo real desde contratos Chainlink usando fetch directo al RPC.
+// Evita ethers.JsonRpcProvider que causa OOM por reintentos infinitos.
 
-const RPC_ETH_MAINNET = "https://eth.llamarpc.com";
-const FALLBACK_RPCS = [
-  "https://rpc.ankr.com/eth",
+const RPCS = [
   "https://ethereum.publicnode.com",
   "https://1rpc.io/eth",
+  "https://cloudflare-eth.com",
 ];
 
 const CHAINLINK_FEEDS: Record<string, { address: string; decimals: number }> = {
@@ -39,10 +37,40 @@ const CHAINLINK_FEEDS: Record<string, { address: string; decimals: number }> = {
   },
 };
 
-const AGGREGATOR_V3_ABI = [
-  "function latestRoundData() external view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound)",
-  "function decimals() external view returns (uint8)",
-];
+// Selector de latestRoundData() = 0xfeaf968c
+const LATEST_ROUND_SELECTOR = "0xfeaf968c";
+
+interface RpcResult {
+  result?: string;
+  error?: { code: number; message: string };
+}
+
+async function rpcCall(rpc: string, to: string, data: string): Promise<string> {
+  const res = await fetch(rpc, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "eth_call",
+      params: [{ to, data }, "latest"],
+    }),
+    signal: AbortSignal.timeout(6000),
+  });
+  if (!res.ok) throw new Error(`RPC HTTP ${res.status}`);
+  const json = (await res.json()) as RpcResult;
+  if (json.error) throw new Error(json.error.message);
+  if (!json.result) throw new Error("Sin resultado");
+  return json.result;
+}
+
+function decodeBigInt(hex: string, offset: number): bigint {
+  const cleanHex = hex.replace("0x", "");
+  if (cleanHex.length === 0) return 0n;
+  const slice = cleanHex.slice(offset * 64, (offset + 1) * 64);
+  if (slice.length === 0) return 0n;
+  return BigInt("0x" + slice);
+}
 
 async function fetchPrice(pair: string): Promise<{
   pair: string;
@@ -53,22 +81,14 @@ async function fetchPrice(pair: string): Promise<{
   const feed = CHAINLINK_FEEDS[pair];
   if (!feed) return null;
 
-  const allRpcs = [RPC_ETH_MAINNET, ...FALLBACK_RPCS];
-
-  for (const rpc of allRpcs) {
+  for (const rpc of RPCS) {
     try {
-      const provider = new ethers.JsonRpcProvider(rpc, undefined, {
-        staticNetwork: true,
-      });
-      const contract = new Contract(
-        feed.address,
-        AGGREGATOR_V3_ABI,
-        provider
-      );
-      const roundData = await contract.latestRoundData();
-      const answer = roundData[1];
-      const updatedAt = Number(roundData[3]);
-      const price = Number(formatUnits(answer, feed.decimals));
+      const resultHex = await rpcCall(rpc, feed.address, LATEST_ROUND_SELECTOR);
+      // latestRoundData() returns 5 values: roundId, answer, startedAt, updatedAt, answeredInRound
+      // Cada value ocupa 32 bytes (64 chars hex)
+      const answer = decodeBigInt(resultHex, 1);
+      const updatedAt = Number(decodeBigInt(resultHex, 3));
+      const price = Number(answer) / 10 ** feed.decimals;
       return {
         pair,
         price,
@@ -86,7 +106,7 @@ async function fetchPrice(pair: string): Promise<{
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const pair = searchParams.get("pair");
-  const pairs = searchParams.get("pairs"); // comma-separated
+  const pairs = searchParams.get("pairs");
 
   try {
     if (pairs) {
@@ -111,7 +131,6 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(price);
     }
 
-    // Sin parámetros: devolver todos los precios
     const allPairs = Object.keys(CHAINLINK_FEEDS);
     const results = await Promise.all(
       allPairs.map(async (p) => [p, await fetchPrice(p)] as const)

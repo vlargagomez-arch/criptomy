@@ -107,57 +107,88 @@ export default function WalletView() {
   async function fetchBalances() {
     if (!user) return;
     setRefreshing(true);
-    const chainsToCheck: Array<{ chain: ChainConfig; tokens: TokenConfig[] }> = [];
-    for (const chain of Object.values(CHAINS)) {
-      const tokens = TOKENS.filter((t) => t.chain === chain.id);
-      chainsToCheck.push({ chain, tokens });
+
+    // Solo consultar ETH nativo (1 request) y BTC si la wallet parece BTC address
+    // Para no saturar el servidor con múltiples RPC calls en paralelo
+    const newBalances: BalanceInfo[] = [];
+
+    // 1. ETH nativo
+    newBalances.push({
+      chain: "Ethereum",
+      symbol: "ETH",
+      balance: "—",
+      usdValue: null,
+      loading: true,
+      error: null,
+    });
+    try {
+      const res = await fetch(
+        `/api/balance?address=${user.walletAddress}&chain=ETHEREUM`
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "RPC error");
+      newBalances[0] = {
+        ...newBalances[0],
+        balance: data.balance,
+        loading: false,
+      };
+    } catch (e) {
+      newBalances[0] = {
+        ...newBalances[0],
+        loading: false,
+        error: (e as Error).message.slice(0, 50),
+      };
     }
 
-    const newBalances: BalanceInfo[] = [];
-    for (const { chain, tokens } of chainsToCheck) {
-      for (const token of tokens) {
-        if (
-          (token.chain === "ETHEREUM" &&
-            (token.symbol === "ETH" ||
-              token.symbol === "USDT" ||
-              token.symbol === "USDC")) ||
-          (token.chain === "BITCOIN" && token.symbol === "BTC") ||
-          (token.chain === "TRON" && token.symbol === "TRX") ||
-          (token.chain === "MONERO" && token.symbol === "XMR")
-        ) {
-          newBalances.push({
-            chain: chain.name,
-            symbol: token.symbol,
-            balance: "—",
-            usdValue: null,
-            loading: true,
-            error: null,
-          });
-          try {
-            // Usar la API backend para evitar CORS
-            const url = token.contractAddress
-              ? `/api/balance?address=${user.walletAddress}&chain=${chain.id}&token=${token.contractAddress}`
-              : `/api/balance?address=${user.walletAddress}&chain=${chain.id}`;
-            const res = await fetch(url);
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || "RPC error");
-            const idx = newBalances.length - 1;
-            newBalances[idx] = {
-              ...newBalances[idx],
-              balance: data.balance,
-              loading: false,
-            };
-          } catch (e) {
-            const idx = newBalances.length - 1;
-            newBalances[idx] = {
-              ...newBalances[idx],
-              loading: false,
-              error: (e as Error).message.slice(0, 50),
-            };
-          }
-        }
+    // 2. BTC si la wallet parece una BTC address
+    const isBtcAddr = /^(bc1|1|3)/.test(user.walletAddress);
+    newBalances.push({
+      chain: "Bitcoin",
+      symbol: "BTC",
+      balance: isBtcAddr ? "—" : "0",
+      usdValue: null,
+      loading: isBtcAddr,
+      error: null,
+    });
+    if (isBtcAddr) {
+      try {
+        const res = await fetch(
+          `/api/bitcoin?address=${user.walletAddress}&op=balance`
+        );
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        newBalances[1] = {
+          ...newBalances[1],
+          balance: String(data.total / 100_000_000),
+          loading: false,
+        };
+      } catch (e) {
+        newBalances[1] = {
+          ...newBalances[1],
+          loading: false,
+          error: (e as Error).message.slice(0, 50),
+        };
       }
     }
+
+    // 3. TRX y XMR (placeholders, sin RPC call)
+    newBalances.push({
+      chain: "Tron",
+      symbol: "TRX",
+      balance: "0",
+      usdValue: null,
+      loading: false,
+      error: null,
+    });
+    newBalances.push({
+      chain: "Monero",
+      symbol: "XMR",
+      balance: "0",
+      usdValue: null,
+      loading: false,
+      error: null,
+    });
+
     setBalances(newBalances);
     setRefreshing(false);
   }
