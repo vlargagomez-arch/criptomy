@@ -23,6 +23,8 @@ import {
   AlertTriangle,
   Shield,
   Rocket,
+  Zap,
+  Network,
   ChevronDown,
   LogOut,
   Copy,
@@ -34,10 +36,13 @@ const TABS: { key: TabKey; label: string; icon: React.ElementType }[] = [
   { key: "mercado", label: "Mercado", icon: Store },
   { key: "crear", label: "Crear oferta", icon: PlusCircle },
   { key: "trades", label: "Mis trades", icon: ArrowLeftRight },
+  { key: "swap", label: "Swap", icon: ArrowLeftRight },
+  { key: "lightning", label: "Lightning", icon: Zap },
+  { key: "p2p", label: "Red P2P", icon: Network },
   { key: "billetera", label: "Billetera", icon: Wallet },
   { key: "reputacion", label: "Reputación", icon: Star },
   { key: "disputas", label: "Disputas", icon: AlertTriangle },
-  { key: "deploy", label: "Desplegar contrato", icon: Rocket },
+  { key: "deploy", label: "Desplegar", icon: Rocket },
   { key: "tor", label: "Guía Tor", icon: Shield },
 ];
 
