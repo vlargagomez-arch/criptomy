@@ -2,417 +2,252 @@
 
 import { useState, useEffect } from "react";
 import { useApp } from "@/lib/store";
-import { generateKeyPair, randomAlias } from "@/lib/crypto";
 import {
-  connectWallet,
-  hasWallet,
-  onWalletChange,
-  NETWORK_PARAMS,
-  CHAIN_IDS,
-  switchNetwork,
-} from "@/lib/web3";
+  useDetectedWallets,
+  connectAndLogin,
+  useAutoReconnect,
+} from "@/lib/wallet-detect";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
-  Loader2,
-  ShieldCheck,
-  Wallet,
-  AlertCircle,
-  ExternalLink,
-  QrCode,
-  Smartphone,
-  Chrome,
-} from "lucide-react";
-
-const NETWORK_LABELS: Record<number, string> = {
-  [CHAIN_IDS.ETHEREUM_MAINNET]: "Ethereum Mainnet",
-  [CHAIN_IDS.ETHEREUM_SEPOLIA]: "Sepolia Testnet",
-};
+import { Loader2, ShieldCheck, Zap, CheckCircle2, AlertCircle } from "lucide-react";
 
 export default function Onboarding() {
-  const { setUser, setPrivateKey, connecting, setConnecting, setTab } = useApp();
-  const [open, setOpen] = useState(false);
-  const [alias, setAlias] = useState("");
-  const [torOnly, setTorOnly] = useState(false);
-  const [walletAddr, setWalletAddr] = useState<string | null>(null);
-  const [chainId, setChainId] = useState<number | null>(null);
+  const { setUser, setPrivateKey, setTab } = useApp();
+  const { wallets, ready } = useDetectedWallets();
+  const { reconnecting } = useAutoReconnect();
+  const [connecting, setConnecting] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const [needsSwitch, setNeedsSwitch] = useState(false);
-  const [walletType, setWalletType] = useState<"metamask" | "walletconnect">(
-    "metamask"
-  );
-  const [wcURI, setWcURI] = useState<string | null>(null);
-  const [wcStep, setWcStep] = useState<"choose" | "qr">("choose");
 
-  useEffect(() => {
-    const off = onWalletChange((addr, cid) => {
-      if (addr) setWalletAddr(addr);
-      if (cid) setChainId(cid);
-    });
-    return off;
-  }, []);
-
-  // En móvil, priorizar WalletConnect (lazy check)
-  const [isMobile, setIsMobile] = useState(false);
-  useEffect(() => {
-    setIsMobile(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent));
-  }, []);
-
-  async function handleConnectMetaMask() {
+  async function handleQuickConnect(walletId?: string) {
     setError("");
-    setConnecting(true);
-    try {
-      const { address, chainId: cid } = await connectWallet();
-      setWalletAddr(address);
-      setChainId(cid);
-      setWalletType("metamask");
-      if (cid !== CHAIN_IDS.ETHEREUM_MAINNET && cid !== CHAIN_IDS.ETHEREUM_SEPOLIA) {
-        setNeedsSwitch(true);
-      }
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setConnecting(false);
-    }
-  }
-
-  async function handleConnectWalletConnect() {
-    setError("");
-    setConnecting(true);
-    try {
-      // MVP: mostrar URI generado para que el usuario lo use en su wallet
-      // En producción: usar @walletconnect/ethereum-provider (ver instrucciones en lib/walletconnect.ts)
-      const { isWalletConnectConfigured, generateWalletConnectURI, SUPPORTED_WALLETS } =
-        await import("@/lib/walletconnect");
-
-      const uri = generateWalletConnectURI();
-      setWcURI(uri);
-      setWcStep("qr");
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setConnecting(false);
-    }
-  }
-
-  async function handleSwitchToSepolia() {
-    setError("");
-    try {
-      await switchNetwork(NETWORK_PARAMS[CHAIN_IDS.ETHEREUM_SEPOLIA].chainId);
-      setNeedsSwitch(false);
-    } catch (e) {
-      try {
-        await addNetworkSafe();
-        setNeedsSwitch(false);
-      } catch (err) {
-        setError((err as Error).message);
-      }
-    }
-  }
-
-  async function addNetworkSafe() {
-    // Importar dinámicamente para evitar SSR issues
-    const { addNetwork } = await import("@/lib/web3");
-    await addNetwork(NETWORK_PARAMS[CHAIN_IDS.ETHEREUM_SEPOLIA]);
-  }
-
-  async function handleLogin() {
-    if (!walletAddr) {
-      setError("Conecte una wallet primero");
+    const wallet = walletId
+      ? wallets.find((w) => w.id === walletId)
+      : wallets.find((w) => w.installed && w.provider);
+    if (!wallet?.provider) {
+      setError("No se detectó wallet. Instale MetaMask o Trust Wallet.");
       return;
     }
-    setConnecting(true);
+    setConnecting(wallet.id);
     try {
-      const kp = await generateKeyPair();
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          walletAddress: walletAddr,
-          publicKey: kp.publicKey,
-          alias: alias.trim() || undefined,
-          torOnly,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error");
-      setUser(data.user);
-      setPrivateKey(kp.privateKey);
-      setOpen(false);
+      const result = await connectAndLogin(wallet.provider);
+      setUser(result.user);
+      setPrivateKey(result.privateKey);
       setTab("inicio");
     } catch (e) {
       setError((e as Error).message);
     } finally {
-      setConnecting(false);
+      setConnecting(null);
     }
   }
 
-  function generateAlias() {
-    setAlias(randomAlias());
-  }
+  const installedWallets = wallets.filter((w) => w.installed);
+  const hasInstalled = installedWallets.length > 0;
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-2">
+      {/* Botón principal: "Conectar wallet" — un clic */}
       <Button
-        onClick={() => setOpen(true)}
-        className="bg-emerald-600 hover:bg-emerald-700 text-white"
+        onClick={() => handleQuickConnect()}
+        disabled={connecting !== null || reconnecting || !ready}
+        className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium relative overflow-hidden"
       >
-        <Wallet className="w-4 h-4 mr-2" />
-        Conectar wallet
+        {connecting || reconnecting ? (
+          <>
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            {reconnecting ? "Reconectando…" : "Conectando…"}
+          </>
+        ) : (
+          <>
+            <Zap className="w-4 h-4 mr-2" />
+            Conectar wallet
+          </>
+        )}
       </Button>
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="bg-slate-900 border-slate-700 text-slate-100 sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-emerald-400">
-              <ShieldCheck className="w-5 h-5" />
-              Acceso pseudónimo real
-            </DialogTitle>
-            <DialogDescription className="text-slate-400">
-              Conecte su wallet Ethereum (MetaMask desktop o cualquier wallet
-              mobile vía WalletConnect). Sin KYC, sin email, sin datos personales.
-            </DialogDescription>
-          </DialogHeader>
+      {/* Dropdown con wallets específicas (opcional) */}
+      <WalletPicker
+        wallets={installedWallets}
+        onPick={(id) => handleQuickConnect(id)}
+        connecting={connecting}
+      />
 
-          <div className="space-y-4 py-2">
-            {/* Paso 1: Elegir tipo de wallet */}
-            {!walletAddr && wcStep === "choose" && (
-              <div className="space-y-2">
-                <Label className="text-slate-300 flex items-center gap-1">
-                  <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] flex items-center justify-center">1</span>
-                  Método de conexión
-                </Label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={handleConnectMetaMask}
-                    disabled={connecting || !hasWallet()}
-                    className={`flex flex-col items-center gap-2 p-4 rounded-lg border transition ${
-                      walletType === "metamask"
-                        ? "bg-orange-950/30 border-orange-700 text-orange-300"
-                        : "bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700"
-                    } ${!hasWallet() ? "opacity-50 cursor-not-allowed" : ""}`}
-                  >
-                    <Chrome className="w-6 h-6" />
-                    <span className="text-xs font-medium">MetaMask</span>
-                    <span className="text-[10px] opacity-70">Desktop</span>
-                  </button>
-                  <button
-                    onClick={handleConnectWalletConnect}
-                    disabled={connecting}
-                    className={`flex flex-col items-center gap-2 p-4 rounded-lg border transition ${
-                      walletType === "walletconnect"
-                        ? "bg-blue-950/30 border-blue-700 text-blue-300"
-                        : "bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700"
-                    }`}
-                  >
-                    <QrCode className="w-6 h-6" />
-                    <span className="text-xs font-medium">WalletConnect</span>
-                    <span className="text-[10px] opacity-70">Mobile</span>
-                  </button>
-                </div>
-                {!hasWallet() && (
-                  <p className="text-[10px] text-slate-500 text-center">
-                    MetaMask no detectado.{" "}
-                    <a
-                      href="https://metamask.io/download/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-emerald-400 hover:underline inline-flex items-center gap-1"
-                    >
-                      Instalar <ExternalLink className="w-2.5 h-2.5" />
-                    </a>{" "}
-                    o use WalletConnect desde su móvil.
-                  </p>
-                )}
-                {isMobile && (
-                  <div className="flex items-center gap-1.5 text-[10px] text-blue-400 mt-1">
-                    <Smartphone className="w-3 h-3" />
-                    Detectado móvil: WalletConnect recomendado
-                  </div>
-                )}
-              </div>
-            )}
+      {/* Modal de error si no hay wallet */}
+      {error && !hasInstalled && ready && (
+        <ErrorModal error={error} onClose={() => setError("")} />
+      )}
 
-            {/* WalletConnect QR step */}
-            {!walletAddr && wcStep === "qr" && wcURI && (
-              <div className="space-y-3">
-                <div className="text-center">
-                  <QrCode className="w-12 h-12 text-blue-400 mx-auto mb-2" />
-                  <p className="text-sm text-slate-300 font-medium">
-                    Escanee con su wallet móvil
-                  </p>
-                  <p className="text-[10px] text-slate-500 mt-1">
-                    Abra Rainbow, Trust, MetaMask mobile u otra wallet compatible
-                    y escanee este código.
-                  </p>
-                </div>
-                <div className="p-4 rounded-md bg-white border-2 border-blue-500/50 flex items-center justify-center">
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(wcURI)}`}
-                    alt="WalletConnect QR"
-                    className="w-48 h-48"
-                  />
-                </div>
-                <details className="text-[10px] text-slate-500">
-                  <summary className="cursor-pointer text-slate-400">
-                    Ver URI completo
-                  </summary>
-                  <code className="block mt-1 p-2 bg-slate-950 rounded break-all font-mono">
-                    {wcURI}
-                  </code>
-                </details>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setWcStep("choose")}
-                  className="w-full border-slate-700 text-slate-300 hover:bg-slate-800"
-                >
-                  Volver
-                </Button>
-                <p className="text-[10px] text-yellow-500 text-center">
-                  ⚠️ MVP: WalletConnect SDK completo no instalado. Para activar
-                  conexión automática, instalar{" "}
-                  <code className="text-yellow-400">
-                    @walletconnect/ethereum-provider
-                  </code>{" "}
-                  (ver instrucciones en src/lib/walletconnect.ts).
-                </p>
-              </div>
-            )}
+      {/* Modal de conexión rápida (visual feedback) */}
+      {connecting && (
+        <ConnectingModal
+          wallet={installedWallets.find((w) => w.id === connecting)}
+        />
+      )}
 
-            {/* Wallet conectada */}
-            {walletAddr && (
-              <div className="space-y-2">
-                <div className="p-3 rounded-md bg-slate-950 border border-emerald-700/50">
-                  <div className="text-[10px] text-slate-500 uppercase flex items-center justify-between">
-                    <span>Wallet conectada</span>
-                    <span className="text-emerald-400">
-                      {walletType === "metamask" ? "MetaMask" : "WalletConnect"}
-                    </span>
-                  </div>
-                  <code className="text-sm font-mono text-emerald-400 break-all">
-                    {walletAddr}
-                  </code>
-                  {chainId && (
-                    <div className="text-[10px] text-slate-400 mt-1">
-                      Red: {NETWORK_LABELS[chainId] || `Chain ID ${chainId}`}
-                    </div>
-                  )}
-                </div>
-                {needsSwitch && (
-                  <div className="p-2 rounded-md bg-yellow-950/40 border border-yellow-900/50 text-xs text-yellow-300">
-                    <div className="flex items-center gap-2 mb-2">
-                      <AlertCircle className="w-3.5 h-3.5" />
-                      Recomendamos Sepolia Testnet para pruebas.
-                    </div>
-                    <Button
-                      size="sm"
-                      onClick={handleSwitchToSepolia}
-                      className="w-full bg-yellow-600 hover:bg-yellow-700 text-white"
-                    >
-                      Cambiar a Sepolia
-                    </Button>
-                  </div>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setWalletAddr(null);
-                    setChainId(null);
-                  }}
-                  className="w-full border-slate-700 text-slate-400 hover:bg-slate-800 text-xs"
-                >
-                  Desconectar y usar otra wallet
-                </Button>
-              </div>
-            )}
+      {/* Modal de error */}
+      {error && hasInstalled && (
+        <ErrorModal error={error} onClose={() => setError("")} />
+      )}
+    </div>
+  );
+}
 
-            {/* Paso 2: Alias */}
-            <div className="space-y-2">
-              <Label className="text-slate-300 flex items-center gap-1">
-                <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] flex items-center justify-center">2</span>
-                Alias público
-              </Label>
-              <div className="flex gap-2">
-                <Input
-                  value={alias}
-                  onChange={(e) => setAlias(e.target.value)}
-                  placeholder="satoshi_ninja_42"
-                  className="bg-slate-950 border-slate-700 text-slate-100 placeholder:text-slate-600"
+// ============================================================
+// Wallet Picker — dropdown con iconos de wallets instaladas
+// ============================================================
+
+function WalletPicker({
+  wallets,
+  onPick,
+  connecting,
+}: {
+  wallets: ReturnType<typeof useDetectedWallets>["wallets"];
+  onPick: (id: string) => void;
+  connecting: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+
+  if (wallets.length === 0) return null;
+
+  return (
+    <div className="relative">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => setOpen(!open)}
+        className="border-slate-700 text-slate-300 hover:bg-slate-800"
+      >
+        {wallets.length} wallet{wallets.length > 1 ? "s" : ""} ▾
+      </Button>
+      {open && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setOpen(false)}
+          />
+          <div className="absolute right-0 top-full mt-1 z-50 bg-slate-900 border border-slate-700 rounded-lg shadow-xl p-2 min-w-[200px]">
+            {wallets.map((w) => (
+              <button
+                key={w.id}
+                onClick={() => {
+                  onPick(w.id);
+                  setOpen(false);
+                }}
+                disabled={connecting !== null}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-slate-800 transition text-left"
+              >
+                <img
+                  src={w.icon}
+                  alt={w.name}
+                  className="w-6 h-6 rounded-full"
                 />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={generateAlias}
-                  className="border-slate-700 text-slate-300 hover:bg-slate-800"
-                >
-                  Generar
-                </Button>
-              </div>
-              <p className="text-xs text-slate-500">
-                El alias es su identidad pública. No revele su nombre real.
-              </p>
-            </div>
-
-            {/* Paso 3: Tor-only */}
-            <div className="flex items-center justify-between rounded-lg bg-slate-950 border border-slate-800 p-3">
-              <div>
-                <div className="text-sm font-medium text-slate-200">
-                  Conexión exclusiva vía Tor
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-medium text-slate-200">
+                    {w.name}
+                  </div>
+                  <div className="text-[10px] text-slate-500 truncate">
+                    {w.description}
+                  </div>
                 </div>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Exigir a las contrapartes usar Tor para comunicarse con usted.
-                </p>
-              </div>
-              <Switch checked={torOnly} onCheckedChange={setTorOnly} />
-            </div>
-
-            <div className="rounded-lg bg-emerald-950/30 border border-emerald-900/50 p-3 text-xs text-emerald-300">
-              <strong>Privacidad:</strong> Su par de claves ECDH se genera
-              localmente. La clave privada NUNCA sale de su navegador. Los
-              mensajes entre partes se cifran E2E con AES-GCM-256.
-            </div>
-
-            {error && (
-              <div className="rounded-md bg-red-950/50 border border-red-900/50 p-2.5 text-xs text-red-300 flex items-start gap-2">
-                <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                {error}
-              </div>
-            )}
+                {connecting === w.id && (
+                  <Loader2 className="w-3 h-3 animate-spin text-emerald-400" />
+                )}
+              </button>
+            ))}
           </div>
+        </>
+      )}
+    </div>
+  );
+}
 
-          <DialogFooter>
-            <Button
-              onClick={handleLogin}
-              disabled={connecting || !walletAddr}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
-            >
-              {connecting ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Conectando…
-                </>
-              ) : (
-                <>
-                  <ShieldCheck className="w-4 h-4 mr-2" />
-                  Entrar a la plataforma
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+// ============================================================
+// Modal de conexión (feedback visual)
+// ============================================================
+
+function ConnectingModal({
+  wallet,
+}: {
+  wallet?: {
+    name: string;
+    icon: string;
+    color: string;
+  };
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 max-w-xs w-full mx-4 text-center">
+        {wallet && (
+          <img
+            src={wallet.icon}
+            alt={wallet.name}
+            className="w-16 h-16 rounded-2xl mx-auto mb-3"
+            style={{ boxShadow: `0 0 24px ${wallet.color}40` }}
+          />
+        )}
+        <h3 className="text-base font-semibold text-slate-100 mb-1">
+          Conectando con {wallet?.name || "wallet"}
+        </h3>
+        <p className="text-xs text-slate-400 mb-4">
+          Confirme la conexión en la popup de su wallet
+        </p>
+        <div className="flex items-center justify-center gap-2 text-xs text-emerald-400">
+          <Loader2 className="w-3 h-3 animate-spin" />
+          Esperando confirmación…
+        </div>
+        <div className="mt-4 pt-3 border-t border-slate-800 text-[10px] text-slate-500">
+          <ShieldCheck className="w-3 h-3 inline mr-1" />
+          Sin KYC · Sin email · Sin datos personales
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// Modal de error (cuando no hay wallet instalada)
+// ============================================================
+
+function ErrorModal({ error, onClose }: { error: string; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 max-w-sm w-full mx-4">
+        <div className="flex items-start gap-3 mb-3">
+          <AlertCircle className="w-5 h-5 text-yellow-400 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <h3 className="text-base font-semibold text-slate-100 mb-1">
+              Wallet no detectada
+            </h3>
+            <p className="text-xs text-slate-400">{error}</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2 mt-4">
+          <a
+            href="https://metamask.io/download/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex flex-col items-center gap-1 p-3 rounded-lg bg-slate-950 border border-slate-800 hover:border-orange-700/50 transition"
+          >
+            <span className="text-2xl">🦊</span>
+            <span className="text-xs font-medium text-slate-200">MetaMask</span>
+            <span className="text-[10px] text-slate-500">Desktop</span>
+          </a>
+          <a
+            href="https://trustwallet.com/download"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex flex-col items-center gap-1 p-3 rounded-lg bg-slate-950 border border-slate-800 hover:border-blue-700/50 transition"
+          >
+            <span className="text-2xl">🛡️</span>
+            <span className="text-xs font-medium text-slate-200">Trust Wallet</span>
+            <span className="text-[10px] text-slate-500">Mobile</span>
+          </a>
+        </div>
+        <Button
+          onClick={onClose}
+          className="w-full mt-4 bg-slate-800 hover:bg-slate-700 text-slate-200"
+        >
+          Cerrar
+        </Button>
+      </div>
     </div>
   );
 }
