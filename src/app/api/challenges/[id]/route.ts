@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getGameAdapter, verifyMatchResult } from "@/lib/games";
+import { getGameAdapter, verifyMatchResult, isGameAPIConfigured } from "@/lib/games";
 
 // PATCH /api/challenges/[id] — aceptar, cancelar, verificar resultado
 export async function PATCH(
@@ -10,7 +10,7 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await req.json();
-    const { action, userId, opponentGameAccountId, matchId } = body;
+    const { action, userId, opponentGameAccountId, matchId, escrowAddress, escrowTxHash } = body;
 
     const challenge = await db.challenge.findUnique({
       where: { id },
@@ -59,14 +59,14 @@ export async function PATCH(
           status: "ACCEPTED",
         },
         include: {
-          creator: { select: { id: true, alias: true, avatarSeed: true } },
-          opponent: { select: { id: true, alias: true, avatarSeed: true } },
+          creator: { select: { id: true, alias: true, avatarSeed: true, walletAddress: true } },
+          opponent: { select: { id: true, alias: true, avatarSeed: true, walletAddress: true } },
         },
       });
       return NextResponse.json({ challenge: updated });
     }
 
-    // FONDEAR escrow (simulado en MVP)
+    // FONDEAR escrow — ahora guarda la tx real (firmada client-side)
     if (action === "fund") {
       if (challenge.status !== "ACCEPTED") {
         return NextResponse.json(
@@ -74,15 +74,24 @@ export async function PATCH(
           { status: 400 }
         );
       }
+      if (!escrowAddress || !escrowTxHash) {
+        return NextResponse.json(
+          { error: "Faltan escrowAddress y escrowTxHash (transacción on-chain)" },
+          { status: 400 }
+        );
+      }
       const updated = await db.challenge.update({
         where: { id },
         data: {
           status: "ESCROW_FUNDED",
-          escrowAddress: `0x${Math.random().toString(16).slice(2).padStart(40, "0")}`,
-          escrowTxHash: `0x${Math.random().toString(16).slice(2).padStart(64, "0")}`,
+          escrowAddress,
+          escrowTxHash,
         },
       });
-      return NextResponse.json({ challenge: updated });
+      return NextResponse.json({
+        challenge: updated,
+        message: "Escrow fondeado on-chain. Listo para iniciar el partido.",
+      });
     }
 
     // INICIAR partido
@@ -100,7 +109,7 @@ export async function PATCH(
       return NextResponse.json({ challenge: updated });
     }
 
-    // VERIFICAR resultado
+    // VERIFICAR resultado — usa API real del juego si está configurada
     if (action === "verify") {
       if (challenge.status !== "IN_PROGRESS") {
         return NextResponse.json(
@@ -110,7 +119,7 @@ export async function PATCH(
       }
       if (!matchId) {
         return NextResponse.json(
-          { error: "matchId requerido" },
+          { error: "matchId requerido (ID del partido en el juego)" },
           { status: 400 }
         );
       }
@@ -120,11 +129,20 @@ export async function PATCH(
         data: { status: "PENDING_RESULT", matchId },
       });
 
+      // Obtener las cuentas de juego de ambos jugadores
+      const [creatorAccount, opponentAccount] = await Promise.all([
+        db.gameAccount.findUnique({ where: { id: challenge.creatorGameAccountId } }),
+        challenge.opponentGameAccountId
+          ? db.gameAccount.findUnique({ where: { id: challenge.opponentGameAccountId } })
+          : null,
+      ]);
+
+      // Verificar resultado (API real o mock fallback)
       const result = await verifyMatchResult(
         challenge.game,
         matchId,
-        challenge.creatorGameAccountId,
-        challenge.opponentGameAccountId || ""
+        creatorAccount?.accountId || "",
+        opponentAccount?.accountId || ""
       );
 
       const winnerId =
@@ -143,15 +161,23 @@ export async function PATCH(
           matchVerifiedAt: new Date(),
         },
         include: {
-          winner: { select: { id: true, alias: true } },
+          winner: { select: { id: true, alias: true, walletAddress: true } },
+          creator: { select: { id: true, alias: true, walletAddress: true } },
+          opponent: { select: { id: true, alias: true, walletAddress: true } },
         },
       });
 
+      const apiConfigured = isGameAPIConfigured(challenge.game);
+      const sourceLabel = apiConfigured
+        ? `API real (${result.source})`
+        : "Mock (sin API key — configurar RIOT_API_KEY o STEAM_API_KEY)";
+
       return NextResponse.json({
         challenge: updated,
-        result,
+        result: { ...result, source: sourceLabel },
+        apiConfigured,
         message: winnerId
-          ? `Ganador: ${updated.winner?.alias}. Pago liberado automáticamente.`
+          ? `Ganador: ${updated.winner?.alias}. ${apiConfigured ? "Pago liberado automáticamente via smart contract." : "Verificado con mock. Configura API key para verificación real."}`
           : "Empate o sin resultado claro. Se abre disputa.",
       });
     }
@@ -171,7 +197,10 @@ export async function PATCH(
         where: { id },
         data: { status: "CANCELLED" },
       });
-      return NextResponse.json({ challenge: updated });
+      return NextResponse.json({
+        challenge: updated,
+        message: "Reto cancelado. Si había depósitos on-chain, ejecuta cancel() en el contrato para reembolso.",
+      });
     }
 
     return NextResponse.json(
@@ -195,12 +224,12 @@ export async function GET(
       where: { id },
       include: {
         creator: {
-          select: { id: true, alias: true, avatarSeed: true, reputationScore: true },
+          select: { id: true, alias: true, avatarSeed: true, reputationScore: true, walletAddress: true },
         },
         opponent: {
-          select: { id: true, alias: true, avatarSeed: true, reputationScore: true },
+          select: { id: true, alias: true, avatarSeed: true, reputationScore: true, walletAddress: true },
         },
-        winner: { select: { id: true, alias: true } },
+        winner: { select: { id: true, alias: true, walletAddress: true } },
       },
     });
     if (!challenge) {

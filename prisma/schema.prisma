@@ -245,7 +245,7 @@ enum TradeStatus {
 model GameAccount {
   id              String   @id @default(cuid())
   userId          String
-  game            GameType // LOL, VALORANT, CS2, ...
+  game            String // LOL, VALORANT, CS2, ...
   accountRegion   String   // ej: "la1", "na1", "euw"
   accountId       String   // ID dentro del juego (PUUID, steamID, etc.)
   accountName     String   // nombre visible (invocador, tag)
@@ -263,7 +263,7 @@ model GameAccount {
 // Reto P2P: dos jugadores apuestan cripto sobre quién gana
 model Challenge {
   id              String   @id @default(cuid())
-  game            GameType
+  game            String
   mode            String   // "1v1-rank", "1v1-custom", "bo3", etc.
   stakeAmount     Float    // cantidad de USDT que apuesta cada jugador
   currency        String   @default("USDT")
@@ -301,13 +301,6 @@ model Challenge {
   @@index([opponentId])
 }
 
-enum GameType {
-  LEAGUE_OF_LEAGENDS
-  VALORANT
-  COUNTER_STRIKE_2
-  DOTA2
-  ROCKET_LEAGUE
-}
 
 enum ChallengeStatus {
   OPEN            // esperando oponente

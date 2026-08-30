@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getGameAdapter, GameType } from "@/lib/games";
 
 // GET /api/games/link?userId=... — lista cuentas vinculadas
 export async function GET(req: NextRequest) {
@@ -34,10 +33,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Validar juego
-    try {
-      getGameAdapter(game as GameType);
-    } catch {
+    // Validar juego y obtener el valor del enum
+    const VALID_GAMES: Record<string, unknown> = {
+      LEAGUE_OF_LEGENDS: "LEAGUE_OF_LEGENDS",
+      VALORANT: "VALORANT",
+      COUNTER_STRIKE_2: "COUNTER_STRIKE_2",
+      DOTA2: "DOTA2",
+      ROCKET_LEAGUE: "ROCKET_LEAGUE",
+    };
+    const gameValue = VALID_GAMES[game];
+    if (!gameValue) {
       return NextResponse.json({ error: "Juego no soportado" }, { status: 400 });
     }
 
@@ -45,7 +50,7 @@ export async function POST(req: NextRequest) {
     const existing = await db.gameAccount.findUnique({
       where: {
         game_accountId_accountRegion: {
-          game: game as GameType,
+          game: game,
           accountId,
           accountRegion,
         },
@@ -61,7 +66,7 @@ export async function POST(req: NextRequest) {
     const account = await db.gameAccount.create({
       data: {
         userId,
-        game: game as GameType,
+        game: game,
         accountRegion,
         accountId,
         accountName,

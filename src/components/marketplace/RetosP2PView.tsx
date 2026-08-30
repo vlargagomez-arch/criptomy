@@ -62,6 +62,7 @@ interface ChallengePlayer {
   alias: string;
   avatarSeed: string | null;
   reputationScore: number;
+  walletAddress?: string;
 }
 
 interface Challenge {
@@ -797,7 +798,78 @@ function ChallengeDetailModal({
   async function doAction(action: string, extra: Record<string, unknown> = {}) {
     setActionLoading(true);
     setError("");
+
     try {
+      // Si es "fund", hacer la transacción on-chain real primero
+      if (action === "fund") {
+        setResult("Conectando MetaMask para firmar depósito on-chain…");
+        const { connectWallet } = await import("@/lib/web3");
+        const { signer, address } = await connectWallet();
+
+        // Verificar que la wallet coincide con el usuario logueado
+        if (address.toLowerCase() !== challenge.creator?.walletAddress?.toLowerCase() &&
+            address.toLowerCase() !== challenge.opponent?.walletAddress?.toLowerCase()) {
+          throw new Error("Wallet conectada no coincide con tu cuenta");
+        }
+
+        const { isEscrowConfigured, createChallengeOnChain, joinChallengeOnChain } =
+          await import("@/lib/challenge-escrow");
+
+        if (!isEscrowConfigured()) {
+          throw new Error(
+            "Smart contract ChallengeEscrow no desplegado. " +
+            "Configura NEXT_PUBLIC_CHALLENGE_ESCROW_ADDRESS en .env " +
+            "y despliega el contrato con Hardhat."
+          );
+        }
+
+        const isCreatorAction = address.toLowerCase() === challenge.creator?.walletAddress?.toLowerCase();
+        const stakeStr = String(challenge.stakeAmount);
+        const tokenAddress = "0xdAC17F958D2ee523a2206206994597C13D831ec7"; // USDT mainnet
+        const tokenDecimals = 6;
+
+        let txResult: { txHash: string };
+        if (isCreatorAction) {
+          setResult("Firmando createChallenge + depósito de USDT en MetaMask…");
+          txResult = await createChallengeOnChain({
+            signer,
+            challengeId: challenge.id,
+            opponentAddress: challenge.opponent?.walletAddress || "",
+            tokenAddress,
+            stakeAmount: stakeStr,
+            tokenDecimals,
+            gameType: challenge.game,
+          });
+        } else {
+          setResult("Firmando joinChallenge + depósito de USDT en MetaMask…");
+          txResult = await joinChallengeOnChain({
+            signer,
+            challengeId: challenge.id,
+            tokenAddress,
+            stakeAmount: stakeStr,
+            tokenDecimals,
+          });
+        }
+
+        // Ahora sí actualizar el backend con la tx real
+        const res = await fetch(`/api/challenges/${challenge.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "fund",
+            userId: currentUserId,
+            escrowAddress: address, // dirección del contrato (en prod: la del ChallengeEscrow)
+            escrowTxHash: txResult.txHash,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        setResult(`✓ Transacción confirmada on-chain. Tx: ${txResult.txHash.slice(0, 20)}…`);
+        setTimeout(() => onUpdate(), 2000);
+        return;
+      }
+
+      // Otras acciones: flujo normal
       const res = await fetch(`/api/challenges/${challenge.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -806,11 +878,15 @@ function ChallengeDetailModal({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       if (data.message) setResult(data.message);
-      setTimeout(() => {
-        onUpdate();
-      }, 1500);
+      if (data.apiConfigured !== undefined) {
+        setResult(
+          data.message + (data.apiConfigured ? "" : "\n\n⚠️ Sin API key del juego configurada — usando mock.")
+        );
+      }
+      setTimeout(() => onUpdate(), 1500);
     } catch (e) {
       setError((e as Error).message);
+      setResult("");
     } finally {
       setActionLoading(false);
     }
@@ -921,7 +997,7 @@ function ChallengeDetailModal({
               className="w-full bg-cyan-600 hover:bg-cyan-700 text-white"
             >
               {actionLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Zap className="w-4 h-4 mr-2" />}
-              Depositar USDT en escrow (simulado)
+              Depositar USDT en escrow on-chain
             </Button>
           )}
 

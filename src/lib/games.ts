@@ -168,14 +168,14 @@ export function getAllGames(): GameAdapter[] {
 }
 
 // ============================================================
-// Verificación de resultado (mock para MVP, real en producción)
+// Verificación de resultado — intenta API real, fallback a mock
 // ============================================================
-// En producción, cada adapter implementa su propia verificación:
-//   - LoL/Valorant: Riot Games API (GET /lol/match/v5/matches/{matchId})
-//   - CS2/Dota2: Steam Web API o Steamworks
-//   - Rocket League: no hay API pública oficial (usar tracker.gg)
+// En producción:
+//   - LoL/Valorant: Riot Games API (RIOT_API_KEY en .env)
+//   - Dota2: Steam Web API (STEAM_API_KEY en .env)
+//   - CS2: No hay API pública (usar FACEIT o self-report)
 //
-// Para MVP, simulamos la verificación.
+// Si no hay API key configurada, usa mock determinista.
 
 export async function verifyMatchResult(
   game: GameType | string,
@@ -184,8 +184,102 @@ export async function verifyMatchResult(
   opponentAccountId: string
 ): Promise<MatchResult> {
   const adapter = getGameAdapter(game);
+  const gameType = adapter.type;
 
-  // MVP: resultado aleatorio determinista basado en matchId
+  // Intentar API real según el juego
+  try {
+    if (gameType === "LEAGUE_OF_LEGENDS") {
+      const { getLoLMatchResult, isRiotConfigured } = await import("./riot-api");
+      if (isRiotConfigured()) {
+        const result = await getLoLMatchResult(
+          matchId,
+          creatorAccountId,
+          opponentAccountId
+        );
+        if (result) {
+          return {
+            matchId,
+            game: gameType,
+            duration: result.duration,
+            winner: result.winner as "creator" | "opponent" | "draw",
+            scoreCreator: result.participants.find(p => p.puuid === creatorAccountId)?.kills || 0,
+            scoreOpponent: result.participants.find(p => p.puuid === opponentAccountId)?.kills || 0,
+            stats: { source: "riot-api", participants: result.participants.length },
+            verifiedAt: result.verifiedAt,
+            source: result.source,
+          };
+        }
+      }
+    } else if (gameType === "VALORANT") {
+      const { getValorantMatchResult, isRiotConfigured } = await import("./riot-api");
+      if (isRiotConfigured()) {
+        const result = await getValorantMatchResult(
+          matchId,
+          creatorAccountId,
+          opponentAccountId
+        );
+        if (result) {
+          return {
+            matchId,
+            game: gameType,
+            duration: result.duration,
+            winner: result.winner as "creator" | "opponent" | "draw",
+            scoreCreator: result.participants.find(p => p.puuid === creatorAccountId)?.kills || 0,
+            scoreOpponent: result.participants.find(p => p.puuid === opponentAccountId)?.kills || 0,
+            stats: { source: "riot-api", participants: result.participants.length },
+            verifiedAt: result.verifiedAt,
+            source: result.source,
+          };
+        }
+      }
+    } else if (gameType === "DOTA2") {
+      const { getDota2MatchResult, isSteamConfigured } = await import("./steam-api");
+      if (isSteamConfigured()) {
+        const result = await getDota2MatchResult(
+          matchId,
+          creatorAccountId,
+          opponentAccountId
+        );
+        if (result) {
+          return {
+            matchId,
+            game: gameType,
+            duration: result.duration,
+            winner: result.winner as "creator" | "opponent" | "draw",
+            scoreCreator: result.players?.find(p => p.accountId === creatorAccountId)?.kills || 0,
+            scoreOpponent: result.players?.find(p => p.accountId === opponentAccountId)?.kills || 0,
+            stats: { source: "steam-api", radiantWin: result.radiantWin },
+            verifiedAt: result.verifiedAt,
+            source: result.source,
+          };
+        }
+      }
+    } else if (gameType === "COUNTER_STRIKE_2") {
+      const { getCS2MatchResult } = await import("./steam-api");
+      const result = await getCS2MatchResult(
+        matchId,
+        creatorAccountId,
+        opponentAccountId
+      );
+      if (result) {
+        return {
+          matchId,
+          game: gameType,
+          duration: result.duration,
+          winner: result.winner as "creator" | "opponent" | "draw",
+          scoreCreator: 0,
+          scoreOpponent: 0,
+          stats: { source: result.source },
+          verifiedAt: result.verifiedAt,
+          source: result.source,
+        };
+      }
+    }
+  } catch (e) {
+    console.warn(`[verifyMatchResult] API real falló para ${gameType}:`, e);
+  }
+
+  // Fallback: mock determinista (para desarrollo sin API keys)
   const hash = (matchId || "").split("").reduce((a, c) => a + c.charCodeAt(0), 0);
   const winner: "creator" | "opponent" | "draw" =
     hash % 3 === 0 ? "creator" : hash % 3 === 1 ? "opponent" : "draw";
@@ -201,10 +295,26 @@ export async function verifyMatchResult(
       creatorAccountId,
       opponentAccountId,
       mode: "1v1",
+      warning: "Resultado simulado (sin API key configurada)",
     },
     verifiedAt: Date.now(),
     source: `mock-${adapter.shortName}`,
   };
+}
+
+// Verificar si un juego tiene API real configurada
+export function isGameAPIConfigured(game: GameType | string): boolean {
+  const adapter = getGameAdapter(game);
+  switch (adapter.type) {
+    case "LEAGUE_OF_LEGENDS":
+    case "VALORANT":
+      return process.env.RIOT_API_KEY?.startsWith("RGAPI-") || false;
+    case "DOTA2":
+    case "COUNTER_STRIKE_2":
+      return (process.env.STEAM_API_KEY?.length || 0) > 10;
+    default:
+      return false;
+  }
 }
 
 // ============================================================
