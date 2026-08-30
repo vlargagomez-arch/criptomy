@@ -36,6 +36,12 @@ model User {
   messages        Message[]
   disputesOpened  Dispute[] @relation("DisputeOpener")
   disputesAgainst Dispute[] @relation("DisputeDefendant")
+
+  // Gaming P2P
+  gameAccounts        GameAccount[]
+  challengesCreated   Challenge[] @relation("ChallengeCreator")
+  challengesOpponent  Challenge[] @relation("ChallengeOpponent")
+  challengesWon       Challenge[] @relation("ChallengeWinner")
 }
 
 // Oferta P2P: "vendo X BTC por Y COP vía Nequi"
@@ -225,4 +231,91 @@ enum TradeStatus {
   COMPLETED         // trade finalizado OK
   CANCELLED         // cancelado por una de las partes
   DISPUTED          // en disputa
+}
+
+// ============================================================
+// MÓDULO: Retos P2P Gaming
+// ============================================================
+// Retos 1v1 con criptomonedas. Los usuarios vinculan su cuenta
+// de juego (LoL, Valorant, CS2), apuestan USDT, juegan, y el
+// sistema consulta la API oficial para determinar el ganador
+// y liberar el pago automáticamente.
+
+// Cuenta de juego vinculada por un usuario (ej: invocador de LoL)
+model GameAccount {
+  id              String   @id @default(cuid())
+  userId          String
+  game            GameType // LOL, VALORANT, CS2, ...
+  accountRegion   String   // ej: "la1", "na1", "euw"
+  accountId       String   // ID dentro del juego (PUUID, steamID, etc.)
+  accountName     String   // nombre visible (invocador, tag)
+  verifiedAt      DateTime @default(now())
+  verificationHash String? // hash de verificación de propiedad
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime @default(now())
+
+  @@unique([game, accountId, accountRegion])
+  @@index([userId])
+}
+
+// Reto P2P: dos jugadores apuestan cripto sobre quién gana
+model Challenge {
+  id              String   @id @default(cuid())
+  game            GameType
+  mode            String   // "1v1-rank", "1v1-custom", "bo3", etc.
+  stakeAmount     Float    // cantidad de USDT que apuesta cada jugador
+  currency        String   @default("USDT")
+  chain           String   @default("TRON") // chain del pago
+
+  creatorId       String   // usuario que crea el reto
+  opponentId      String?  // usuario que acepta (null si está abierto)
+  winnerId        String?  // determinado al final
+
+  // Cuentas de juego usadas en este reto
+  creatorGameAccountId  String
+  opponentGameAccountId String?
+
+  // Match info
+  matchId         String?  // ID del match en la API del juego (post-juego)
+  matchData       String?  // JSON con datos crudos del match
+  matchVerifiedAt DateTime?
+
+  // Estado del escrow
+  escrowAddress   String?
+  escrowTxHash    String?
+
+  status          ChallengeStatus @default(OPEN)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  expiresAt       DateTime? // si nadie acepta, expira
+
+  creator         User     @relation("ChallengeCreator", fields: [creatorId], references: [id])
+  opponent        User?    @relation("ChallengeOpponent", fields: [opponentId], references: [id])
+  winner          User?    @relation("ChallengeWinner", fields: [winnerId], references: [id])
+
+  @@index([game, status])
+  @@index([creatorId])
+  @@index([opponentId])
+}
+
+enum GameType {
+  LEAGUE_OF_LEAGENDS
+  VALORANT
+  COUNTER_STRIKE_2
+  DOTA2
+  ROCKET_LEAGUE
+}
+
+enum ChallengeStatus {
+  OPEN            // esperando oponente
+  ACCEPTED        // oponente confirmó, esperando depósito
+  ESCROW_FUNDED   // ambos depositaron, listos para jugar
+  IN_PROGRESS     // match en curso
+  PENDING_RESULT  // match terminó, esperando verificación API
+  COMPLETED       // ganador determinado, pago liberado
+  CANCELLED       // cancelado
+  DISPUTED        // en disputa (API no pudo determinar ganador)
 }

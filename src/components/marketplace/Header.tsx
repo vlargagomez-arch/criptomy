@@ -18,6 +18,7 @@ import {
   ArrowDownUp,
   Zap,
   Network,
+  Trophy,
   Wallet,
   Star,
   ShieldAlert,
@@ -50,6 +51,12 @@ const NAV_GROUPS: NavGroup[] = [
       { key: "swap", label: "Swap cripto", icon: ArrowDownUp, description: "Intercambio vía Uniswap V3" },
       { key: "lightning", label: "Lightning", icon: Zap, description: "Pagos instantáneos de Bitcoin" },
       { key: "p2p", label: "Red P2P", icon: Network, description: "Red descentralizada sin servidor" },
+    ],
+  },
+  {
+    label: "Gaming",
+    items: [
+      { key: "retos", label: "Retos P2P", icon: Trophy, description: "Apuestas 1v1 en LoL, Valorant, CS2" },
     ],
   },
   {

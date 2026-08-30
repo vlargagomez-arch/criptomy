@@ -24,6 +24,7 @@ export type TabKey =
   | "swap"
   | "lightning"
   | "p2p"
+  | "retos"
   | "billetera"
   | "reputacion"
   | "disputas"

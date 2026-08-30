@@ -14,6 +14,7 @@ import DeployContractView from "@/components/marketplace/DeployContractView";
 import LightningView from "@/components/marketplace/LightningView";
 import SwapView from "@/components/marketplace/SwapView";
 import P2PView from "@/components/marketplace/P2PView";
+import RetosP2PView from "@/components/marketplace/RetosP2PView";
 
 export default function Home() {
   const { tab } = useApp();
@@ -29,6 +30,7 @@ export default function Home() {
         {tab === "swap" && <SwapView />}
         {tab === "lightning" && <LightningView />}
         {tab === "p2p" && <P2PView />}
+        {tab === "retos" && <RetosP2PView />}
         {tab === "billetera" && <WalletView />}
         {tab === "reputacion" && <ReputationView />}
         {tab === "disputas" && <DisputesView />}
