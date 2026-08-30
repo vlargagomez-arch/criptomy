@@ -47,6 +47,25 @@ interface AppState {
   logout: () => void;
 }
 
+// Versión del storage. Cambiar este número cuando el schema cambia
+// para forzar que los navegadores descarten datos viejos.
+const STORAGE_VERSION = 9;
+
+// Validar que un objeto user tenga todos los campos requeridos
+function isValidUser(user: unknown): user is CurrentUser {
+  if (!user || typeof user !== "object") return false;
+  const u = user as Record<string, unknown>;
+  return (
+    typeof u.id === "string" &&
+    typeof u.alias === "string" &&
+    typeof u.walletAddress === "string" &&
+    typeof u.torOnly === "boolean" &&
+    typeof u.reputationScore === "number" &&
+    typeof u.totalTrades === "number" &&
+    typeof u.completedTrades === "number"
+  );
+}
+
 export const useApp = create<AppState>()(
   persist(
     (set) => ({
@@ -71,8 +90,8 @@ export const useApp = create<AppState>()(
         }),
     }),
     {
-      name: "nokycswap-v8",
-      version: 8,
+      name: "nokycswap-v9",
+      version: STORAGE_VERSION,
       // Solo persistir datos serializables simples
       partialize: (state) => ({
         user: state.user,
@@ -80,13 +99,26 @@ export const useApp = create<AppState>()(
         tab: state.tab,
         escrowAddress: state.escrowAddress,
       }),
-      // Migración: si la versión del storage es vieja, empezar limpio
-      migrate: (_persistedState, version) => {
-        if (version < 8) {
-          // Schema cambió — descartar datos viejos
+      // Migración: descartar datos viejos o inválidos
+      migrate: (persistedState, version) => {
+        if (version < STORAGE_VERSION || !persistedState) {
           return null;
         }
-        return _persistedState;
+        // Validar que el user persistido tenga el schema correcto
+        const state = persistedState as { user?: unknown; tab?: unknown };
+        if (state.user && !isValidUser(state.user)) {
+          state.user = null;
+        }
+        // Validar que tab sea un valor válido
+        const validTabs: TabKey[] = [
+          "inicio", "mercado", "crear", "trades", "swap",
+          "lightning", "p2p", "retos", "billetera", "reputacion",
+          "disputas", "tor", "deploy"
+        ];
+        if (state.tab && !validTabs.includes(state.tab as TabKey)) {
+          state.tab = "inicio";
+        }
+        return state;
       },
     }
   )
