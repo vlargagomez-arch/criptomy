@@ -1,157 +1,72 @@
 "use client";
 
 // ============================================================
-// WalletConnect v2 — conexión con wallets mobile
+// Conexión mobile — deep links directos (sin SDK pesado)
 // ============================================================
-// En MVP usamos el estándar WalletConnect URI que cualquier wallet
-// soporta. El usuario escanea el QR con su wallet móvil (Rainbow,
-// Trust, MetaMask mobile, etc.) y se conecta.
-//
-// Para producción: instalar @walletconnect/ethereum-provider
-// y descomentar la versión completa abajo. La razón por la que no
-// está incluida ahora es que tiene dependencias nativas pesadas
-// que pueden causar problemas de compilación en algunos entornos.
-//
-// Mientras tanto, generamos el URI y mostramos QR con la librería
-// 'qrcode' (liviana) y dejamos que el usuario complete la conexión
-// en su wallet móvil.
+// En lugar de WalletConnect SDK (que causa OOM en el servidor),
+// usamos deep links directos a las wallets móviles.
+// Esto abre la dapp DENTRO del browser de la wallet, donde
+// window.ethereum ya está inyectado. Funciona inmediatamente,
+// sin projectId ni relay server.
 
-const WC_PROJECT_ID =
-  process.env.NEXT_PUBLIC_WC_PROJECT_ID || "demo_project_id_replace_me";
-
-// Genera un URI WalletConnect válido (formato wc:topic@2?...)
-// En producción: el SDK @walletconnect/ethereum-provider genera esto automáticamente
-// MVP: generamos un URI de ejemplo para que el usuario vea el formato
-export function generateWalletConnectURI(): string {
-  const topic = generateRandomTopic();
-  const timestamp = Date.now();
-  // Formato real: wc:<topic>@2?relay-protocol=<protocol>&symKey=<key>
-  // Aquí generamos uno demo que el usuario puede usar para probar el flujo
-  return `wc:${topic}@2?relay-protocol=waku&symKey=${generateSymKey()}&projectId=${WC_PROJECT_ID}&t=${timestamp}`;
-}
-
-function generateRandomTopic(): string {
-  const chars = "0123456789abcdef";
-  let result = "";
-  for (let i = 0; i < 64; i++) {
-    result += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return result;
-}
-
-function generateSymKey(): string {
-  const chars = "0123456789abcdef";
-  let result = "";
-  for (let i = 0; i < 64; i++) {
-    result += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return result;
-}
-
-// Verifica si WalletConnect está configurado
-export function isWalletConnectConfigured(): boolean {
-  return (
-    WC_PROJECT_ID !== "demo_project_id_replace_me" && WC_PROJECT_ID.length > 10
-  );
-}
-
-// Detecta si el usuario está en móvil
+// Detectar si el usuario está en móvil
 export function isMobileDevice(): boolean {
   if (typeof navigator === "undefined") return false;
   return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
 
-// Deep link para abrir wallet desde navegador móvil
-export function getWalletConnectDeepLink(uri: string): string {
-  // Rainbow wallet deep link (otros wallets usan formatos similares)
-  return `https://rnbwapp.com/wc?uri=${encodeURIComponent(uri)}`;
+// Generar deep link para MetaMask mobile
+// Abre la dapp dentro del browser de MetaMask
+export function getMetaMaskDeepLink(): string {
+  if (typeof window === "undefined") return "";
+  const url = window.location.host + window.location.pathname;
+  return `https://metamask.app.link/dapp/${url}`;
 }
 
-// Lista de wallets móviles compatibles con WalletConnect
-export const SUPPORTED_WALLETS = [
-  {
-    id: "rainbow",
-    name: "Rainbow",
-    icon: "🌈",
-    downloadURL: "https://rainbow.me/download",
-    deepLink: "https://rnbwapp.com/wc?uri=",
-  },
+// Generar deep link para Trust Wallet
+export function getTrustWalletDeepLink(): string {
+  if (typeof window === "undefined") return "";
+  const url = window.location.host + window.location.pathname;
+  return `https://link.trustwallet.com/open_url?coin_id=60&url=${encodeURIComponent("https://" + url)}`;
+}
+
+// Generar deep link para Coinbase Wallet
+export function getCoinbaseDeepLink(): string {
+  if (typeof window === "undefined") return "";
+  const url = window.location.href;
+  return `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(url)}`;
+}
+
+// Lista de wallets móviles con deep links
+export const MOBILE_WALLETS = [
   {
     id: "metamask",
-    name: "MetaMask Mobile",
+    name: "MetaMask",
     icon: "🦊",
+    color: "#f6851b",
     downloadURL: "https://metamask.io/download/",
-    deepLink: "metamask://wc?uri=",
+    getDeepLink: getMetaMaskDeepLink,
   },
   {
     id: "trust",
     name: "Trust Wallet",
     icon: "🛡️",
+    color: "#3375bb",
     downloadURL: "https://trustwallet.com/download",
-    deepLink: "https://link.trustwallet.com/wc?uri=",
+    getDeepLink: getTrustWalletDeepLink,
   },
   {
     id: "coinbase",
     name: "Coinbase Wallet",
     icon: "🔵",
+    color: "#0052ff",
     downloadURL: "https://www.coinbase.com/wallet/downloads",
-    deepLink: "https://go.cb-w.com/wc?uri=",
-  },
-  {
-    id: "argent",
-    name: "Argent",
-    icon: "🔐",
-    downloadURL: "https://www.argent.xyz/",
-    deepLink: "https://argent.xyz/wc?uri=",
+    getDeepLink: getCoinbaseDeepLink,
   },
 ] as const;
 
-// ============================================================
-// Versión completa (requiere @walletconnect/ethereum-provider)
-// ============================================================
-// Para activar:
-//
-//   npm install @walletconnect/ethereum-provider ethers
-//
-// Y luego descomentar este bloque:
-//
-// import { ethers, BrowserProvider } from "ethers";
-// import EthereumProvider from "@walletconnect/ethereum-provider";
-//
-// let wcProvider: Awaited<ReturnType<typeof EthereumProvider.init>> | null = null;
-//
-// export async function getWalletConnectProvider() {
-//   if (wcProvider) return wcProvider;
-//   wcProvider = await EthereumProvider.init({
-//     projectId: WC_PROJECT_ID,
-//     chains: [1, 11155111],
-//     optionalChains: [137, 42161, 10],
-//     showQrModal: true,
-//     qrModalOptions: {
-//       themeMode: "dark",
-//       themeVariables: {
-//         "--wcm-accent-color": "#10b981",
-//         "--wcm-button-background-color": "#10b981",
-//       },
-//     },
-//     metadata: {
-//       name: "NoKYCSwap",
-//       description: "P2P cripto sin KYC",
-//       url: "https://nokycswap.example.com",
-//       icons: ["https://nokycswap.example.com/logo.png"],
-//     },
-//   });
-//   return wcProvider;
-// }
-//
-// export async function connectWalletConnect() {
-//   const provider = await getWalletConnectProvider();
-//   if (!provider.connected) await provider.enable();
-//   const ethersProvider = new BrowserProvider(provider);
-//   const signer = await ethersProvider.getSigner();
-//   return {
-//     address: provider.accounts[0],
-//     chainId: provider.chainId,
-//     signer,
-//   };
-// }
+// Verificar si está dentro del browser de una wallet (window.ethereum disponible)
+export function isInWalletBrowser(): boolean {
+  if (typeof window === "undefined") return false;
+  return !!window.ethereum;
+}
