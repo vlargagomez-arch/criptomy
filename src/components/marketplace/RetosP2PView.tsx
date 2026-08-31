@@ -36,6 +36,7 @@ import {
   XCircle,
   Clock,
   Swords,
+  AlertCircle,
 } from "lucide-react";
 import {
   GameType,
@@ -1013,25 +1014,55 @@ function ChallengeDetailModal({
           )}
 
           {challenge.status === "IN_PROGRESS" && (isCreator || isOpponent) && (
-            <div className="space-y-2">
-              <Label className="text-slate-300 block text-xs">
-                ID del partido (match ID) en {adapter.shortName}
-              </Label>
-              <Input
-                value={matchId}
-                onChange={(e) => setMatchId(e.target.value)}
-                placeholder="ej: LA1_1234567890"
-                className="bg-slate-950 border-slate-700 text-slate-100 font-mono text-xs"
+            adapter.verification === "API" ? (
+              <div className="space-y-2">
+                <Label className="text-slate-300 block text-xs">
+                  ID del partido (match ID) en {adapter.shortName}
+                </Label>
+                <Input
+                  value={matchId}
+                  onChange={(e) => setMatchId(e.target.value)}
+                  placeholder="ej: LA1_1234567890"
+                  className="bg-slate-950 border-slate-700 text-slate-100 font-mono text-xs"
+                />
+                <Button
+                  onClick={() => doAction("verify", { matchId })}
+                  disabled={actionLoading || !matchId}
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  {actionLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
+                  Verificar resultado vía API
+                </Button>
+              </div>
+            ) : (
+              <SelfReportSection
+                challenge={challenge}
+                isCreator={isCreator}
+                isOpponent={isOpponent}
+                currentUserId={currentUserId}
+                actionLoading={actionLoading}
+                onReport={(winner, cid) => doAction("report-result", { reportedWinner: winner, screenshotCID: cid })}
+                onConfirm={() => doAction("confirm-result", {})}
+                onDispute={(reason) => doAction("dispute-result", { disputeReason: reason })}
+                onCheckTimeout={() => doAction("check-timeout", {})}
+                setResult={setResult}
               />
-              <Button
-                onClick={() => doAction("verify", { matchId })}
-                disabled={actionLoading || !matchId}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
-              >
-                {actionLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
-                Verificar resultado y liberar pago
-              </Button>
-            </div>
+            )
+          )}
+
+          {challenge.status === "PENDING_CONFIRM" && (isCreator || isOpponent) && (
+            <SelfReportSection
+              challenge={challenge}
+              isCreator={isCreator}
+              isOpponent={isOpponent}
+              currentUserId={currentUserId}
+              actionLoading={actionLoading}
+              onReport={(winner, cid) => doAction("report-result", { reportedWinner: winner, screenshotCID: cid })}
+              onConfirm={() => doAction("confirm-result", {})}
+              onDispute={(reason) => doAction("dispute-result", { disputeReason: reason })}
+              onCheckTimeout={() => doAction("check-timeout", {})}
+              setResult={setResult}
+            />
           )}
 
           {["OPEN", "ACCEPTED", "ESCROW_FUNDED"].includes(challenge.status) && (isCreator || isOpponent) && (
@@ -1105,6 +1136,232 @@ function AcceptSection({
       >
         {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Swords className="w-4 h-4 mr-2" />}
         Aceptar reto
+      </Button>
+    </div>
+  );
+}
+
+// ============================================================
+// SelfReportSection — para juegos sin API (FIFA, CS2, CoD, etc.)
+// ============================================================
+function SelfReportSection({
+  challenge,
+  isCreator,
+  currentUserId,
+  actionLoading,
+  onReport,
+  onConfirm,
+  onDispute,
+  onCheckTimeout,
+  setResult,
+}: {
+  challenge: Challenge;
+  isCreator: boolean;
+  isOpponent: boolean;
+  currentUserId: string;
+  actionLoading: boolean;
+  onReport: (winner: "creator" | "opponent", screenshotCID: string) => void;
+  onConfirm: () => void;
+  onDispute: (reason: string) => void;
+  onCheckTimeout: () => void;
+  setResult: (s: string | null) => void;
+}) {
+  const [selectedWinner, setSelectedWinner] = useState<"creator" | "opponent">("creator");
+  const [screenshotUploaded, setScreenshotUploaded] = useState(false);
+  const [screenshotCID, setScreenshotCID] = useState("");
+  const [disputeText, setDisputeText] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [remainingTime, setRemainingTime] = useState("");
+
+  // Timer para countdown
+  useEffect(() => {
+    if (challenge.status === "PENDING_CONFIRM" && challenge.resultDeadline) {
+      const updateTimer = () => {
+        const remaining = new Date(challenge.resultDeadline!).getTime() - Date.now();
+        if (remaining <= 0) {
+          setRemainingTime("⏰ Tiempo agotado");
+          onCheckTimeout();
+        } else {
+          const min = Math.floor(remaining / 60000);
+          const sec = Math.floor((remaining % 60000) / 1000);
+          setRemainingTime(`${min}:${sec.toString().padStart(2, "0")}`);
+        }
+      };
+      updateTimer();
+      const interval = setInterval(updateTimer, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [challenge.status, challenge.resultDeadline, onCheckTimeout]);
+
+  // Subir screenshot a IPFS
+  async function uploadScreenshot(file: File) {
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/ipfs?op=upload", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.cid) {
+        setScreenshotCID(data.cid);
+        setScreenshotUploaded(true);
+        setResult("Screenshot subido a IPFS. CID: " + data.cid.slice(0, 12) + "...");
+      }
+    } catch (e) {
+      setResult("Error subiendo screenshot: " + (e as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  // Si ya se reportó y estamos esperando confirmación
+  if (challenge.status === "PENDING_CONFIRM") {
+    const isLoser = challenge.reportedWinner === "creator"
+      ? challenge.opponent?.id === currentUserId
+      : challenge.creator?.id === currentUserId;
+
+    return (
+      <div className="space-y-3">
+        <div className="p-3 rounded-md bg-blue-950/30 border border-blue-900/50">
+          <div className="text-xs text-blue-300 font-medium mb-1">
+            ⏳ Resultado reportado — Esperando confirmación
+          </div>
+          <div className="text-[10px] text-slate-400 mb-2">
+            Ganador reportado: <strong className="text-emerald-400">
+              {challenge.reportedWinner === "creator" ? challenge.creator.alias : challenge.opponent?.alias}
+            </strong>
+          </div>
+          {remainingTime && (
+            <div className="text-xs font-mono text-yellow-400">
+              Tiempo restante: {remainingTime}
+            </div>
+          )}
+          {challenge.resultScreenshot && (
+            <a
+              href={`https://ipfs.io/ipfs/${challenge.resultScreenshot}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[10px] text-emerald-400 hover:underline mt-1 inline-block"
+            >
+              📎 Ver screenshot en IPFS
+            </a>
+          )}
+        </div>
+
+        {isLoser ? (
+          <div className="space-y-2">
+            <Button
+              onClick={onConfirm}
+              disabled={actionLoading}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              <CheckCircle2 className="w-4 h-4 mr-2" />
+              Confirmar resultado (soy el perdedor)
+            </Button>
+            <div className="space-y-1">
+              <textarea
+                value={disputeText}
+                onChange={(e) => setDisputeText(e.target.value)}
+                placeholder="Si disputa, explique por qué (ej: el screenshot es falso, el resultado fue diferente...)"
+                className="w-full bg-slate-950 border border-slate-700 text-slate-100 text-xs p-2 rounded-md"
+                rows={2}
+              />
+              <Button
+                onClick={() => onDispute(disputeText)}
+                disabled={actionLoading || !disputeText.trim()}
+                variant="outline"
+                className="w-full border-red-900/50 text-red-400 hover:bg-red-950/30"
+              >
+                <AlertCircle className="w-4 h-4 mr-2" />
+                Disputar resultado
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="p-2 rounded-md bg-slate-950 border border-slate-800 text-xs text-slate-400 text-center">
+            Esperando que el oponente confirme o dispute...
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Si está en progreso y es self-report
+  return (
+    <div className="space-y-3">
+      <div className="p-3 rounded-md bg-purple-950/20 border border-purple-900/40">
+        <div className="text-xs text-purple-300 font-medium mb-1">
+          📸 Self-report — Este juego no tiene API automática
+        </div>
+        <p className="text-[10px] text-slate-400">
+          1. Jueguen el partido<br/>
+          2. El ganador sube un screenshot del resultado<br/>
+          3. El perdedor tiene 10 min para confirmar o disputar<br/>
+          4. Si no responde en 10 min → el ganador recibe el pago
+        </p>
+      </div>
+
+      <div>
+        <Label className="text-slate-300 mb-1.5 block text-xs">¿Quién ganó?</Label>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => setSelectedWinner("creator")}
+            className={`p-2 rounded-md border text-xs font-medium transition ${
+              selectedWinner === "creator"
+                ? "bg-emerald-950/40 border-emerald-700 text-emerald-300"
+                : "bg-slate-950 border-slate-800 text-slate-400"
+            }`}
+          >
+            {challenge.creator.alias} (tú{isCreator ? "" : " — creador"})
+          </button>
+          <button
+            onClick={() => setSelectedWinner("opponent")}
+            className={`p-2 rounded-md border text-xs font-medium transition ${
+              selectedWinner === "opponent"
+                ? "bg-emerald-950/40 border-emerald-700 text-emerald-300"
+                : "bg-slate-950 border-slate-800 text-slate-400"
+            }`}
+          >
+            {challenge.opponent?.alias || "Oponente"}
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <Label className="text-slate-300 mb-1.5 block text-xs">
+          Screenshot del resultado (subir a IPFS)
+        </Label>
+        <input
+          type="file"
+          accept="image/*"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) uploadScreenshot(file);
+          }}
+          className="w-full text-xs text-slate-400 file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-emerald-600 file:text-white file:text-xs file:cursor-pointer"
+        />
+        {uploading && (
+          <div className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            Subiendo a IPFS...
+          </div>
+        )}
+        {screenshotUploaded && (
+          <div className="text-[10px] text-emerald-400 mt-1">
+            ✓ Screenshot subido. CID: {screenshotCID.slice(0, 20)}...
+          </div>
+        )}
+      </div>
+
+      <Button
+        onClick={() => onReport(selectedWinner, screenshotCID)}
+        disabled={actionLoading || !screenshotUploaded}
+        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+      >
+        {actionLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
+        Reportar resultado
       </Button>
     </div>
   );

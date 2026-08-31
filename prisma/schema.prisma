@@ -282,6 +282,20 @@ model Challenge {
   matchData       String?  // JSON con datos crudos del match
   matchVerifiedAt DateTime?
 
+  // Self-report (para juegos sin API: FIFA, CS2, CoD, etc.)
+  reportedWinner     String?  // "creator" | "opponent" (quién se reporta como ganador)
+  resultScreenshot   String?  // CID de IPFS con screenshot del resultado
+  resultReportedAt   DateTime?
+  resultConfirmedAt  DateTime?  // si el perdedor confirma
+  resultDeadline     DateTime?  // 10 min para confirmar/disputar
+
+  // Disputa
+  disputeReason      String?
+  disputeEvidence    String?  // CID de IPFS con evidencia adicional
+  disputeOpenedAt    DateTime?
+  disputeResolvedAt  DateTime?
+  disputeResolver    String?  // alias del árbitro
+
   // Estado del escrow
   escrowAddress   String?
   escrowTxHash    String?
@@ -307,8 +321,9 @@ enum ChallengeStatus {
   ACCEPTED        // oponente confirmó, esperando depósito
   ESCROW_FUNDED   // ambos depositaron, listos para jugar
   IN_PROGRESS     // match en curso
-  PENDING_RESULT  // match terminó, esperando verificación API
+  PENDING_RESULT  // match terminó, esperando verificación API o self-report
+  PENDING_CONFIRM // self-report hecho, esperando confirmación del perdedor (10 min)
   COMPLETED       // ganador determinado, pago liberado
   CANCELLED       // cancelado
-  DISPUTED        // en disputa (API no pudo determinar ganador)
+  DISPUTED        // en disputa
 }

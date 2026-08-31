@@ -6,7 +6,25 @@
 //
 // El resto del sistema (UI, API, escrow) no necesita cambios.
 
-export type GameType = "LEAGUE_OF_LEGENDS" | "VALORANT" | "COUNTER_STRIKE_2" | "DOTA2" | "ROCKET_LEAGUE";
+export type GameType =
+  | "LEAGUE_OF_LEGENDS"
+  | "VALORANT"
+  | "COUNTER_STRIKE_2"
+  | "DOTA2"
+  | "ROCKET_LEAGUE"
+  | "PUBG"
+  | "EA_SPORTS_FC"
+  | "CALL_OF_DUTY"
+  | "APEX_LEGENDS"
+  | "FORTNITE"
+  | "MORTAL_KOMBAT"
+  | "NBA_2K"
+  | "STREET_FIGHTER"
+  | "TEKKEN"
+  | "CUSTOM";
+
+// Tipo de verificación que soporta cada juego
+export type VerificationType = "API" | "SELF_REPORT";
 
 export interface GameAdapter {
   type: GameType;
@@ -19,8 +37,8 @@ export interface GameAdapter {
   accountInputLabel: string;
   accountRegionLabel: string;
   accountNamePlaceholder: string;
-  // En producción: cada adapter tiene su cliente de API oficial
-  // verifyMatchResult(matchId: string, accounts: [string, string]): Promise<MatchResult>
+  verification: VerificationType; // API = automático, SELF_REPORT = screenshot
+  apiName?: string; // "riot", "steam", "pubg" — para saber qué API usar
 }
 
 export interface MatchResult {
@@ -61,6 +79,8 @@ const LOL_ADAPTER: GameAdapter = {
   accountInputLabel: "Nombre de invocador",
   accountRegionLabel: "Región del invocador",
   accountNamePlaceholder: "ej: Faker#KR1",
+  verification: "API",
+  apiName: "riot",
 };
 
 // ============================================================
@@ -88,6 +108,8 @@ const VALORANT_ADAPTER: GameAdapter = {
   accountInputLabel: "Riot ID (nombre#tag)",
   accountRegionLabel: "Región",
   accountNamePlaceholder: "ej: TenZ#sen",
+  verification: "API",
+  apiName: "riot",
 };
 
 // ============================================================
@@ -110,6 +132,8 @@ const CS2_ADAPTER: GameAdapter = {
   accountInputLabel: "Steam ID o URL",
   accountRegionLabel: "Región",
   accountNamePlaceholder: "ej: 76561198012345678",
+  verification: "SELF_REPORT",
+  apiName: undefined,
 };
 
 // ============================================================
@@ -128,6 +152,8 @@ const DOTA2_ADAPTER: GameAdapter = {
   accountInputLabel: "Steam ID",
   accountRegionLabel: "Región",
   accountNamePlaceholder: "ej: 76561198012345678",
+  verification: "API",
+  apiName: "steam",
 };
 
 // ============================================================
@@ -151,6 +177,173 @@ export const GAME_ADAPTERS: Record<GameType, GameAdapter> = {
     accountInputLabel: "Epic Games ID",
     accountRegionLabel: "Región",
     accountNamePlaceholder: "ej: username",
+    verification: "SELF_REPORT",
+  },
+  PUBG: {
+    type: "PUBG",
+    name: "PUBG: Battlegrounds",
+    shortName: "PUBG",
+    icon: "🪂",
+    color: "#f2a900",
+    regions: [
+      { code: "pc-na", name: "PC Norteamérica" },
+      { code: "pc-eu", name: "PC Europa" },
+      { code: "pc-as", name: "PC Asia" },
+      { code: "pc-sa", name: "PC Sudamérica" },
+      { code: "pc-krjp", name: "PC Corea/Japón" },
+      { code: "xbox-na", name: "Xbox NA" },
+      { code: "psn-na", name: "PSN NA" },
+    ],
+    modes: [
+      { id: "1v1-arena", name: "1v1 Arena", description: "Custom match, último en pie" },
+    ],
+    accountInputLabel: "PUBG Player ID",
+    accountRegionLabel: "Plataforma/Región",
+    accountNamePlaceholder: "ej: account.1234567890",
+    verification: "API",
+    apiName: "pubg",
+  },
+  EA_SPORTS_FC: {
+    type: "EA_SPORTS_FC",
+    name: "EA Sports FC 25 (FIFA)",
+    shortName: "FC25",
+    icon: "⚽",
+    color: "#00ff87",
+    regions: [{ code: "global", name: "Global" }],
+    modes: [
+      { id: "1v1-friendly", name: "1v1 Amistoso", description: "Partida amistosa, 90 seg de tiempo extra" },
+      { id: "1v1-penalties", name: "1v1 Penales", description: "Solo penales" },
+      { id: "bo3", name: "Best of 3", description: "Mejor de 3 partidos" },
+    ],
+    accountInputLabel: "EA ID / Gamertag",
+    accountRegionLabel: "Plataforma",
+    accountNamePlaceholder: "ej: ProGamer2025",
+    verification: "SELF_REPORT",
+  },
+  CALL_OF_DUTY: {
+    type: "CALL_OF_DUTY",
+    name: "Call of Duty: Warzone/MW3",
+    shortName: "CoD",
+    icon: "🔫",
+    color: "#7a7a7a",
+    regions: [{ code: "global", name: "Global" }],
+    modes: [
+      { id: "1v1-gunfight", name: "1v1 Gunfight", description: "Mejor de 6 rondas" },
+      { id: "1v1-search", name: "1v1 Search & Destroy", description: "Mejor de 11 rondas" },
+    ],
+    accountInputLabel: "Activision ID (nombre#tag)",
+    accountRegionLabel: "Plataforma",
+    accountNamePlaceholder: "ej: Player#1234567",
+    verification: "SELF_REPORT",
+  },
+  APEX_LEGENDS: {
+    type: "APEX_LEGENDS",
+    name: "Apex Legends",
+    shortName: "Apex",
+    icon: "🦅",
+    color: "#da292a",
+    regions: [{ code: "global", name: "Global" }],
+    modes: [
+      { id: "1v1-arena", name: "1v1 Arena", description: "Último en pie" },
+    ],
+    accountInputLabel: "EA ID / IGN",
+    accountRegionLabel: "Plataforma",
+    accountNamePlaceholder: "ej: ApexPlayer",
+    verification: "SELF_REPORT",
+  },
+  FORTNITE: {
+    type: "FORTNITE",
+    name: "Fortnite",
+    shortName: "FN",
+    icon: "🏗️",
+    color: "#00b4f0",
+    regions: [{ code: "global", name: "Global" }],
+    modes: [
+      { id: "1v1-build", name: "1v1 Build", description: "Con construcción, último en pie" },
+      { id: "1v1-zb", name: "1v1 Zero Build", description: "Sin construcción, último en pie" },
+    ],
+    accountInputLabel: "Epic Games ID",
+    accountRegionLabel: "Plataforma",
+    accountNamePlaceholder: "ej: FortnitePro",
+    verification: "SELF_REPORT",
+  },
+  MORTAL_KOMBAT: {
+    type: "MORTAL_KOMBAT",
+    name: "Mortal Kombat 1",
+    shortName: "MK1",
+    icon: "🥷",
+    color: "#f47b20",
+    regions: [{ code: "global", name: "Global" }],
+    modes: [
+      { id: "bo3", name: "Best of 3", description: "Mejor de 3 rounds" },
+      { id: "bo5", name: "Best of 5", description: "Mejor de 5 rounds" },
+    ],
+    accountInputLabel: "WB Games ID / PSN",
+    accountRegionLabel: "Plataforma",
+    accountNamePlaceholder: "ej: KombatMaster",
+    verification: "SELF_REPORT",
+  },
+  NBA_2K: {
+    type: "NBA_2K",
+    name: "NBA 2K25",
+    shortName: "2K25",
+    icon: "🏀",
+    color: "#1d428a",
+    regions: [{ code: "global", name: "Global" }],
+    modes: [
+      { id: "1v1", name: "1v1 Partida", description: "Partida completa 5 min/cuarto" },
+    ],
+    accountInputLabel: "PSN / Xbox GT / Steam",
+    accountRegionLabel: "Plataforma",
+    accountNamePlaceholder: "ej: HoopsKing",
+    verification: "SELF_REPORT",
+  },
+  STREET_FIGHTER: {
+    type: "STREET_FIGHTER",
+    name: "Street Fighter 6",
+    shortName: "SF6",
+    icon: "🥊",
+    color: "#ffcb05",
+    regions: [{ code: "global", name: "Global" }],
+    modes: [
+      { id: "bo3", name: "Best of 3", description: "Mejor de 3 rounds" },
+      { id: "bo5", name: "Best of 5", description: "Mejor de 5 rounds" },
+    ],
+    accountInputLabel: "Capcom ID / PSN",
+    accountRegionLabel: "Plataforma",
+    accountNamePlaceholder: "ej: ShotoMaster",
+    verification: "SELF_REPORT",
+  },
+  TEKKEN: {
+    type: "TEKKEN",
+    name: "Tekken 8",
+    shortName: "TK8",
+    icon: "👊",
+    color: "#e60012",
+    regions: [{ code: "global", name: "Global" }],
+    modes: [
+      { id: "bo3", name: "Best of 3", description: "Mejor de 3 rounds" },
+      { id: "bo5", name: "Best of 5", description: "Mejor de 5 rounds" },
+    ],
+    accountInputLabel: "Bandai ID / PSN",
+    accountRegionLabel: "Plataforma",
+    accountNamePlaceholder: "ej: IronFist",
+    verification: "SELF_REPORT",
+  },
+  CUSTOM: {
+    type: "CUSTOM",
+    name: "Juego personalizado",
+    shortName: "Custom",
+    icon: "🎮",
+    color: "#6366f1",
+    regions: [{ code: "global", name: "Global" }],
+    modes: [
+      { id: "custom", name: "Reglas custom", description: "Acuerdan las reglas en el chat" },
+    ],
+    accountInputLabel: "ID en el juego",
+    accountRegionLabel: "Plataforma",
+    accountNamePlaceholder: "ej: tu_id",
+    verification: "SELF_REPORT",
   },
 };
 

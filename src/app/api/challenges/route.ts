@@ -54,15 +54,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const VALID_GAMES: Record<string, unknown> = {
-      LEAGUE_OF_LEGENDS: "LEAGUE_OF_LEGENDS",
-      VALORANT: "VALORANT",
-      COUNTER_STRIKE_2: "COUNTER_STRIKE_2",
-      DOTA2: "DOTA2",
-      ROCKET_LEAGUE: "ROCKET_LEAGUE",
-    };
-    const gameValue = VALID_GAMES[game];
-    if (!gameValue) {
+    // Validar juego
+    const { getAllGames } = await import("@/lib/games");
+    const validGameTypes = getAllGames().map((g) => g.type);
+    if (!validGameTypes.includes(game)) {
       return NextResponse.json({ error: "Juego no soportado" }, { status: 400 });
     }
 
@@ -71,7 +66,7 @@ export async function POST(req: NextRequest) {
     }
 
     const gameAccount = await db.gameAccount.findFirst({
-      where: { id: creatorGameAccountId, userId: creatorId, game: gameValue  },
+      where: { id: creatorGameAccountId, userId: creatorId, game: game },
     });
     if (!gameAccount) {
       return NextResponse.json(
@@ -82,7 +77,7 @@ export async function POST(req: NextRequest) {
 
     const challenge = await db.challenge.create({
       data: {
-        game: gameValue ,
+        game: game,
         mode,
         stakeAmount: parseFloat(stakeAmount),
         currency: "USDT",
