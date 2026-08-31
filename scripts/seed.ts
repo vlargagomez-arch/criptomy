@@ -1,18 +1,23 @@
 // Script de seed: inserta ofertas de demostración para que el marketplace
 // no esté vacío al primer arranque.
 // Ejecutar con: bun run scripts/seed.ts
+//
+// IMPORTANTE: Solo inserta si no hay datos. NO borra ofertas existentes.
 
 import { db } from "../src/lib/db";
 
 async function main() {
-  console.log("🌱 Seeding database...");
+  console.log("🌱 Verificando si hay datos...");
 
-  await db.message.deleteMany();
-  await db.feedback.deleteMany();
-  await db.dispute.deleteMany();
-  await db.trade.deleteMany();
-  await db.offer.deleteMany();
-  await db.user.deleteMany();
+  // Verificar si ya hay ofertas — si las hay, NO borrar nada
+  const existingOffers = await db.offer.count();
+  if (existingOffers > 0) {
+    console.log(`✓ Ya hay ${existingOffers} ofertas. No se borra nada.`);
+    console.log("✓ Para re-seed manual: bun run scripts/seed.ts --force");
+    return;
+  }
+
+  console.log("🌱 No hay ofertas. Creando datos de demostración...");
 
   const users = await Promise.all([
     db.user.create({

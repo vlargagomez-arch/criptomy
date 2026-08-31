@@ -126,7 +126,7 @@ export default function MarketplaceView() {
             Mercado P2P
           </h1>
           <p className="text-sm text-slate-400">
-            {offers.length} ofertas activas · sin KYC · escrow on-chain
+            {offers.length} ofertas activas · sin KYC · escrow smart contract
           </p>
         </div>
       </div>
