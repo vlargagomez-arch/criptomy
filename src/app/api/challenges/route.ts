@@ -21,14 +21,29 @@ export async function GET(req: NextRequest) {
 
     const challenges = await db.challenge.findMany({
       where,
-      include: {
+      select: {
+        id: true,
+        game: true,
+        mode: true,
+        stakeAmount: true,
+        currency: true,
+        status: true,
+        createdAt: true,
+        escrowTxHash: true,
+        payoutStatus: true,
+        payoutTxHash: true,
+        payoutAmount: true,
+        resultDeadline: true,
+        reportedWinner: true,
+        resultScreenshot: true,
+        winnerId: true,
         creator: {
-          select: { id: true, alias: true, avatarSeed: true, reputationScore: true },
+          select: { id: true, alias: true, avatarSeed: true, reputationScore: true, walletAddress: true },
         },
         opponent: {
-          select: { id: true, alias: true, avatarSeed: true, reputationScore: true },
+          select: { id: true, alias: true, avatarSeed: true, reputationScore: true, walletAddress: true },
         },
-        winner: { select: { id: true, alias: true } },
+        winner: { select: { id: true, alias: true, walletAddress: true } },
       },
       orderBy: { createdAt: "desc" },
       take: 50,

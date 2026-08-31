@@ -182,7 +182,7 @@ export default function RetosP2PView() {
         <StatCard label="Retos abiertos" value={challenges.filter(c => c.status === "OPEN").length} icon={Clock} color="text-emerald-400" />
         <StatCard label="En progreso" value={challenges.filter(c => c.status === "IN_PROGRESS").length} icon={Swords} color="text-yellow-400" />
         <StatCard label="Completados" value={challenges.filter(c => c.status === "COMPLETED").length} icon={CheckCircle2} color="text-cyan-400" />
-        <StatCard label="Volumen total" value={`${challenges.reduce((s, c) => s + c.stakeAmount * 2, 0).toFixed(0)} USDT`} icon={Zap} color="text-purple-400" />
+        <StatCard label="Depósitos reales" value={`${challenges.filter(c => c.escrowTxHash).reduce((s, c) => s + c.stakeAmount * 2, 0).toFixed(0)} USDT`} icon={Zap} color="text-purple-400" />
       </div>
 
       {/* Tabs */}
@@ -389,11 +389,18 @@ function ChallengeRow({
           </div>
         </div>
 
-        {/* Apuesta */}
+        {/* Apuesta — honesto sobre qué es real */}
         <div className="col-span-6 sm:col-span-2">
-          <div className="text-[10px] text-slate-500 uppercase">Pool total</div>
-          <div className="text-sm font-mono text-emerald-400">
-            {formatStake(totalPot(challenge.stakeAmount))}
+          <div className="text-[10px] text-slate-500 uppercase">
+            {challenge.escrowTxHash ? "Pool depositado" : "Apuesta (sin depositar)"}
+          </div>
+          <div className={`text-sm font-mono ${
+            challenge.escrowTxHash ? "text-emerald-400" : "text-slate-500"
+          }`}>
+            {challenge.escrowTxHash
+              ? formatStake(totalPot(challenge.stakeAmount))
+              : `${challenge.stakeAmount} USDT`
+            }
           </div>
         </div>
 
@@ -597,8 +604,8 @@ function CreateChallengeModal({
               className="bg-slate-950 border-slate-700 text-slate-100 font-mono"
             />
             <div className="flex justify-between text-[10px] text-slate-500 mt-1">
-              <span>Pool total: {formatStake(totalPot(parseFloat(stake) || 0))}</span>
-              <span>Ganador recibe: {winnerPayout(parseFloat(stake) || 0).toFixed(2)} USDT</span>
+              <span>Pool si ambos depositan: {formatStake(totalPot(parseFloat(stake) || 0))}</span>
+              <span>Ganador recibe (est.): {winnerPayout(parseFloat(stake) || 0).toFixed(2)} USDT</span>
             </div>
           </div>
 
@@ -1005,19 +1012,33 @@ function ChallengeDetailModal({
             </div>
           </div>
 
-          {/* Apuesta */}
+          {/* Apuesta — honesto sobre qué es real */}
           <div className="grid grid-cols-3 gap-2 text-xs">
             <div className="p-2 rounded bg-slate-950 border border-slate-800">
               <div className="text-[10px] text-slate-500 uppercase">Apuesta</div>
               <div className="font-mono text-slate-200">{formatStake(challenge.stakeAmount)}</div>
             </div>
             <div className="p-2 rounded bg-slate-950 border border-slate-800">
-              <div className="text-[10px] text-slate-500 uppercase">Pool</div>
-              <div className="font-mono text-emerald-400">{formatStake(totalPot(challenge.stakeAmount))}</div>
+              <div className="text-[10px] text-slate-500 uppercase">
+                {challenge.escrowTxHash ? "Pool ✓" : "Pool (pend.)"}
+              </div>
+              <div className={`font-mono ${challenge.escrowTxHash ? "text-emerald-400" : "text-slate-600"}`}>
+                {challenge.escrowTxHash
+                  ? formatStake(totalPot(challenge.stakeAmount))
+                  : "—"
+                }
+              </div>
             </div>
             <div className="p-2 rounded bg-slate-950 border border-slate-800">
-              <div className="text-[10px] text-slate-500 uppercase">Ganador</div>
-              <div className="font-mono text-yellow-400">{winnerPayout(challenge.stakeAmount).toFixed(2)}</div>
+              <div className="text-[10px] text-slate-500 uppercase">
+                {challenge.payoutStatus === "COMPLETED" ? "Pagado ✓" : "Ganador (est.)"}
+              </div>
+              <div className={`font-mono ${challenge.payoutStatus === "COMPLETED" ? "text-yellow-400" : "text-slate-600"}`}>
+                {challenge.escrowTxHash
+                  ? winnerPayout(challenge.stakeAmount).toFixed(2)
+                  : "—"
+                }
+              </div>
             </div>
           </div>
 
