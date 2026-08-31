@@ -111,26 +111,35 @@ export async function GET(req: NextRequest) {
     }
 
     if (op === "balance") {
-      const res = await fetch(`${BLOCKSTREAM_API}/address/${address}`);
-      if (!res.ok) {
+      try {
+        const res = await fetch(`${BLOCKSTREAM_API}/address/${address}`, {
+          signal: AbortSignal.timeout(15000),
+        });
+        if (!res.ok) {
+          return NextResponse.json(
+            { error: `Blockstream API error: ${res.status}` },
+            { status: res.status }
+          );
+        }
+        const data = await res.json();
+        const funded = data.chain_stats?.funded_txo_sum || 0;
+        const spent = data.chain_stats?.spent_txo_sum || 0;
+        const mempoolFunded = data.mempool_stats?.funded_txo_sum || 0;
+        const mempoolSpent = data.mempool_stats?.spent_txo_sum || 0;
+        return NextResponse.json({
+          address,
+          confirmed: funded - spent,
+          unconfirmed: mempoolFunded - mempoolSpent,
+          total: funded - spent + mempoolFunded - mempoolSpent,
+          totalTx: data.chain_stats?.tx_count || 0,
+          source: "blockstream.info",
+        });
+      } catch (e) {
         return NextResponse.json(
-          { error: `Blockstream API error: ${res.status}` },
-          { status: res.status }
+          { error: "No se pudo conectar a Blockstream. Intente de nuevo." },
+          { status: 503 }
         );
       }
-      const data = await res.json();
-      const funded = data.chain_stats?.funded_txo_sum || 0;
-      const spent = data.chain_stats?.spent_txo_sum || 0;
-      const mempoolFunded = data.mempool_stats?.funded_txo_sum || 0;
-      const mempoolSpent = data.mempool_stats?.spent_txo_sum || 0;
-      return NextResponse.json({
-        address,
-        confirmed: funded - spent,
-        unconfirmed: mempoolFunded - mempoolSpent,
-        total: funded - spent + mempoolFunded - mempoolSpent,
-        totalTx: data.chain_stats?.tx_count || 0,
-        source: "blockstream.info",
-      });
     }
 
     if (op === "utxos") {
