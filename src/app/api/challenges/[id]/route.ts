@@ -149,6 +149,7 @@ export async function PATCH(
           winnerId,
           resultConfirmedAt: new Date(),
           matchVerifiedAt: new Date(),
+          payoutStatus: "PENDING", // Bot de pago automático procesará esto
         },
         include: {
           winner: { select: { id: true, alias: true, walletAddress: true } },
@@ -230,6 +231,7 @@ export async function PATCH(
           winnerId,
           matchData: JSON.stringify(result),
           matchVerifiedAt: new Date(),
+          payoutStatus: winnerId ? "PENDING" : null, // Bot procesará si hay ganador
         },
         include: {
           winner: { select: { id: true, alias: true, walletAddress: true } },
@@ -274,6 +276,7 @@ export async function PATCH(
           status: "COMPLETED",
           winnerId,
           matchVerifiedAt: new Date(),
+          payoutStatus: "PENDING",
         },
         include: {
           winner: { select: { id: true, alias: true } },

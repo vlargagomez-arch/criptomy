@@ -76,7 +76,15 @@ interface Challenge {
   createdAt: string;
   creator: ChallengePlayer;
   opponent: ChallengePlayer | null;
-  winner: { id: string; alias: string } | null;
+  winner: { id: string; alias: string; walletAddress?: string } | null;
+  payoutStatus?: string;
+  payoutTxHash?: string | null;
+  payoutAmount?: number | null;
+  payoutError?: string | null;
+  escrowTxHash?: string | null;
+  resultDeadline?: string | null;
+  reportedWinner?: string | null;
+  resultScreenshot?: string | null;
 }
 
 export default function RetosP2PView() {
@@ -1111,10 +1119,15 @@ function ChallengeDetailModal({
           )}
 
           {result && (
-            <div className="p-3 rounded-md bg-emerald-950/30 border border-emerald-900/50 text-xs text-emerald-300">
+            <div className="p-3 rounded-md bg-emerald-950/30 border border-emerald-900/50 text-xs text-emerald-300 whitespace-pre-line">
               <CheckCircle2 className="w-4 h-4 inline mr-1" />
               {result}
             </div>
+          )}
+
+          {/* Estado del pago automático */}
+          {challenge.status === "COMPLETED" && challenge.winner && (
+            <PayoutStatus challenge={challenge} />
           )}
 
           {error && (
@@ -1396,6 +1409,56 @@ function SelfReportSection({
         {actionLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-2" />}
         Reportar resultado
       </Button>
+    </div>
+  );
+}
+
+// ============================================================
+// PayoutStatus — muestra el estado del pago automático al ganador
+// ============================================================
+function PayoutStatus({ challenge }: { challenge: Challenge }) {
+  const status = challenge.payoutStatus || "PENDING";
+  const statusConfig: Record<string, { label: string; color: string; icon: string }> = {
+    PENDING: { label: "Pago pendiente", color: "bg-yellow-950/30 border-yellow-900/50 text-yellow-300", icon: "⏳" },
+    PROCESSING: { label: "Procesando pago…", color: "bg-blue-950/30 border-blue-900/50 text-blue-300", icon: "🔄" },
+    COMPLETED: { label: "Pago completado", color: "bg-emerald-950/30 border-emerald-900/50 text-emerald-300", icon: "✓" },
+    FAILED: { label: "Pago falló", color: "bg-red-950/30 border-red-900/50 text-red-300", icon: "❌" },
+  };
+  const config = statusConfig[status] || statusConfig.PENDING;
+  const payout = challenge.payoutAmount || challenge.stakeAmount * 2 * 0.95;
+
+  return (
+    <div className={`p-3 rounded-md border text-xs ${config.color}`}>
+      <div className="flex items-center justify-between mb-1">
+        <span className="font-medium">{config.icon} {config.label}</span>
+        {status === "COMPLETED" && (
+          <span className="font-mono">{payout.toFixed(2)} USDT</span>
+        )}
+      </div>
+      {status === "PENDING" && (
+        <p className="text-[10px] opacity-80">
+          El bot de pago automático enviará {payout.toFixed(2)} USDT a {challenge.winner?.alias} en breve.
+        </p>
+      )}
+      {status === "PROCESSING" && (
+        <p className="text-[10px] opacity-80">Transfiriendo USDT al ganador…</p>
+      )}
+      {status === "COMPLETED" && challenge.payoutTxHash && (
+        <div className="text-[10px] opacity-80">
+          <div>Wallet: {challenge.winner?.walletAddress?.slice(0, 10)}…</div>
+          <a
+            href={`https://etherscan.io/tx/${challenge.payoutTxHash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-emerald-400 hover:underline"
+          >
+            Ver tx: {challenge.payoutTxHash.slice(0, 20)}…
+          </a>
+        </div>
+      )}
+      {status === "FAILED" && challenge.payoutError && (
+        <p className="text-[10px] opacity-80">Error: {challenge.payoutError}</p>
+      )}
     </div>
   );
 }

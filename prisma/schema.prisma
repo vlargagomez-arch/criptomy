@@ -300,6 +300,13 @@ model Challenge {
   escrowAddress   String?
   escrowTxHash    String?
 
+  // Pago al ganador (bot automático)
+  payoutTxHash    String?  // tx hash del pago al ganador
+  payoutAmount    Float?   // cantidad enviada al ganador
+  payoutStatus    String?  @default("PENDING") // PENDING | PROCESSING | COMPLETED | FAILED
+  payoutError     String?
+  payoutProcessedAt DateTime?
+
   status          ChallengeStatus @default(OPEN)
 
   createdAt       DateTime @default(now())
