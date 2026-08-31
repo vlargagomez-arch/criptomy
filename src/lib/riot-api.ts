@@ -10,7 +10,6 @@
 // - GET /lol/match/v5/matches/{matchId} — info completa del match
 // - GET /riot/account/v1/accounts/by-riot-id/{name}/{tag} — obtener PUUID
 
-const RIOT_API_KEY = process.env.RIOT_API_KEY || "";
 const RIOT_BASE = "https://americas.api.riotgames.com"; // para match v5
 const RIOT_REGIONAL: Record<string, string> = {
   la1: "https://la1.api.riotgames.com",
@@ -44,8 +43,12 @@ export interface RiotMatchResult {
   source: string;
 }
 
+function getApiKey(): string {
+  return process.env.RIOT_API_KEY || "";
+}
+
 function isConfigured(): boolean {
-  return RIOT_API_KEY.startsWith("RGAPI-");
+  return getApiKey().startsWith("RGAPI-");
 }
 
 // ============================================================
@@ -62,7 +65,7 @@ export async function resolveRiotId(
         gameName
       )}/${encodeURIComponent(tagLine)}`,
       {
-        headers: { "X-Riot-Token": RIOT_API_KEY },
+        headers: { "X-Riot-Token": getApiKey() },
         signal: AbortSignal.timeout(8000),
       }
     );
@@ -87,7 +90,7 @@ export async function getLoLMatchResult(
     const res = await fetch(
       `${RIOT_BASE}/lol/match/v5/matches/${matchId}`,
       {
-        headers: { "X-Riot-Token": RIOT_API_KEY },
+        headers: { "X-Riot-Token": getApiKey() },
         signal: AbortSignal.timeout(8000),
       }
     );
@@ -152,7 +155,7 @@ export async function getValorantMatchResult(
     const res = await fetch(
       `${RIOT_BASE}/val/match/v1/matches/${matchId}`,
       {
-        headers: { "X-Riot-Token": RIOT_API_KEY },
+        headers: { "X-Riot-Token": getApiKey() },
         signal: AbortSignal.timeout(8000),
       }
     );

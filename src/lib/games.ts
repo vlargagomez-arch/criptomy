@@ -6,7 +6,7 @@
 //
 // El resto del sistema (UI, API, escrow) no necesita cambios.
 
-export type GameType = "LEAGUE_OF_LEAGENDS" | "VALORANT" | "COUNTER_STRIKE_2" | "DOTA2" | "ROCKET_LEAGUE";
+export type GameType = "LEAGUE_OF_LEGENDS" | "VALORANT" | "COUNTER_STRIKE_2" | "DOTA2" | "ROCKET_LEAGUE";
 
 export interface GameAdapter {
   type: GameType;
@@ -39,7 +39,7 @@ export interface MatchResult {
 // ADAPTER: League of Legends (Riot Games API)
 // ============================================================
 const LOL_ADAPTER: GameAdapter = {
-  type: "LEAGUE_OF_LEAGENDS",
+  type: "LEAGUE_OF_LEGENDS",
   name: "League of Legends",
   shortName: "LoL",
   icon: "⚔️",
@@ -134,7 +134,7 @@ const DOTA2_ADAPTER: GameAdapter = {
 // REGISTRO DE ADAPTERS
 // ============================================================
 export const GAME_ADAPTERS: Record<GameType, GameAdapter> = {
-  LEAGUE_OF_LEAGENDS: LOL_ADAPTER,
+  LEAGUE_OF_LEGENDS: LOL_ADAPTER,
   VALORANT: VALORANT_ADAPTER,
   COUNTER_STRIKE_2: CS2_ADAPTER,
   DOTA2: DOTA2_ADAPTER,
