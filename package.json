@@ -20,6 +20,7 @@
     "@libp2p/bootstrap": "^12.0.30",
     "@libp2p/crypto": "^5.1.23",
     "@libp2p/gossipsub": "^17.0.1",
+    "@libp2p/identify": "^4.1.14",
     "@libp2p/interfaces": "^3.3.2",
     "@libp2p/mplex": "^12.0.30",
     "@libp2p/noise": "^1.0.1",

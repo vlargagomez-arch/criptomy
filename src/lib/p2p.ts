@@ -26,6 +26,7 @@ import { mplex } from "@libp2p/mplex";
 import { noise } from "@libp2p/noise";
 import { bootstrap } from "@libp2p/bootstrap";
 import { gossipsub } from "@libp2p/gossipsub";
+import { identify } from "@libp2p/identify";
 import { peerIdFromPrivateKey } from "@libp2p/peer-id";
 import { generateKeyPair } from "@libp2p/crypto/keys";
 
@@ -107,17 +108,13 @@ export class P2PNode {
       transports: [webSockets()],
       connectionEncryption: [noise()],
       streamMuxers: [mplex()],
-      connectionGrouper: undefined,
       peerDiscovery: [
         bootstrap({
           list: BOOTSTRAP_PEERS,
         }),
       ],
-      pubsub: gossipsub({
-        allowPublishToZeroPeers: true,
-        emitSelf: false,
-      }),
       services: {
+        identify: identify(),
         pubsub: gossipsub({
           allowPublishToZeroPeers: true,
           emitSelf: false,
