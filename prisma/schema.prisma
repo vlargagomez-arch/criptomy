@@ -47,12 +47,12 @@ model User {
 // Oferta P2P: "vendo X BTC por Y COP vía Nequi"
 model Offer {
   id              String   @id @default(cuid())
-  type            OfferType // BUY o SELL
+  type            String // BUY o SELL
   creatorId       String
   creator         User     @relation(fields: [creatorId], references: [id])
 
   // Asset en juego
-  chain           Chain    // ETH, BTC, TRON, XMR
+  chain           String    // ETH, BTC, TRON, XMR
   asset           String   // símbolo: BTC, ETH, USDT, USDC, XMR, etc.
   amount          Float    // cantidad de cripto
   minAmount       Float?   // mínimo por trade parcial
@@ -61,7 +61,7 @@ model Offer {
   // Fiat o contra-asset
   currency        String   // COP, USD, EUR, MXN, ARS, VES, etc.
   pricePerUnit    Float    // precio en fiat por unidad de cripto
-  priceType       PriceType // FIXED o MARKET (con margen)
+  priceType       String // FIXED o MARKET
   marketMargin    Float?   // % sobre/bajo precio de mercado si priceType = MARKET
 
   // Métodos de pago aceptados (CSV: "NEQUI,DAVIPLATA,PSE,CASH_IN_PERSON")
@@ -72,10 +72,10 @@ model Offer {
 
   // Límites y ventana de pago
   paymentWindowMin Int     @default(60) // minutos máximos para pagar fiat
-  escrowType      EscrowType @default(SMART_CONTRACT)
+  escrowType      String @default("SMART_CONTRACT")
 
   // Estado
-  status          OfferStatus @default(ACTIVE)
+  status          String @default("ACTIVE")
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -107,11 +107,11 @@ model Trade {
   escrowAddress   String?  // dirección del smart contract de escrow desplegado
   escrowTxHash    String?  // tx hash del depósito
   releaseTxHash   String?  // tx hash de liberación
-  escrowChain     Chain?
+  escrowChain     String?
   escrowAsset     String?
 
   // Estado del trade
-  status          TradeStatus @default(PENDING_ESCROW)
+  status          String @default("PENDING_ESCROW")
   disputeStarted  Boolean  @default(false)
 
   // Timestamps de cada etapa para auditoría
@@ -177,7 +177,7 @@ model Dispute {
 
   reason          String
   evidence        String?  // URL o hash IPFS de evidencia (screenshots, etc.)
-  status          DisputeStatus @default(OPEN)
+  status          String @default("OPEN")
   resolution      String?  // texto explicativo de la resolución
   resolvedBy      String?  // alias del árbitro/multisig signer
   resolvedAt      DateTime?
@@ -187,51 +187,12 @@ model Dispute {
 }
 
 // Enums
-enum OfferType {
-  BUY
-  SELL
-}
 
-enum Chain {
-  ETHEREUM
-  BITCOIN
-  TRON
-  MONERO
-}
 
-enum PriceType {
-  FIXED
-  MARKET
-}
 
-enum EscrowType {
-  SMART_CONTRACT
-  MULTISIG_2OF3
-}
 
-enum OfferStatus {
-  ACTIVE
-  PAUSED
-  CLOSED
-}
 
-enum DisputeStatus {
-  OPEN
-  RESOLVED_BUYER
-  RESOLVED_SELLER
-  CANCELLED
-}
 
-enum TradeStatus {
-  PENDING_ESCROW    // esperando que el vendedor deposite en escrow
-  ESCROW_FUNDED     // escrow activo, esperando pago fiat del comprador
-  PAYMENT_SENT      // comprador marcó pago enviado
-  PAYMENT_CONFIRMED // vendedor confirmó recepción
-  RELEASING         // liberando fondos del escrow al comprador
-  COMPLETED         // trade finalizado OK
-  CANCELLED         // cancelado por una de las partes
-  DISPUTED          // en disputa
-}
 
 // ============================================================
 // MÓDULO: Retos P2P Gaming
@@ -307,7 +268,7 @@ model Challenge {
   payoutError     String?
   payoutProcessedAt DateTime?
 
-  status          ChallengeStatus @default(OPEN)
+  status          String @default("OPEN")
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -323,14 +284,3 @@ model Challenge {
 }
 
 
-enum ChallengeStatus {
-  OPEN            // esperando oponente
-  ACCEPTED        // oponente confirmó, esperando depósito
-  ESCROW_FUNDED   // ambos depositaron, listos para jugar
-  IN_PROGRESS     // match en curso
-  PENDING_RESULT  // match terminó, esperando verificación API o self-report
-  PENDING_CONFIRM // self-report hecho, esperando confirmación del perdedor (10 min)
-  COMPLETED       // ganador determinado, pago liberado
-  CANCELLED       // cancelado
-  DISPUTED        // en disputa
-}
