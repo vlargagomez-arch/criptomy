@@ -94,15 +94,15 @@ export default function CreateOfferView() {
   async function handleSubmit() {
     setError("");
     if (!amount || parseFloat(amount) <= 0) {
-      setError("Indique la cantidad");
+      setError("Indique la cantidad de " + asset + " a vender");
       return;
     }
     if (!pricePerUnit || parseFloat(pricePerUnit) <= 0) {
-      setError("Indique el precio por unidad");
+      setError("Indique el precio por unidad de " + asset);
       return;
     }
     if (selectedMethods.length === 0) {
-      setError("Seleccione al menos un método de pago");
+      setError("⚠️ Seleccione al menos un método de pago (Nequi, Daviplata, PSE, etc.)");
       return;
     }
     setLoading(true);
@@ -128,13 +128,22 @@ export default function CreateOfferView() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error");
+      if (!res.ok) {
+        // Mostrar el error específico de la API, no "Error interno"
+        throw new Error(data.error || "No se pudo publicar la oferta. Verifique los campos.");
+      }
       setSuccess(true);
       setTimeout(() => {
         setTab("mercado");
       }, 1500);
     } catch (e) {
-      setError((e as Error).message);
+      const msg = (e as Error).message;
+      // Si el error es genérico "Error interno", dar mensaje más útil
+      if (msg.includes("Error interno") || msg.includes("internal")) {
+        setError("No se pudo conectar con el servidor. Verifique su conexión e intente de nuevo.");
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }

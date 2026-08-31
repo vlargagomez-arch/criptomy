@@ -510,9 +510,43 @@ export function isGameAPIConfigured(game: GameType | string): boolean {
   }
 }
 
-// ============================================================
-// Helpers
-// ============================================================
+// Colores e iconos de cada juego para generar imágenes SVG inline
+// No dependemos de URLs externas que pueden caerse
+export const GAME_IMAGES: Record<string, string> = {
+  LEAGUE_OF_LEGENDS: "",
+  VALORANT: "",
+  COUNTER_STRIKE_2: "",
+  DOTA2: "",
+  ROCKET_LEAGUE: "",
+  PUBG: "",
+  EA_SPORTS_FC: "",
+  CALL_OF_DUTY: "",
+  APEX_LEGENDS: "",
+  FORTNITE: "",
+  MORTAL_KOMBAT: "",
+  NBA_2K: "",
+  STREET_FIGHTER: "",
+  TEKKEN: "",
+  CUSTOM: "",
+};
+
+// Genera un avatar SVG con el icono y color del juego
+export function getGameImageURL(game: GameType | string): string {
+  const adapter = getGameAdapter(game);
+  if (!adapter) return "";
+
+  // SVG inline con el icono del juego y su color de marca
+  const svg = `<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+    <rect width="64" height="64" rx="12" fill="${adapter.color}"/>
+    <text x="32" y="42" font-size="32" text-anchor="middle" fill="white" font-family="sans-serif" font-weight="bold">${adapter.icon}</text>
+  </svg>`;
+
+  // Funciona en navegador (btoa) y en servidor (Buffer)
+  if (typeof btoa !== "undefined") {
+    return `data:image/svg+xml;base64,${btoa(svg)}`;
+  }
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+}
 
 export function formatStake(amount: number, currency = "USDT"): string {
   return `${amount.toFixed(2)} ${currency}`;

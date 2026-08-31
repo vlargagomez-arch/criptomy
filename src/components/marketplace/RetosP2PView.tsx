@@ -42,6 +42,7 @@ import {
   GameType,
   getAllGames,
   getGameAdapter,
+  getGameImageURL,
   formatStake,
   totalPot,
   winnerPayout,
@@ -169,10 +170,14 @@ export default function RetosP2PView() {
           <Badge
             key={g.type}
             variant="outline"
-            className="bg-slate-900 border-slate-800 text-slate-400 py-1"
+            className="bg-slate-900 border-slate-800 text-slate-400 py-1.5 px-2"
           >
-            <span className="mr-1">{g.icon}</span>
-            {g.name}
+            <img
+              src={getGameImageURL(g.type)}
+              alt={g.name}
+              className="w-5 h-5 rounded mr-1.5 inline-block"
+            />
+            {g.shortName}
           </Badge>
         ))}
       </div>
@@ -368,7 +373,7 @@ function ChallengeRow({
         {/* Juego + modo */}
         <div className="col-span-12 sm:col-span-3">
           <div className="flex items-center gap-2">
-            <span className="text-2xl">{adapter.icon}</span>
+            <img src={getGameImageURL(challenge.game)} alt={adapter.name} className="w-8 h-8 rounded-lg" />
             <div>
               <div className="text-sm font-semibold text-slate-100">{adapter.shortName}</div>
               <div className="text-[10px] text-slate-500">{challenge.mode}</div>
@@ -547,7 +552,7 @@ function CreateChallengeModal({
               <SelectContent className="bg-slate-900 border-slate-700 text-slate-100">
                 {getAllGames().map((g) => (
                   <SelectItem key={g.type} value={g.type}>
-                    {g.icon} {g.name}
+                    <img src={getGameImageURL(g.type)} alt="" className="w-4 h-4 rounded inline mr-2" /> {g.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -711,7 +716,7 @@ function LinkGameAccountModal({
               <SelectContent className="bg-slate-900 border-slate-700 text-slate-100">
                 {getAllGames().map((g) => (
                   <SelectItem key={g.type} value={g.type}>
-                    {g.icon} {g.name}
+                    <img src={getGameImageURL(g.type)} alt="" className="w-4 h-4 rounded inline mr-2" /> {g.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -950,7 +955,7 @@ function ChallengeDetailModal({
         <DialogHeader>
           <DialogTitle className="text-emerald-400 flex items-center justify-between">
             <span className="flex items-center gap-2">
-              <span className="text-2xl">{adapter.icon}</span>
+              <img src={getGameImageURL(challenge.game)} alt={adapter.name} className="w-8 h-8 rounded-lg" />
               {adapter.name}
             </span>
             <Badge variant="outline" className={`text-xs ${status.color}`}>
