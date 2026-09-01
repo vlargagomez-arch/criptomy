@@ -22,6 +22,9 @@ export const metadata: Metadata = {
   authors: [{ name: "NoKYCSwap" }],
 };
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -29,6 +32,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" suppressHydrationWarning className="dark">
+      <head>
+        <meta httpEquiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+        <meta httpEquiv="Pragma" content="no-cache" />
+        <meta httpEquiv="Expires" content="0" />
+      </head>
       <body className="bg-slate-950 text-slate-100 antialiased min-h-screen flex flex-col">
         {children}
         <Toaster />
