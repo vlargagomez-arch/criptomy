@@ -535,17 +535,19 @@ export function getGameImageURL(game: GameType | string): string {
   const adapter = getGameAdapter(game);
   if (!adapter) return "";
 
-  // SVG inline con el icono del juego y su color de marca
+  // SVG inline con el color del juego (sin emoji para evitar error con btoa)
   const svg = `<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
     <rect width="64" height="64" rx="12" fill="${adapter.color}"/>
-    <text x="32" y="42" font-size="32" text-anchor="middle" fill="white" font-family="sans-serif" font-weight="bold">${adapter.icon}</text>
+    <text x="32" y="40" font-size="24" text-anchor="middle" fill="white" font-family="Arial,sans-serif" font-weight="bold">${adapter.shortName}</text>
   </svg>`;
 
-  // Funciona en navegador (btoa) y en servidor (Buffer)
-  if (typeof btoa !== "undefined") {
+  // btoa no soporta emojis ni caracteres no-Latin1, usamos solo el shortName
+  try {
     return `data:image/svg+xml;base64,${btoa(svg)}`;
+  } catch {
+    // Fallback: usar URL-encoded SVG
+    return `data:image/svg+xml,${encodeURIComponent(svg)}`;
   }
-  return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
 }
 
 export function formatStake(amount: number, currency = "USDT"): string {
