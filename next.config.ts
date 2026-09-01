@@ -1,8 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
-  /* config options here */
+  /* Removed output: "standalone" — causes ENOENT error on Vercel with Next.js 16 Turbopack */
   typescript: {
     ignoreBuildErrors: true,
   },
