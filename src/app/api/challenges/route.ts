@@ -80,6 +80,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Apuesta mínima: 1 USDT" }, { status: 400 });
     }
 
+    if (stakeAmount > 100) {
+      return NextResponse.json({ error: "Apuesta máxima: 100 USDT" }, { status: 400 });
+    }
+
     const gameAccount = await db.gameAccount.findFirst({
       where: { id: creatorGameAccountId, userId: creatorId, game: game },
     });

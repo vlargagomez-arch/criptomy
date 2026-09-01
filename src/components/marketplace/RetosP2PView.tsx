@@ -598,18 +598,19 @@ function CreateChallengeModal({
 
           <div>
             <Label className="text-slate-300 mb-1.5 block">
-              Apuesta por jugador (USDT)
+              Apuesta por jugador (USDT) · Min $1 · Max $100
             </Label>
             <Input
               type="number"
               value={stake}
               onChange={(e) => setStake(e.target.value)}
               min="1"
+              max="100"
               step="1"
               className="bg-slate-950 border-slate-700 text-slate-100 font-mono"
             />
             <div className="flex justify-between text-[10px] text-slate-500 mt-1">
-              <span>Pool si ambos depositan: {formatStake(totalPot(parseFloat(stake) || 0))}</span>
+              <span>Pool si ambos depositan: {formatStake(totalPot(Math.min(parseFloat(stake) || 0, 100)))}</span>
               <span>Ganador recibe (est.): {winnerPayout(parseFloat(stake) || 0).toFixed(2)} USDT</span>
             </div>
           </div>
