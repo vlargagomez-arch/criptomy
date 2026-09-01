@@ -24,7 +24,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Loader2, ShieldCheck, Wallet, AlertCircle, ExternalLink, Smartphone } from "lucide-react";
+import { Loader2, ShieldCheck, Wallet, AlertCircle, ExternalLink, Smartphone, ChevronDown, Zap } from "lucide-react";
 
 const NETWORK_LABELS: Record<number, string> = {
   [CHAIN_IDS.ETHEREUM_MAINNET]: "Ethereum Mainnet",
@@ -49,13 +49,6 @@ export default function Onboarding() {
     });
     return off;
   }, []);
-
-  // Auto-detectar móvil al abrir
-  useEffect(() => {
-    if (open && isMobileDevice()) {
-      setShowMobileOptions(true);
-    }
-  }, [open]);
 
   async function handleConnectMetaMask() {
     setError("");
@@ -126,7 +119,7 @@ export default function Onboarding() {
   }
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-2">
       <Button
         onClick={() => setOpen(true)}
         className="bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -138,22 +131,23 @@ export default function Onboarding() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="bg-slate-900 border-slate-700 text-slate-100 sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-emerald-400">
+            <DialogTitle className="flex items-center gap-2 text-emerald-400 text-lg">
               <ShieldCheck className="w-5 h-5" />
               Conectar wallet
             </DialogTitle>
             <DialogDescription className="text-slate-400">
-              Sin KYC · Sin email · Sin datos personales
+              Sin KYC · Sin email · Sin registro · 100% anónimo
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
+          <div className="space-y-3 py-2">
             {/* Wallet conectada */}
             {walletAddr ? (
               <div className="space-y-3">
                 <div className="p-3 rounded-md bg-slate-950 border border-emerald-700/50">
-                  <div className="text-[10px] text-slate-500 uppercase mb-1">
-                    Wallet conectada ✓
+                  <div className="text-[10px] text-slate-500 uppercase mb-1 flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                    Wallet conectada
                   </div>
                   <code className="text-sm font-mono text-emerald-400 break-all">
                     {walletAddr}
@@ -182,79 +176,124 @@ export default function Onboarding() {
               </div>
             ) : (
               <>
-                {/* Opción 1: MetaMask (desktop o in-app browser) */}
-                <button
-                  onClick={handleConnectMetaMask}
-                  disabled={connecting}
-                  className="w-full flex items-center gap-3 p-4 rounded-lg border border-orange-700/50 bg-orange-950/20 hover:bg-orange-950/40 transition"
-                >
-                  <span className="text-3xl">🦊</span>
-                  <div className="flex-1 text-left">
-                    <div className="text-sm font-medium text-slate-100">
-                      MetaMask
-                    </div>
-                    <div className="text-[10px] text-slate-400">
-                      {hasWallet()
-                        ? "Clic para conectar"
-                        : "No detectado — instale la extensión"}
-                    </div>
+                {/* Wallets desktop */}
+                <div className="space-y-2">
+                  <div className="text-[10px] text-slate-500 uppercase font-medium mb-2">
+                    🖥️ Desktop
                   </div>
-                  {connecting && (
-                    <Loader2 className="w-4 h-4 animate-spin text-orange-400" />
+
+                  {/* MetaMask */}
+                  <button
+                    onClick={handleConnectMetaMask}
+                    disabled={connecting}
+                    className="w-full flex items-center gap-3 p-3 rounded-lg border border-orange-700/50 bg-orange-950/20 hover:bg-orange-950/40 transition group"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-xl shrink-0">
+                      🦊
+                    </div>
+                    <div className="flex-1 text-left">
+                      <div className="text-sm font-semibold text-slate-100">
+                        MetaMask
+                      </div>
+                      <div className="text-[10px] text-slate-400">
+                        {hasWallet()
+                          ? "Sin registro · Clic para conectar"
+                          : "No detectado — instalar extensión"}
+                      </div>
+                    </div>
+                    {connecting && <Loader2 className="w-4 h-4 animate-spin text-orange-400" />}
+                  </button>
+
+                  {/* Trust Wallet (browser extension) */}
+                  <a
+                    href="https://trustwallet.com/download"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full flex items-center gap-3 p-3 rounded-lg border border-slate-700 bg-slate-950 hover:bg-slate-800 transition"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-xl shrink-0">
+                      🛡️
+                    </div>
+                    <div className="flex-1 text-left">
+                      <div className="text-sm font-semibold text-slate-100">
+                        Trust Wallet
+                      </div>
+                      <div className="text-[10px] text-slate-400">
+                        Sin registro · Instalar extensión
+                      </div>
+                    </div>
+                    <ExternalLink className="w-3 h-3 text-slate-500" />
+                  </a>
+
+                  {/* Rabby Wallet */}
+                  <a
+                    href="https://rabby.io"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full flex items-center gap-3 p-3 rounded-lg border border-slate-700 bg-slate-950 hover:bg-slate-800 transition"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-xl shrink-0">
+                      🐰
+                    </div>
+                    <div className="flex-1 text-left">
+                      <div className="text-sm font-semibold text-slate-100">
+                        Rabby Wallet
+                      </div>
+                      <div className="text-[10px] text-slate-400">
+                        Sin registro · Multi-chain · Open source
+                      </div>
+                    </div>
+                    <ExternalLink className="w-3 h-3 text-slate-500" />
+                  </a>
+                </div>
+
+                {/* Divider */}
+                <div className="border-t border-slate-800 pt-3">
+                  <button
+                    onClick={() => setShowMobileOptions(!showMobileOptions)}
+                    className="w-full flex items-center gap-3 p-3 rounded-lg border border-slate-700 bg-slate-950 hover:bg-slate-800 transition"
+                  >
+                    <Smartphone className="w-7 h-7 text-blue-400" />
+                    <div className="flex-1 text-left">
+                      <div className="text-sm font-semibold text-slate-100">
+                        📱 Conectar desde el móvil
+                      </div>
+                      <div className="text-[10px] text-slate-400">
+                        MetaMask Mobile, Trust, Coinbase, Rainbow
+                      </div>
+                    </div>
+                    <ChevronDown className={`w-4 h-4 text-slate-500 transition ${showMobileOptions ? "rotate-180" : ""}`} />
+                  </button>
+
+                  {showMobileOptions && (
+                    <div className="mt-2 space-y-1.5 p-3 rounded-lg bg-slate-950 border border-slate-800">
+                      <p className="text-[10px] text-slate-400 mb-2">
+                        Abre tu wallet móvil y escanea o toca para abrir esta página dentro del browser de la app.
+                      </p>
+                      {MOBILE_WALLETS.map((w) => (
+                        <a
+                          key={w.id}
+                          href={w.getDeepLink()}
+                          className="flex items-center gap-3 p-2 rounded-md hover:bg-slate-800 transition"
+                        >
+                          <span className="text-2xl">{w.icon}</span>
+                          <div className="flex-1">
+                            <div className="text-xs font-medium text-slate-200">{w.name}</div>
+                            <div className="text-[10px] text-slate-500">Sin KYC · Sin registro</div>
+                          </div>
+                          <ExternalLink className="w-3 h-3 text-slate-500" />
+                        </a>
+                      ))}
+                    </div>
                   )}
-                </button>
+                </div>
 
-                {/* Opción 2: Abrir en wallet móvil (deep link) */}
-                <button
-                  onClick={() => setShowMobileOptions(!showMobileOptions)}
-                  className="w-full flex items-center gap-3 p-4 rounded-lg border border-slate-700 bg-slate-950 hover:bg-slate-800 transition"
-                >
-                  <Smartphone className="w-7 h-7 text-blue-400" />
-                  <div className="flex-1 text-left">
-                    <div className="text-sm font-medium text-slate-100">
-                      Conectar desde el móvil
-                    </div>
-                    <div className="text-[10px] text-slate-400">
-                      MetaMask, Trust, Coinbase
-                    </div>
-                  </div>
-                </button>
-
-                {/* Mostrar opciones móviles */}
-                {showMobileOptions && (
-                  <div className="space-y-2 p-3 rounded-lg bg-slate-950 border border-slate-800">
-                    <p className="text-[10px] text-slate-400 mb-2">
-                      Toque su wallet para abrir esta página dentro del browser
-                      de la app. Luego use el botón MetaMask de arriba.
-                    </p>
-                    {MOBILE_WALLETS.map((w) => (
-                      <a
-                        key={w.id}
-                        href={w.getDeepLink()}
-                        className="flex items-center gap-2 p-2 rounded-md hover:bg-slate-800 transition"
-                      >
-                        <span className="text-xl">{w.icon}</span>
-                        <span className="text-xs font-medium text-slate-200 flex-1">
-                          {w.name}
-                        </span>
-                        <ExternalLink className="w-3 h-3 text-slate-500" />
-                      </a>
-                    ))}
-                  </div>
-                )}
-
-                {!hasWallet() && !isMobileDevice() && (
-                  <div className="text-center">
-                    <a
-                      href="https://metamask.io/download/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-emerald-400 hover:underline inline-flex items-center gap-1"
-                    >
-                      Descargar MetaMask <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </div>
-                )}
+                {/* Info */}
+                <div className="rounded-md bg-emerald-950/20 border border-emerald-900/40 p-3 text-xs text-emerald-300/90">
+                  <Zap className="w-3 h-3 inline mr-1" />
+                  <strong>Sin KYC:</strong> Ninguna de estas wallets pide email, nombre o documento.
+                  Solo generas una wallet y conectas. 100% anónimo.
+                </div>
               </>
             )}
 
