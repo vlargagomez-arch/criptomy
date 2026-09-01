@@ -153,29 +153,30 @@ export async function GET(req: NextRequest) {
       const tokenInFeed = chainlinkSymbol(tokenInData.symbol);
       const tokenOutFeed = chainlinkSymbol(tokenOutData.symbol);
 
-      // Obtener precios USD de ambos tokens
-      const pricePromises: Promise<{ price?: number }>[] = [];
-      if (tokenInFeed !== "USDT" && tokenInFeed !== "USDC" && tokenInFeed !== "DAI") {
-        pricePromises.push(
-          fetch(`http://localhost:3000/api/price?pair=${tokenInFeed}/USD`).then(r => r.json())
-        );
+      // Obtener precios USD de ambos tokens via Chainlink (usando fetch directo al RPC)
+      const RPC_URL = "https://ethereum.publicnode.com";
+      const CHAINLINK_FEEDS: Record<string, { address: string; decimals: number }> = {
+        "ETH/USD": { address: "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419", decimals: 8 },
+        "BTC/USD": { address: "0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c", decimals: 8 },
+        "USDT/USD": { address: "0x3E7d1eAB13ad0104d2750B8863b489D65364e32D", decimals: 8 },
+        "USDC/USD": { address: "0x8fFfFfd4AfB6115b954BdFe269564D41C93557de", decimals: 8 },
+        "LINK/USD": { address: "0x2c1d072e956AFFC0dd475A114C86C86C8B2C8456", decimals: 8 },
+      };
+      const AGGREGATOR_ABI = ["function latestRoundData() view returns (uint80,int256,uint256,uint256,uint80)"];
+
+      async function getTokenPrice(symbol: string): Promise<number> {
+        if (symbol === "USDT" || symbol === "USDC" || symbol === "DAI") return 1;
+        const feed = CHAINLINK_FEEDS[`${symbol}/USD`];
+        if (!feed) return 1;
+        const provider = new ethers.JsonRpcProvider(RPC_URL, undefined, { staticNetwork: true });
+        const contract = new ethers.Contract(feed.address, AGGREGATOR_ABI, provider);
+        const roundData = await contract.latestRoundData();
+        const answer = roundData[1];
+        return Number(ethers.formatUnits(answer, feed.decimals));
       }
-      if (tokenOutFeed !== "USDT" && tokenOutFeed !== "USDC" && tokenOutFeed !== "DAI") {
-        pricePromises.push(
-          fetch(`http://localhost:3000/api/price?pair=${tokenOutFeed}/USD`).then(r => r.json())
-        );
-      }
-      const prices = await Promise.all(pricePromises);
-      let tokenInUSD = 1; // stablecoins = $1
-      let tokenOutUSD = 1;
-      let priceIdx = 0;
-      if (tokenInFeed !== "USDT" && tokenInFeed !== "USDC" && tokenInFeed !== "DAI") {
-        tokenInUSD = prices[priceIdx]?.price || 1;
-        priceIdx++;
-      }
-      if (tokenOutFeed !== "USDT" && tokenOutFeed !== "USDC" && tokenOutFeed !== "DAI") {
-        tokenOutUSD = prices[priceIdx]?.price || 1;
-      }
+
+      const tokenInUSD = await getTokenPrice(tokenInFeed);
+      const tokenOutUSD = await getTokenPrice(tokenOutFeed);
       // Calcular amountOut: (amountIn * priceInUSD) / priceOutUSD
       const amountInNum = parseFloat(amount);
       const amountInUSD = amountInNum * tokenInUSD;
