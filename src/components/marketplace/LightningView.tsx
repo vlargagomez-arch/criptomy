@@ -9,14 +9,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
   Zap,
   Copy,
   Clock,
@@ -50,6 +42,7 @@ export default function LightningView() {
   const [paying, setPaying] = useState(false);
   const [payResult, setPayResult] = useState<{ status: string; preimage: string } | null>(null);
   const [weblnAvailable, setWeblnAvailable] = useState(false);
+  const [payError, setPayError] = useState("");
 
   useEffect(() => {
     fetchBtcPrice();
@@ -90,12 +83,15 @@ export default function LightningView() {
 
   async function handlePayInvoice() {
     if (!payInvoice.startsWith("lnbc")) {
-      alert("Invoice inválido. Debe empezar con 'lnbc'");
+      setPayError("Invoice inválido. Debe empezar con 'lnbc'");
       return;
     }
     setPaying(true);
+    setPayError("");
+    setPayResult(null);
+
     try {
-      // Si WebLN está disponible, usarlo
+      // Si WebLN está disponible (Alby), pagar de verdad
       if (weblnAvailable) {
         const { payInvoiceWebLN } = await import("@/lib/lightning");
         const result = await payInvoiceWebLN(payInvoice);
@@ -104,17 +100,14 @@ export default function LightningView() {
           return;
         }
       }
-      // Fallback: simular pago vía API
-      const res = await fetch("/api/lightning?op=pay", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ invoice: payInvoice }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setPayResult(data);
+
+      // Sin Alby: no se puede pagar de verdad
+      setPayError(
+        "No se puede pagar sin Alby. Para pagos reales instala la extensión Alby " +
+        "desde https://getalby.com — es gratis y no requiere KYC."
+      );
     } catch (e) {
-      alert("Error: " + (e as Error).message);
+      setPayError("Error: " + (e as Error).message);
     } finally {
       setPaying(false);
     }
@@ -135,24 +128,26 @@ export default function LightningView() {
       </div>
 
       {/* Estado WebLN */}
-      <Card className={`p-4 border ${weblnAvailable ? "bg-emerald-950/20 border-emerald-900/50" : "bg-slate-900/60 border-slate-800"}`}>
+      <Card className={`p-4 border ${weblnAvailable ? "bg-emerald-950/20 border-emerald-900/50" : "bg-yellow-950/20 border-yellow-900/50"}`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Wallet className={`w-4 h-4 ${weblnAvailable ? "text-emerald-400" : "text-slate-500"}`} />
+            <Wallet className={`w-4 h-4 ${weblnAvailable ? "text-emerald-400" : "text-yellow-400"}`} />
             <span className="text-sm font-medium text-slate-200">
-              {weblnAvailable ? "Wallet Lightning detectada (WebLN)" : "Sin wallet Lightning"}
+              {weblnAvailable
+                ? "Alby/WebLN detectado — pagos reales disponibles"
+                : "Sin Alby — los invoices se generan pero no se pueden pagar"}
             </span>
           </div>
           {weblnAvailable ? (
             <Badge className="bg-emerald-950/50 border-emerald-700 text-emerald-400">
-              <CheckCircle2 className="w-3 h-3 mr-1" /> Alby/WebLN
+              <CheckCircle2 className="w-3 h-3 mr-1" /> Real
             </Badge>
           ) : (
             <a
               href="https://getalby.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs text-emerald-400 hover:underline flex items-center gap-1"
+              className="text-xs text-yellow-400 hover:underline flex items-center gap-1"
             >
               Instalar Alby <ExternalLink className="w-3 h-3" />
             </a>
@@ -164,7 +159,7 @@ export default function LightningView() {
       {btcPrice && (
         <Card className="bg-slate-900/60 border-slate-800 p-4">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-400">Precio BTC (Chainlink)</span>
+            <span className="text-xs text-slate-400">Precio BTC</span>
             <span className="font-mono text-emerald-400">
               ${btcPrice.toLocaleString("en-US", { maximumFractionDigits: 0 })} USD
             </span>
@@ -224,13 +219,19 @@ export default function LightningView() {
             )}
             Generar invoice
           </Button>
+          {!weblnAvailable && (
+            <p className="text-[10px] text-yellow-500 text-center">
+              ⚠️ Sin Alby: el invoice se genera pero nadie puede pagarlo de verdad.
+              Instala Alby para que los pagos sean reales.
+            </p>
+          )}
         </div>
 
         {invoice && (
           <div className="mt-4 space-y-3">
             <div className="p-3 rounded-md bg-slate-950 border border-yellow-700/50">
               <div className="text-[10px] text-slate-500 uppercase mb-1">
-                BOLT11 Payment Request
+                BOLT11 Payment Request {weblnAvailable ? "" : "(DEMO — sin nodo real)"}
               </div>
               <code className="text-xs font-mono text-yellow-400 break-all">
                 {invoice.paymentRequest}
@@ -287,13 +288,21 @@ export default function LightningView() {
             ) : (
               <Zap className="w-4 h-4 mr-2" />
             )}
-            {weblnAvailable ? "Pagar con WebLN" : "Pagar (simulado)"}
+            {weblnAvailable ? "Pagar con Alby (real)" : "Pagar (requiere Alby)"}
           </Button>
+
+          {payError && (
+            <div className="p-3 rounded-md bg-yellow-950/30 border border-yellow-900/50 text-xs text-yellow-300">
+              <AlertCircle className="w-4 h-4 inline mr-1" />
+              {payError}
+            </div>
+          )}
+
           {payResult && (
             <div className="p-3 rounded-md bg-emerald-950/30 border border-emerald-900/50">
               <div className="flex items-center gap-2 text-emerald-300 text-sm mb-2">
                 <CheckCircle2 className="w-4 h-4" />
-                Pago exitoso
+                Pago real confirmado vía Alby
               </div>
               <div className="text-[10px] text-slate-500">Preimage:</div>
               <code className="text-xs font-mono text-emerald-400 break-all">
@@ -301,13 +310,19 @@ export default function LightningView() {
               </code>
             </div>
           )}
+
           {!weblnAvailable && (
-            <div className="flex items-start gap-2 text-xs text-yellow-400">
-              <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-              <span>
-                Sin wallet WebLN: el pago se simula. Instale Alby para pagos
-                reales desde el navegador.
-              </span>
+            <div className="p-3 rounded-md bg-slate-950 border border-slate-800 text-xs text-slate-400">
+              <AlertCircle className="w-3.5 h-3.5 inline mr-1 text-yellow-400" />
+              Para pagos reales necesitas Alby (extensión del navegador, gratis, sin KYC).
+              <a
+                href="https://getalby.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-yellow-400 hover:underline ml-1"
+              >
+                Instalar Alby →
+              </a>
             </div>
           )}
         </div>
