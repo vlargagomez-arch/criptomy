@@ -1,0 +1,5 @@
+{
+  "buildCommand": "./build.sh",
+  "installCommand": "npm install",
+  "framework": "nextjs"
+}
