@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 
 // POST /api/ipfs?op=upload
-// Body: { content: string, filename?: string }
+// Acepta FormData (file) o JSON { content, filename }
 //
-// Sube contenido a IPFS vía Pinata (con API key si está configurada)
-// o fallback a gateway público.
+// - Si hay PINATA_API_KEY configurada: sube a Pinata (IPFS real, persistente).
+// - Si NO hay Pinata: genera un CID determinístico (SHA-256 → base58) y devuelve
+//   un warning claro: "no persistente, configure Pinata para IPFS real".
+//
+// Esto es honesto: el usuario sabe cuándo es real y cuándo es solo una referencia local.
 
 const PINATA_API_KEY = process.env.PINATA_API_KEY;
 const PINATA_SECRET = process.env.PINATA_SECRET_API_KEY;
@@ -20,22 +23,45 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  try {
-    const body = await req.json();
-    const { content, filename = "evidence.json" } = body;
+  const contentType = req.headers.get("content-type") || "";
 
-    if (!content || typeof content !== "string") {
-      return NextResponse.json(
-        { error: "content (string) requerido" },
-        { status: 400 }
-      );
+  try {
+    let fileBytes: Uint8Array;
+    let filename = "evidence.bin";
+    let mimeType = "application/octet-stream";
+
+    if (contentType.startsWith("multipart/form-data")) {
+      const formData = await req.formData();
+      const file = formData.get("file");
+      if (!(file instanceof File)) {
+        return NextResponse.json(
+          { error: "file (File) requerido en FormData" },
+          { status: 400 }
+        );
+      }
+      fileBytes = new Uint8Array(await file.arrayBuffer());
+      filename = file.name || "evidence.bin";
+      mimeType = file.type || mimeType;
+    } else {
+      // JSON fallback: { content: string (utf-8), filename? }
+      const body = await req.json();
+      const { content, filename: fname = "evidence.json" } = body;
+      if (!content || typeof content !== "string") {
+        return NextResponse.json(
+          { error: "file (FormData) o content (JSON string) requerido" },
+          { status: 400 }
+        );
+      }
+      fileBytes = new TextEncoder().encode(content);
+      filename = fname;
+      mimeType = "application/json";
     }
 
-    // Intentar con Pinata si hay API key configurada
+    // 1) Intentar Pinata (IPFS real persistente)
     if (PINATA_API_KEY && PINATA_SECRET) {
       try {
         const formData = new FormData();
-        const blob = new Blob([content], { type: "application/json" });
+        const blob = new Blob([fileBytes], { type: mimeType });
         formData.append("file", blob, filename);
 
         const res = await fetch(
@@ -56,9 +82,10 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({
               cid: data.IpfsHash,
               url: `https://ipfs.io/ipfs/${data.IpfsHash}`,
-              size: data.PinSize || content.length,
+              size: data.PinSize || fileBytes.length,
               gateway: "pinata",
               pinned: true,
+              real: true,
             });
           }
         }
@@ -67,17 +94,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Fallback: usar ipfs-http-client con gateway público (no persiste pero genera CID)
-    // Generamos el CID server-side para evitar inconsistencias
-    const cid = await generateCID(content);
+    // 2) Fallback honesto: CID determinístico (no persistente en IPFS público)
+    const cid = await generateCID(fileBytes);
     return NextResponse.json({
       cid,
       url: `https://ipfs.io/ipfs/${cid}`,
-      size: content.length,
-      gateway: "mock-server-side",
+      size: fileBytes.length,
+      gateway: "local-hash",
       pinned: false,
+      real: false,
       warning:
-        "Archivo no pinnenado permanentemente. Configure PINATA_API_KEY y PINATA_SECRET_API_KEY para persistencia real.",
+        "CID generado localmente, NO persistente en IPFS. Configure PINATA_API_KEY y PINATA_SECRET_API_KEY para IPFS real y accesible públicamente.",
     });
   } catch (err) {
     console.error("[ipfs API]", err);
@@ -89,7 +116,8 @@ export async function POST(req: NextRequest) {
 }
 
 // GET /api/ipfs?op=read&cid=Qm...
-// Lee contenido desde IPFS vía gateway público (con fallback)
+// Lee contenido desde IPFS vía gateways públicos (solo funciona si el CID fue
+// pinnado por Pinata o por otro nodo IPFS)
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const op = searchParams.get("op");
@@ -121,6 +149,7 @@ export async function GET(req: NextRequest) {
           content: text,
           gateway: gateway.split("//")[1].split("/")[0],
           size: text.length,
+          real: true,
         });
       }
     } catch (e) {
@@ -130,16 +159,18 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json(
-    { error: "No se pudo leer desde ningún gateway IPFS" },
+    {
+      error: "No se pudo leer desde ningún gateway IPFS. El CID puede no estar pinnado.",
+      real: false,
+    },
     { status: 503 }
   );
 }
 
-// Generar CID server-side (en MVP, mock determinístico)
-async function generateCID(content: string): Promise<string> {
-  // En producción: usar import('ipfs-http-client') y calcular el CID real
-  // Aquí generamos un hash determinístico para consistencia
-  const data = new TextEncoder().encode(content);
+// Generar CID determinístico (formato CIDv0 compatible con IPFS)
+// Nota: este CID NO es accesible públicamente a menos que alguien lo pinee.
+// Es solo una referencia determinística para uso interno y desarrollo.
+async function generateCID(data: Uint8Array): Promise<string> {
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   const hashHex = hashArray
