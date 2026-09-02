@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { notifyPriceTargetMatches, notifyNewOfferPaymentMethod } from "@/lib/notify";
 
 // GET /api/offers - lista ofertas activas con filtros
 export async function GET(req: NextRequest) {
@@ -111,6 +112,28 @@ export async function POST(req: NextRequest) {
         },
       },
     });
+
+    // Disparar notificaciones a usuarios con alertas de precio objetivo
+    // y a usuarios con watchlist del método de pago
+    try {
+      await notifyPriceTargetMatches({
+        asset,
+        offerPricePerUnit: parseFloat(pricePerUnit),
+        offerType: type,
+        offerId: offer.id,
+        currency,
+      });
+
+      await notifyNewOfferPaymentMethod({
+        offerId: offer.id,
+        asset,
+        currency,
+        paymentMethods: paymentMethods.join(","),
+        offerType: type,
+      });
+    } catch (e) {
+      console.warn("[offers POST] notify failed (no bloqueante):", e);
+    }
 
     return NextResponse.json({ offer }, { status: 201 });
   } catch (err) {

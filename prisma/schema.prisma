@@ -42,6 +42,13 @@ model User {
   challengesCreated   Challenge[] @relation("ChallengeCreator")
   challengesOpponent  Challenge[] @relation("ChallengeOpponent")
   challengesWon       Challenge[] @relation("ChallengeWinner")
+
+  // Notificaciones + Alertas + NFT
+  notifications       Notification[]
+  priceAlerts         PriceAlert[]
+  pushSubscriptions   PushSubscription[]
+  nftListings         NFTListing[]  @relation("NFTSeller")
+  nftBought           NFTListing[]  @relation("NFTBuyer")
 }
 
 // Oferta P2P: "vendo X BTC por Y COP vía Nequi"
@@ -281,6 +288,141 @@ model Challenge {
   @@index([game, status])
   @@index([creatorId])
   @@index([opponentId])
+}
+
+
+// ============================================================
+// MÓDULO: Notificaciones + Alertas + Mercado NFT
+// ============================================================
+
+// Notificación in-app + browser push para el usuario
+model Notification {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Tipo: PRICE_ALERT, NEW_OFFER, TRADE_UPDATE, CHALLENGE_NEW, NFT_SOLD, NFT_BOUGHT, DIP_ALERT, NFT_DROP
+  type            String
+  title           String   // título corto
+  body            String   // mensaje completo
+  url             String?  // link interno al hacer click (ej: "/?tab=retos")
+  metadata        String?  // JSON con datos extra (offerId, challengeId, etc.)
+
+  read            Boolean  @default(false)
+  readAt         DateTime?
+
+  createdAt       DateTime @default(now())
+
+  @@index([userId, read])
+  @@index([userId, createdAt])
+}
+
+// Suscripción Web Push (Service Worker) por usuario + navegador
+model PushSubscription {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  endpoint        String   @unique // URL del push service del navegador
+  p256dh          String   // clave pública de encriptación
+  auth            String   // auth secret
+
+  createdAt       DateTime @default(now())
+
+  @@index([userId])
+}
+
+// Alerta de precio "buy the dip" — avisa cuando el activo cae X% en timeframe
+model PriceAlert {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  asset           String   // BTC, ETH, SOL, MATIC
+  // Tipo de alerta:
+  //  DIP_BELOW: dispara si precio cae a <= thresholdPrice
+  //  PERCENT_DROP: dispara si el precio cae thresholdPercent % en timeframeHours
+  //  TARGET_PRICE: dispara si precio sube a >= thresholdPrice (para venta)
+  alertType       String   @default("DIP_BELOW")
+  thresholdPrice  Float?
+  thresholdPercent Float?
+  timeframeHours  Int      @default(24)
+
+  triggered       Boolean  @default(false)
+  triggeredAt     DateTime?
+  triggeredPrice  Float?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId, triggered])
+  @@index([asset, triggered])
+}
+
+// NFT listado en el marketplace
+model NFTListing {
+  id              String   @id @default(cuid())
+  sellerId        String
+  seller          User     @relation("NFTSeller", fields: [sellerId], references: [id])
+
+  // Datos on-chain
+  chain           String   // polygon, base, ethereum
+  contractAddress String   // dirección del contrato ERC-721
+  tokenId         String   // ID del NFT (string porque puede ser grande)
+
+  // Metadata
+  name            String
+  description     String?
+  imageCID        String?  // CID de IPFS con la imagen
+  imageGateway    String?  // URL pública al gateway IPFS
+  metadataCID     String?  // CID del JSON metadata (ERC-721 tokenURI)
+
+  // Precio
+  priceAmount     Float
+  priceCurrency   String   // ETH o USDT
+  priceChain      String   // chain del pago (igual a chain normalmente)
+
+  // Comprador (cuando se vende)
+  buyerId         String?
+  buyer           User?    @relation("NFTBuyer", fields: [buyerId], references: [id])
+  soldAt          DateTime?
+  saleTxHash      String?
+
+  status          String   @default("LISTED")  // LISTED, SOLD, DELISTED
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([chain, status])
+  @@index([sellerId])
+  @@index([status])
+}
+
+// Calendario de NFT Drops — lanzamientos verificados (curado manualmente)
+model NFTDrop {
+  id              String   @id @default(cuid())
+  name            String   // nombre de la colección
+  description     String?
+  collectionImage String?  // URL imagen
+  projectWebsite  String?
+
+  // Chain y contrato (si se conoce)
+  chain           String   // polygon, base, ethereum
+  contractAddress String?  // null si no se conoce aún
+
+  // Tiempo
+  dropDate        DateTime
+  mintPrice       Float?
+  priceCurrency   String?  // ETH, USDT, FREE
+  totalSupply     Int?
+  maxPerWallet    Int?
+
+  // Estado
+  status          String   @default("UPCOMING") // UPCOMING, LIVE, ENDED
+  verified        Boolean  @default(true) // solo drops verificados se muestran
+  createdAt       DateTime @default(now())
+
+  @@index([dropDate])
+  @@index([status, verified])
 }
 
 

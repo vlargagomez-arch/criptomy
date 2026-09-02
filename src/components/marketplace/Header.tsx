@@ -11,10 +11,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   Home, Store, PlusCircle, ArrowLeftRight, Trophy, Wallet, Star,
-  LogOut, Copy,
+  Image, CalendarClock, Bell, LogOut, Copy,
 } from "lucide-react";
 import { reputationLabel, avatarGradient } from "@/lib/format";
 import Onboarding from "./Onboarding";
+import NotificationBell from "./NotificationBell";
 
 type NavItem = { key: TabKey; label: string; icon: React.ElementType };
 
@@ -23,6 +24,9 @@ const NAV_ITEMS: NavItem[] = [
   { key: "crear", label: "Crear oferta", icon: PlusCircle },
   { key: "trades", label: "Mis trades", icon: ArrowLeftRight },
   { key: "retos", label: "Retos", icon: Trophy },
+  { key: "nft", label: "NFT", icon: Image },
+  { key: "drops", label: "Drops", icon: CalendarClock },
+  { key: "alertas", label: "Alertas", icon: Bell },
   { key: "billetera", label: "Billetera", icon: Wallet },
   { key: "reputacion", label: "Reputación", icon: Star },
 ];
@@ -78,7 +82,8 @@ export default function Header() {
           </nav>
 
           {/* Auth */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            {user && <NotificationBell />}
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

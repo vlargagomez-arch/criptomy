@@ -16,7 +16,7 @@ export interface CurrentUser {
   bio: string | null;
 }
 
-export type TabKey = "inicio" | "mercado" | "crear" | "trades" | "retos" | "billetera" | "reputacion";
+export type TabKey = "inicio" | "mercado" | "crear" | "trades" | "retos" | "nft" | "drops" | "alertas" | "billetera" | "reputacion";
 
 interface AppState {
   user: CurrentUser | null;
@@ -34,7 +34,7 @@ interface AppState {
   logout: () => void;
 }
 
-const STORAGE_VERSION = 10;
+const STORAGE_VERSION = 11;
 
 function isValidUser(user: unknown): user is CurrentUser {
   if (!user || typeof user !== "object") return false;
@@ -68,7 +68,7 @@ export const useApp = create<AppState>()(
       logout: () => set({ user: null, privateKey: null, tab: "inicio", chainId: null }),
     }),
     {
-      name: "nokycswap-v10",
+      name: "nokycswap-v11",
       version: STORAGE_VERSION,
       partialize: (state) => ({
         user: state.user,
@@ -80,7 +80,7 @@ export const useApp = create<AppState>()(
         if (version < STORAGE_VERSION || !persistedState) return null;
         const state = persistedState as { user?: unknown; tab?: unknown };
         if (state.user && !isValidUser(state.user)) state.user = null;
-        const validTabs: TabKey[] = ["inicio", "mercado", "crear", "trades", "retos", "billetera", "reputacion"];
+        const validTabs: TabKey[] = ["inicio", "mercado", "crear", "trades", "retos", "nft", "drops", "alertas", "billetera", "reputacion"];
         if (state.tab && !validTabs.includes(state.tab as TabKey)) state.tab = "inicio";
         return state;
       },

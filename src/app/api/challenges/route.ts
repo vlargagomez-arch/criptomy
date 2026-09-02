@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { notifyNewChallenge } from "@/lib/notify";
 
 // GET /api/challenges?status=OPEN&game=LEAGUE_OF_LEGENDS&userId=...
 export async function GET(req: NextRequest) {
@@ -112,6 +113,18 @@ export async function POST(req: NextRequest) {
         },
       },
     });
+
+    // Notificar a otros usuarios sobre el nuevo reto (no bloqueante)
+    try {
+      await notifyNewChallenge({
+        challengeId: challenge.id,
+        game,
+        stakeAmount: parseFloat(stakeAmount),
+        creatorAlias: challenge.creator.alias,
+      });
+    } catch (e) {
+      console.warn("[challenges POST] notify failed:", e);
+    }
 
     return NextResponse.json({ challenge }, { status: 201 });
   } catch (err) {
