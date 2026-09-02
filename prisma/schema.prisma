@@ -49,6 +49,10 @@ model User {
   pushSubscriptions   PushSubscription[]
   nftListings         NFTListing[]  @relation("NFTSeller")
   nftBought           NFTListing[]  @relation("NFTBuyer")
+
+  // Plataforma: oportunidades, proveedores favoritos, comentarios
+  savedOpportunities  SavedOpportunity[]
+  providerReviews    ProviderReview[]
 }
 
 // Oferta P2P: "vendo X BTC por Y COP vía Nequi"
@@ -425,4 +429,64 @@ model NFTDrop {
   @@index([status, verified])
 }
 
+
+// ============================================================
+// MÓDULO: Oportunidades Web3 + Directorio de Proveedores
+// ============================================================
+
+// Oportunidad Web3 (Learn&Earn, Airdrops, Trabajo, Crear, Minería, Staking)
+model Opportunity {
+  id              String   @id @default(cuid())
+  category        String   // LEARN_EARN, AIRDROP, JOB_WEB3, CREATE, MINING, STAKING
+  name            String
+  description     String
+  difficulty      String   @default("BEGINNER") // BEGINNER, INTERMEDIATE, ADVANCED
+  initialInvestment Float?   // USD mínimo para empezar (nullable = gratis)
+  riskLevel       String   @default("LOW") // LOW, MEDIUM, HIGH, VERY_HIGH
+  potentialReward String?   // descripción textual, NO número fijo
+  countries       String   @default("ALL") // CSV de ISO codes o "ALL"
+  sourceUrl       String   // URL oficial verificable
+  sourceName      String   // nombre de la fuente
+  verifiedAt      DateTime @default(now())
+  isActive        Boolean  @default(true)
+
+  savedBy         SavedOpportunity[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([category, isActive])
+  @@index([isActive])
+}
+
+// SavedOpportunity: usuario marca como "interesado" en una oportunidad
+model SavedOpportunity {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunityId   String
+  opportunity     Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime @default(now())
+
+  @@unique([userId, opportunityId])
+  @@index([userId])
+}
+
+// Review de un provider por un usuario (rating + comentario)
+model ProviderReview {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  providerId      String   // referencia a PROVIDER_REGISTRY (no FK porque está en código)
+
+  rating          Int      // 1-5
+  comment         String?
+  country         String?
+
+  createdAt       DateTime @default(now())
+
+  @@unique([userId, providerId])
+  @@index([providerId])
+}
 

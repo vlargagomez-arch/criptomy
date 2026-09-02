@@ -54,3 +54,4 @@ server.log
 /skills/db/custom.db
 skills/
 package-lock.json
+tool-results/
