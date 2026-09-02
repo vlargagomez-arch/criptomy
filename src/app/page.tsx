@@ -1,6 +1,7 @@
 "use client";
 
-import { useApp } from "@/lib/store";
+import { useEffect } from "react";
+import { useApp, TabKey } from "@/lib/store";
 import Header from "@/components/marketplace/Header";
 import HomeView from "@/components/marketplace/HomeView";
 import SmartSearchView from "@/components/marketplace/SmartSearchView";
@@ -24,8 +25,39 @@ import ScannerAdminView from "@/components/marketplace/ScannerAdminView";
 import WalletView from "@/components/marketplace/WalletView";
 import ReputationView from "@/components/marketplace/ReputationView";
 
+const VALID_TABS: TabKey[] = [
+  "inicio", "buscador", "dashboard", "comprar", "vender", "enviar", "recibir",
+  "mercado-p2p", "retos", "nft", "drops", "alertas", "remesas", "tarjeta",
+  "oportunidades", "proveedores", "comparador", "scanner-admin", "compliance",
+  "admin", "billetera", "reputacion",
+];
+
 export default function Home() {
-  const { tab } = useApp();
+  const { tab, setTab } = useApp();
+
+  // Sync URL ?tab= con el store al montar y al cambiar la URL
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const urlTab = params.get("tab") as TabKey | null;
+    if (urlTab && VALID_TABS.includes(urlTab) && urlTab !== tab) {
+      setTab(urlTab);
+    }
+  }, [tab, setTab]);
+
+  // Escuchar cambios de URL (back/forward)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = () => {
+      const params = new URLSearchParams(window.location.search);
+      const urlTab = params.get("tab") as TabKey | null;
+      if (urlTab && VALID_TABS.includes(urlTab) && urlTab !== useApp.getState().tab) {
+        useApp.getState().setTab(urlTab);
+      }
+    };
+    window.addEventListener("popstate", handler);
+    return () => window.removeEventListener("popstate", handler);
+  }, []);
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">

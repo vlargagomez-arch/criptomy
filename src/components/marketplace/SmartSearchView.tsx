@@ -180,8 +180,8 @@ function SearchResults({ response, onRetry }: { response: SearchResponse; onRetr
         <div>
           <h3 className="text-xs uppercase tracking-wide text-slate-500 mb-2">Otras opciones</h3>
           <div className="space-y-3">
-            {alternatives.map((r) => (
-              <ResultCard key={r.provider} result={r} />
+            {alternatives.map((r, i) => (
+              <ResultCard key={`alt-${r.provider}-${i}`} result={r} />
             ))}
           </div>
         </div>
@@ -267,6 +267,17 @@ function ResultCard({ result, highlight }: { result: import("@/lib/scanner/types
     FASTEST: "bg-amber-600 text-white",
   };
 
+  // Defensivo: cualquier campo puede ser null/undefined en runtime
+  const price = result.price ?? 0;
+  const fee = result.fee ?? 0;
+  const totalCost = result.totalCost ?? 0;
+  const effectivePrice = result.effectivePrice ?? 0;
+  const spread = result.spread ?? 0;
+  const spreadPercent = result.spreadPercent ?? 0;
+  const liquidity = result.liquidity ?? 0;
+  const priceDecimals = price < 1 ? 6 : price < 100 ? 2 : 0;
+  const effPriceDecimals = effectivePrice < 1 ? 6 : effectivePrice < 100 ? 4 : 2;
+
   return (
     <div className={`bg-slate-900 border rounded-xl p-4 ${highlight ? "border-emerald-600 shadow-lg shadow-emerald-900/20" : "border-slate-800"}`}>
       <div className="flex items-start justify-between gap-3 mb-3">
@@ -276,14 +287,14 @@ function ResultCard({ result, highlight }: { result: import("@/lib/scanner/types
               {result.badge === "BEST" ? "🥇 Mejor opción" : result.badge === "CHEAPEST" ? "💰 Menor comisión" : "🌊 Mayor liquidez"}
             </span>
           )}
-          <span className="text-base font-semibold text-slate-100">{result.providerName}</span>
+          <span className="text-base font-semibold text-slate-100">{result.providerName || "Provider"}</span>
           <span className={`text-[10px] px-2 py-0.5 rounded ${result.status === "ONLINE" ? "bg-emerald-900/50 text-emerald-300" : "bg-red-900/50 text-red-300"}`}>
-            {result.status === "ONLINE" ? "● Online" : "● " + result.status}
+            {result.status === "ONLINE" ? "● Online" : "● " + (result.status || "OFFLINE")}
           </span>
         </div>
         <div className="text-right">
           <div className="text-[10px] text-slate-500">Latencia</div>
-          <div className="text-xs text-slate-300">{result.latencyMs}ms</div>
+          <div className="text-xs text-slate-300">{result.latencyMs || 0}ms</div>
         </div>
       </div>
 
@@ -291,37 +302,37 @@ function ResultCard({ result, highlight }: { result: import("@/lib/scanner/types
         <div>
           <div className="text-[10px] text-slate-500">Precio unit.</div>
           <div className="text-sm text-slate-100 font-mono">
-            {result.price.toLocaleString(undefined, { maximumFractionDigits: result.price < 1 ? 6 : 2 })} {result.fiat}
+            {price > 0 ? `${price.toLocaleString(undefined, { maximumFractionDigits: priceDecimals })} ${result.fiat || ""}` : "—"}
           </div>
         </div>
         <div>
           <div className="text-[10px] text-slate-500">Comisión</div>
           <div className="text-sm text-amber-400 font-mono">
-            {result.fee.toLocaleString(undefined, { maximumFractionDigits: 4 })} {result.feeCurrency}
+            {fee > 0 ? `${fee.toLocaleString(undefined, { maximumFractionDigits: 4 })} ${result.feeCurrency || ""}` : "Gratis"}
           </div>
         </div>
         <div>
           <div className="text-[10px] text-slate-500">Costo total</div>
           <div className="text-sm text-emerald-400 font-mono font-semibold">
-            {result.totalCost.toLocaleString(undefined, { maximumFractionDigits: 2 })} {result.totalCostCurrency}
+            {totalCost > 0 ? `${totalCost.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${result.totalCostCurrency || ""}` : "—"}
           </div>
         </div>
         <div>
           <div className="text-[10px] text-slate-500">Precio efectivo</div>
           <div className="text-sm text-slate-100 font-mono">
-            {result.effectivePrice.toLocaleString(undefined, { maximumFractionDigits: result.effectivePrice < 1 ? 6 : 4 })} {result.fiat}
+            {effectivePrice > 0 ? `${effectivePrice.toLocaleString(undefined, { maximumFractionDigits: effPriceDecimals })} ${result.fiat || ""}` : "—"}
           </div>
         </div>
       </div>
 
-      {result.spread !== undefined && result.spread > 0 && (
+      {spread > 0 && (
         <div className="text-[11px] text-slate-500 mb-1">
-          Spread: {result.spread.toFixed(4)} ({result.spreadPercent?.toFixed(3)}%)
+          Spread: {spread.toFixed(4)} ({spreadPercent.toFixed(3)}%)
         </div>
       )}
-      {result.liquidity !== undefined && result.liquidity > 0 && (
+      {liquidity > 0 && (
         <div className="text-[11px] text-slate-500 mb-1">
-          Volumen 24h: {result.liquidity.toLocaleString(undefined, { maximumFractionDigits: 0 })} {result.fiat}
+          Volumen 24h: {liquidity.toLocaleString(undefined, { maximumFractionDigits: 0 })} {result.fiat || ""}
         </div>
       )}
       {result.paymentMethods && result.paymentMethods.length > 0 && (
@@ -332,17 +343,17 @@ function ResultCard({ result, highlight }: { result: import("@/lib/scanner/types
 
       <div className="flex items-center justify-between gap-3 mt-2 pt-2 border-t border-slate-800">
         <div className="text-[10px] text-slate-500">
-          {result.reason}
+          {result.reason || ""}
         </div>
       </div>
 
       <div className="flex items-center justify-between gap-3 mt-2">
         <div className="text-[10px] text-slate-500 flex items-center gap-1">
           <Clock className="w-3 h-3" />
-          {result.estimatedTime}
+          {result.estimatedTime || "Tiempo no estimado"}
         </div>
         <div className="text-[10px] text-slate-500">
-          Fuente: {result.source}
+          Fuente: {result.source || "Desconocida"}
         </div>
       </div>
 
@@ -356,28 +367,42 @@ function ResultCard({ result, highlight }: { result: import("@/lib/scanner/types
 }
 
 function P2POfferCard({ offer }: { offer: import("@/lib/scanner/types").P2POffer }) {
+  const price = offer.price ?? 0;
+  const minAmount = offer.minAmount ?? 0;
+  const maxAmount = offer.maxAmount ?? 0;
+  const available = offer.available ?? 0;
+
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-lg p-3 flex items-center justify-between gap-3">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-sm font-medium text-slate-100">@{offer.advertiser}</span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">
+          <span className="text-sm font-medium text-slate-100 truncate">@{offer.advertiser || "anónimo"}</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 shrink-0">
             {offer.providerName}
           </span>
+          {offer.tradeCount > 0 && (
+            <span className="text-[10px] text-emerald-400 shrink-0">
+              {offer.tradeCount} trades
+            </span>
+          )}
         </div>
-        <div className="text-xs text-slate-400">
-          {offer.paymentMethods.slice(0, 3).join(" · ")}
+        <div className="text-xs text-slate-400 truncate">
+          {offer.paymentMethods.length > 0 ? offer.paymentMethods.slice(0, 3).join(" · ") : "Sin método especificado"}
         </div>
         <div className="text-[10px] text-slate-500 mt-1">
-          Límites: {offer.minAmount.toLocaleString()} - {offer.maxAmount.toLocaleString()} {offer.fiat}
+          {minAmount > 0 || maxAmount > 0 ? (
+            <>Límites: {minAmount.toLocaleString()} - {maxAmount.toLocaleString()} {offer.fiat}</>
+          ) : (
+            <>Límites no disponibles</>
+          )}
         </div>
       </div>
-      <div className="text-right">
+      <div className="text-right shrink-0">
         <div className="text-sm font-bold text-emerald-400 font-mono">
-          {offer.price.toLocaleString(undefined, { maximumFractionDigits: 2 })} {offer.fiat}
+          {price > 0 ? `${price.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${offer.fiat}` : "—"}
         </div>
         <div className="text-[10px] text-slate-500">
-          Disponible: {offer.available.toLocaleString()} {offer.asset}
+          {available > 0 ? `${available.toLocaleString()} ${offer.asset}` : ""}
         </div>
       </div>
     </div>

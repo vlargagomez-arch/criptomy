@@ -88,7 +88,19 @@ export const useApp = create<AppState>()(
       connecting: false,
       chainId: null,
       escrowAddress: null,
-      setTab: (t) => set({ tab: t }),
+      setTab: (t) => {
+        set({ tab: t });
+        // Sincronizar URL con history API (sin recargar)
+        if (typeof window !== "undefined") {
+          const url = new URL(window.location.href);
+          if (t === "inicio" || t === "dashboard") {
+            url.searchParams.delete("tab");
+          } else {
+            url.searchParams.set("tab", t);
+          }
+          window.history.replaceState({}, "", url.toString());
+        }
+      },
       setP2PSubTab: (s) => set({ p2pSubTab: s }),
       setUser: (u) => set({ user: u }),
       setPrivateKey: (k) => set({ privateKey: k }),

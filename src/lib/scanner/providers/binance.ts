@@ -116,23 +116,46 @@ export async function fetchBinanceTicker(asset: string, quote: string): Promise<
 // }
 // tradeType: BUY = el usuario quiere comprar; SELL = el usuario quiere vender.
 
-interface BinanceP2PAdv {
+// Estructura REAL de respuesta (verificado con curl):
+// data: [
+//   {
+//     adv: { advNo, asset, fiatUnit, price, minSingleTransAmount, maxSingleTransAmount,
+//            tradableQuantity, tradeMethods, tradeType, surplusAmount, ... },
+//     advertiser: { nickName, userNo, monthOrderCount, monthFinishRate, positiveRate, ... }
+//   }
+// ]
+interface BinanceP2PAdvNested {
   advNo: number;
-  advOwnerNickName: string;
-  advertiserNickName: string;
   asset: string;
   fiatUnit: string;
   price: string;
-  surAmountWithTag: string;
+  surplusAmount: string;
   minSingleTransAmount: string;
   maxSingleTransAmount: string;
   tradableQuantity: string;
-  tradeMethods: { identifier: string; tradeMethodName: string; tradeMethodShortName: string }[];
-  tradeType: string; // "BUY" | "SELL" (desde perspectiva advertiser)
+  tradeType: string;
+  tradeMethods: {
+    identifier: string;
+    tradeMethodName: string;
+    tradeMethodShortName: string;
+  }[];
+}
+
+interface BinanceP2PAdvertiser {
+  nickName: string;
+  userNo: string;
+  monthOrderCount: number;
+  monthFinishRate: number;
+  positiveRate: number;
+}
+
+interface BinanceP2PItem {
+  adv: BinanceP2PAdvNested;
+  advertiser: BinanceP2PAdvertiser;
 }
 
 interface BinanceP2PResponse {
-  data: BinanceP2PAdv[];
+  data: BinanceP2PItem[];
   total: number;
 }
 
@@ -197,30 +220,41 @@ export async function fetchBinanceP2P(params: {
     const data = (await res.json()) as BinanceP2PResponse;
     if (!data.data) return [];
 
-    const offers: P2POffer[] = data.data.map((adv) => {
-      const price = parseFloat(adv.price);
-      const minAmount = parseFloat(adv.minSingleTransAmount);
-      const maxAmount = parseFloat(adv.maxSingleTransAmount);
-      const available = parseFloat(adv.tradableQuantity);
+    const offers: P2POffer[] = data.data
+      .filter((item) => item && item.adv && item.adv.price)
+      .map((item) => {
+        const adv = item.adv;
+        const advertiser = item.advertiser;
+        const price = parseFloat(adv.price || "0");
+        const minAmount = parseFloat(adv.minSingleTransAmount || "0");
+        const maxAmount = parseFloat(adv.maxSingleTransAmount || "0");
+        const available = parseFloat(adv.tradableQuantity || "0");
 
-      return {
-        provider: "binance",
-        providerName: "Binance",
-        advertiser: adv.advertiserNickName || adv.advOwnerNickName || "anónimo",
-        asset: adv.asset,
-        fiat: adv.fiatUnit,
-        tradeType: params.tradeType,
-        price,
-        minAmount,
-        maxAmount,
-        available,
-        paymentMethods: (adv.tradeMethods || []).map((m) => m.tradeMethodShortName || m.tradeMethodName || m.identifier),
-        tradeCount: 0,
-        timestamp: Date.now(),
-        latencyMs,
-        status: "ONLINE" as ProviderStatus,
-      };
-    });
+        // Solo incluir offers con precio válido (> 0)
+        if (price <= 0) return null;
+
+        return {
+          provider: "binance",
+          providerName: "Binance",
+          advertiser: advertiser?.nickName || "anónimo",
+          asset: adv.asset || params.asset,
+          fiat: adv.fiatUnit || params.fiat,
+          tradeType: params.tradeType,
+          price,
+          minAmount,
+          maxAmount,
+          available,
+          paymentMethods: (adv.tradeMethods || []).map(
+            (m) => m.tradeMethodShortName || m.tradeMethodName || m.identifier
+          ),
+          tradeCount: advertiser?.monthOrderCount || 0,
+          completionRate: advertiser?.monthFinishRate,
+          timestamp: Date.now(),
+          latencyMs,
+          status: "ONLINE" as ProviderStatus,
+        };
+      })
+      .filter((o): o is P2POffer => o !== null);
 
     cacheSet(cacheKey, offers, 15_000);
     recordSuccess("binance-p2p");

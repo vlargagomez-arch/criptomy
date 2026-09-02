@@ -69,19 +69,46 @@ export function interpretQuery(raw: string): SearchIntent {
     intent.operation = "FIND_P2P";
   }
 
-  // 2) Detectar cantidad (ej: "1000", "500.000", "1000.50")
-  // Match: "1000 USDT" o "500.000 COP" o "1000.50"
-  const amountMatch = query.match(/(\d{1,3}(?:[.,]\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)\s*(?:usdt|usdc|btc|eth|sol|cop|mxn|ars|brl|clp|pen|usd|eur)?/i);
+  // 2) Detectar cantidad
+  // Estrategia: buscar el primer número seguido (opcionalmente) de un token de cripto/fiat
+  // Formatos soportados: "1000", "500.000", "500,000", "1000.50", "1000,50", "0.5"
+  // Heurística para distinguir separador de miles vs decimal:
+  //   - Si el número tiene un solo punto o coma y luego 1-2 dígitos al final → decimal
+  //   - Si el número tiene un solo punto o coma y luego exactamente 3 dígitos → miles
+  //   - Si tiene varios separadores → son miles
+  const amountRegex = /(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?|\d+[.,]\d{1,2}|\d+)/i;
+  const amountMatch = query.match(amountRegex);
   if (amountMatch && amountMatch[1]) {
-    // Limpiar formato: "500.000" → 500000, "1000.50" → 1000.50
     const rawAmount = amountMatch[1];
-    const normalized = rawAmount.replace(/,(\d{3})/g, "$1");
+    let normalized: string;
+
+    // Caso: tiene varios separadores (1.234.567 o 1,234,567) → todos son miles
+    if ((rawAmount.match(/[.,]/g) || []).length > 1) {
+      normalized = rawAmount.replace(/[.,]/g, "");
+    }
+    // Caso: un solo separador
+    else if (/[.,]/.test(rawAmount)) {
+      const sep = rawAmount.match(/[.,]/)[0];
+      const afterSep = rawAmount.split(sep)[1] || "";
+      if (afterSep.length === 3 && /^\d{3}$/.test(afterSep)) {
+        // Parece separador de miles (ej: "500.000" → 500000)
+        normalized = rawAmount.replace(/[.,]/g, "");
+      } else {
+        // Parece decimal (ej: "1000.50" o "0.5")
+        normalized = rawAmount.replace(/,/, ".");
+      }
+    } else {
+      normalized = rawAmount;
+    }
+
     const amount = parseFloat(normalized);
     if (!isNaN(amount) && amount > 0) {
       intent.amount = amount;
-      // Si el número viene seguido de una cripto, esa es la cripto
-      if (amountMatch[2]) {
-        const upper = amountMatch[2].toUpperCase();
+      // Buscar la unidad que sigue al número
+      const afterNumber = query.slice(query.indexOf(amountMatch[1]) + amountMatch[1].length).trim();
+      const unitMatch = afterNumber.match(/^(usdt|usdc|btc|eth|sol|cop|mxn|ars|brl|clp|pen|ves|usd|eur|bnb|xrp|ada|dot|link|matic|avax)\b/i);
+      if (unitMatch) {
+        const upper = unitMatch[1].toUpperCase();
         if (CURRENCIES.includes(upper)) intent.asset = upper;
         else if (FIATS.includes(upper)) intent.fiat = upper;
       }
