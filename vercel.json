@@ -1,8 +1,5 @@
 {
-  "crons": [
-    {
-      "path": "/api/cron/price-alerts-check",
-      "schedule": "*/5 * * * *"
-    }
-  ]
+  "framework": "nextjs",
+  "buildCommand": "npx prisma generate && next build",
+  "installCommand": "npm install"
 }
