@@ -75,7 +75,7 @@ export default function ComprarView() {
     setPurchasing(providerId);
     setPurchaseResult(null);
     try {
-      const res = await fetch("/api/onramp", {
+      const res = await fetch("/api/onramp/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

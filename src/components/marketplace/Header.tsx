@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useApp, TabKey } from "@/lib/store";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -10,73 +11,70 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Home, Store, PlusCircle, ArrowLeftRight, Trophy, Wallet, Star,
+  Home, Store, ArrowLeftRight, Trophy, Wallet, Star,
   Image as ImageIcon, CalendarClock, Bell, LogOut, Copy,
   ShoppingBag, TrendingDown, Send, Download, Sparkles, Grid3x3,
-  Globe2, CreditCard, ShieldAlert, Settings,
+  Globe2, CreditCard, ShieldAlert, Settings, Menu, X, ChevronRight,
 } from "lucide-react";
 import { reputationLabel, avatarGradient } from "@/lib/format";
 import Onboarding from "./Onboarding";
 import NotificationBell from "./NotificationBell";
 
-type NavItem = { key: TabKey; label: string; icon: React.ElementType };
+type NavItem = { key: TabKey; label: string; icon: React.ElementType; desc: string };
 
-// Nav del top: agrupado en secciones lógicas
-const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
+// Agrupación profesional: 3 categorías claras + sección de cuenta aparte
+const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   {
-    title: "Inicio",
+    title: "Cripto",
     items: [
-      { key: "dashboard", label: "Inicio", icon: Home },
-    ],
-  },
-  {
-    title: "Operaciones",
-    items: [
-      { key: "comprar", label: "Comprar", icon: ShoppingBag },
-      { key: "vender", label: "Vender", icon: TrendingDown },
-      { key: "enviar", label: "Enviar", icon: Send },
-      { key: "recibir", label: "Recibir", icon: Download },
-      { key: "remesas", label: "Remesas", icon: Globe2 },
-      { key: "tarjeta", label: "Tarjeta", icon: CreditCard },
+      { key: "dashboard", label: "Inicio", icon: Home, desc: "Dashboard principal" },
+      { key: "comprar", label: "Comprar", icon: ShoppingBag, desc: "On-ramp: fiat → cripto" },
+      { key: "vender", label: "Vender", icon: TrendingDown, desc: "Off-ramp: cripto → fiat" },
+      { key: "enviar", label: "Enviar", icon: Send, desc: "Transferencia on-chain" },
+      { key: "recibir", label: "Recibir", icon: Download, desc: "Tu dirección + QR" },
     ],
   },
   {
     title: "Mercado",
     items: [
-      { key: "mercado-p2p", label: "Mercado P2P", icon: Store },
-      { key: "retos", label: "Retos", icon: Trophy },
-      { key: "nft", label: "NFT", icon: ImageIcon },
-      { key: "drops", label: "Drops", icon: CalendarClock },
+      { key: "mercado-p2p", label: "Mercado P2P", icon: Store, desc: "Compra/venta persona a persona" },
+      { key: "retos", label: "Retos gaming", icon: Trophy, desc: "Apuestas 1v1 con verificación" },
+      { key: "nft", label: "Mercado NFT", icon: ImageIcon, desc: "Mint, list, buy NFTs" },
+      { key: "drops", label: "NFT Drops", icon: CalendarClock, desc: "Calendario de lanzamientos" },
     ],
   },
   {
-    title: "Descubrir",
+    title: "Servicios",
     items: [
-      { key: "oportunidades", label: "Oportunidades", icon: Sparkles },
-      { key: "proveedores", label: "Proveedores", icon: Grid3x3 },
-      { key: "comparador", label: "Comparador", icon: ShoppingBag },
-      { key: "alertas", label: "Alertas", icon: Bell },
-    ],
-  },
-  {
-    title: "Sistema",
-    items: [
-      { key: "compliance", label: "Compliance", icon: ShieldAlert },
-      { key: "admin", label: "Admin", icon: Settings },
+      { key: "remesas", label: "Remesas", icon: Globe2, desc: "Transferencias internacionales" },
+      { key: "tarjeta", label: "Tarjeta cripto", icon: CreditCard, desc: "Solicitar tarjeta de proveedores" },
+      { key: "oportunidades", label: "Oportunidades", icon: Sparkles, desc: "Learn&Earn, airdrops, staking" },
+      { key: "comparador", label: "Comparador", icon: ShoppingBag, desc: "Compara fees entre providers" },
     ],
   },
 ];
 
-const ALL_NAV = NAV_SECTIONS.flatMap((s) => s.items);
+// Compact nav (iconos + labels cortos) para barra superior
+const COMPACT_NAV: TabKey[] = [
+  "dashboard",
+  "comprar",
+  "vender",
+  "enviar",
+  "recibir",
+  "mercado-p2p",
+  "retos",
+  "nft",
+];
 
 export default function Header() {
   const { user, tab, setTab, logout } = useApp();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const rep = user ? reputationLabel(user.reputationScore) : null;
 
   return (
     <header className="sticky top-0 z-40 border-b border-slate-800 bg-slate-950/95 backdrop-blur">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="flex h-16 items-center justify-between gap-4">
+        <div className="flex h-16 items-center justify-between gap-3">
           {/* Logo */}
           <button
             onClick={() => setTab("inicio")}
@@ -90,31 +88,101 @@ export default function Header() {
                 Cripto<span className="text-emerald-400">My</span>
               </div>
               <div className="text-[10px] text-slate-500 leading-tight">
-                Web3 · LATAM · Sin custodia
+                Web3 · LATAM
               </div>
             </div>
           </button>
 
-          {/* Nav desktop — botones directos */}
-          <nav className="hidden md:flex items-center gap-0.5 flex-1 overflow-x-auto scrollbar-hide">
-            {ALL_NAV.map((item) => {
+          {/* Nav desktop — accesos rápidos principales */}
+          <nav className="hidden lg:flex items-center gap-0.5 flex-1 justify-center">
+            {COMPACT_NAV.map((key) => {
+              const item = NAV_GROUPS.flatMap((g) => g.items).find((i) => i.key === key)!;
+              if (!item) return null;
               const Icon = item.icon;
-              const active = tab === item.key;
+              const active = tab === key;
               return (
                 <button
-                  key={item.key}
-                  onClick={() => setTab(item.key)}
-                  className={`flex items-center gap-1.5 px-2.5 py-2 text-xs font-medium rounded-md transition whitespace-nowrap ${
+                  key={key}
+                  onClick={() => setTab(key)}
+                  className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-md transition ${
                     active
                       ? "bg-emerald-600 text-white"
                       : "text-slate-300 hover:text-slate-100 hover:bg-slate-800"
                   }`}
+                  title={item.desc}
                 >
                   <Icon className="w-3.5 h-3.5" />
                   {item.label}
                 </button>
               );
             })}
+
+            {/* More menu — items secundarios */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-md text-slate-300 hover:text-slate-100 hover:bg-slate-800 transition">
+                  Más
+                  <ChevronRight className="w-3 h-3" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="bg-slate-900 border-slate-800 text-slate-100 w-64 p-2"
+              >
+                {/* Servicios */}
+                <div className="px-2 py-1 text-[10px] uppercase text-slate-500 font-semibold">
+                  Servicios
+                </div>
+                {NAV_GROUPS[2].items.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <DropdownMenuItem
+                      key={item.key}
+                      className="text-xs cursor-pointer px-2 py-1.5 hover:bg-slate-800 rounded"
+                      onClick={() => setTab(item.key)}
+                    >
+                      <Icon className="w-3.5 h-3.5 mr-2 text-slate-400" />
+                      <div>
+                        <div>{item.label}</div>
+                        <div className="text-[10px] text-slate-500">{item.desc}</div>
+                      </div>
+                    </DropdownMenuItem>
+                  );
+                })}
+                <DropdownMenuSeparator className="bg-slate-800 my-2" />
+                <div className="px-2 py-1 text-[10px] uppercase text-slate-500 font-semibold">
+                  Sistema
+                </div>
+                <DropdownMenuItem
+                  className="text-xs cursor-pointer px-2 py-1.5 hover:bg-slate-800 rounded"
+                  onClick={() => setTab("proveedores")}
+                >
+                  <Grid3x3 className="w-3.5 h-3.5 mr-2 text-slate-400" />
+                  Directorio proveedores
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-xs cursor-pointer px-2 py-1.5 hover:bg-slate-800 rounded"
+                  onClick={() => setTab("alertas")}
+                >
+                  <Bell className="w-3.5 h-3.5 mr-2 text-slate-400" />
+                  Alertas de precio
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-xs cursor-pointer px-2 py-1.5 hover:bg-slate-800 rounded"
+                  onClick={() => setTab("compliance")}
+                >
+                  <ShieldAlert className="w-3.5 h-3.5 mr-2 text-slate-400" />
+                  Compliance y regulación
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-xs cursor-pointer px-2 py-1.5 hover:bg-slate-800 rounded"
+                  onClick={() => setTab("admin")}
+                >
+                  <Settings className="w-3.5 h-3.5 mr-2 text-slate-400" />
+                  Panel admin
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </nav>
 
           {/* Auth */}
@@ -184,30 +252,81 @@ export default function Header() {
             ) : (
               <Onboarding />
             )}
+
+            {/* Mobile menu trigger */}
+            <button
+              onClick={() => setMobileMenuOpen((o) => !o)}
+              className="lg:hidden p-2 rounded-lg hover:bg-slate-800 transition text-slate-300"
+              aria-label="Menú"
+            >
+              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
           </div>
         </div>
 
-        {/* Nav móvil */}
-        <nav className="md:hidden flex items-center gap-0.5 pb-2 overflow-x-auto scrollbar-hide">
-          {ALL_NAV.map((item) => {
-            const Icon = item.icon;
-            const active = tab === item.key;
-            return (
-              <button
-                key={item.key}
-                onClick={() => setTab(item.key)}
-                className={`shrink-0 flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium rounded-md transition ${
-                  active
-                    ? "bg-emerald-600 text-white"
-                    : "text-slate-400 hover:bg-slate-800"
-                }`}
-              >
-                <Icon className="w-3 h-3" />
-                {item.label}
-              </button>
-            );
-          })}
-        </nav>
+        {/* Mobile menu */}
+        {mobileMenuOpen && (
+          <div className="lg:hidden border-t border-slate-800 py-4 max-h-[70vh] overflow-y-auto">
+            {NAV_GROUPS.map((group) => (
+              <div key={group.title} className="mb-4">
+                <div className="px-2 mb-1 text-[10px] uppercase text-slate-500 font-semibold">
+                  {group.title}
+                </div>
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const active = tab === item.key;
+                  return (
+                    <button
+                      key={item.key}
+                      onClick={() => {
+                        setTab(item.key);
+                        setMobileMenuOpen(false);
+                      }}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-sm rounded-md transition ${
+                        active
+                          ? "bg-emerald-600 text-white"
+                          : "text-slate-300 hover:bg-slate-800"
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      <div className="text-left flex-1">
+                        <div className="font-medium">{item.label}</div>
+                        <div className="text-[10px] text-slate-500">{item.desc}</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+            {/* Sistema */}
+            <div className="mb-4">
+              <div className="px-2 mb-1 text-[10px] uppercase text-slate-500 font-semibold">
+                Sistema
+              </div>
+              {[
+                { key: "proveedores" as TabKey, label: "Directorio proveedores", icon: Grid3x3 },
+                { key: "alertas" as TabKey, label: "Alertas de precio", icon: Bell },
+                { key: "compliance" as TabKey, label: "Compliance", icon: ShieldAlert },
+                { key: "admin" as TabKey, label: "Panel admin", icon: Settings },
+              ].map((item) => {
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={item.key}
+                    onClick={() => {
+                      setTab(item.key);
+                      setMobileMenuOpen(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800 rounded-md"
+                  >
+                    <Icon className="w-4 h-4" />
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </header>
   );

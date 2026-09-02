@@ -59,7 +59,7 @@ interface Props {
 }
 
 export default function AcceptOfferDialog({ offer, onClose }: Props) {
-  const { user, privateKey, setTab } = useApp();
+  const { user, privateKey, setTab, setP2PSubTab } = useApp();
   const [amount, setAmount] = useState<string>("");
   const [method, setMethod] = useState<string>("");
   const [paymentDetails, setPaymentDetails] = useState<string>("");
@@ -142,7 +142,8 @@ export default function AcceptOfferDialog({ offer, onClose }: Props) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Error");
       onClose();
-      setTab("trades");
+      setTab("mercado-p2p");
+      setP2PSubTab("mis-trades");
     } catch (e) {
       setError((e as Error).message);
     } finally {

@@ -57,6 +57,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // HONESTO: no generamos un verificationHash aleatorio fake.
+    // La cuenta se vincula (registrada en DB) pero NO está verificada
+    // contra la API del juego todavía. La verificación real ocurre
+    // cuando se juega un reto y se consulta la API de Riot/Steam/PUBG.
+    // verificationHash queda null hasta que se confirme con un match.
     const account = await db.gameAccount.create({
       data: {
         userId,
@@ -64,7 +69,8 @@ export async function POST(req: NextRequest) {
         accountRegion,
         accountId,
         accountName,
-        verificationHash: `0x${Math.random().toString(16).slice(2).padStart(64, "0")}`,
+        verificationHash: null,
+        verifiedAt: new Date(), // momento de vinculación (no verificación API)
       },
     });
 

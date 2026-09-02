@@ -134,7 +134,7 @@ export default function CreateOfferView() {
       }
       setSuccess(true);
       setTimeout(() => {
-        setTab("mercado");
+        setTab("mercado-p2p");
       }, 1500);
     } catch (e) {
       const msg = (e as Error).message;

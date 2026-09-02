@@ -219,6 +219,35 @@ export async function PATCH(
         opponentAccount?.accountId || ""
       );
 
+      // ⚠️ CRÍTICO: Si la API del juego NO está configurada (mock),
+      // NO completar el reto ni setear payoutStatus. Esto evita que
+      // el bot de pago automático transfiera USDT real basado en un
+      // resultado simulado. El reto queda en disputa para revisión manual.
+      const apiConfigured = isGameAPIConfigured(challenge.game);
+
+      if (!apiConfigured) {
+        const updated = await db.challenge.update({
+          where: { id },
+          data: {
+            status: "DISPUTED",
+            matchData: JSON.stringify(result),
+            matchVerifiedAt: new Date(),
+            // NO setear winnerId, NO setear payoutStatus
+            disputeReason: "API del juego no configurada. Resultado no verificado automáticamente. Requiere resolución manual.",
+          },
+          include: {
+            winner: { select: { id: true, alias: true, walletAddress: true } },
+          },
+        });
+
+        return NextResponse.json({
+          challenge: updated,
+          result: { ...result, source: "Mock (sin API key configurada)" },
+          apiConfigured: false,
+          message: "⚠️ La API del juego no está configurada. El reto se marca en disputa para revisión manual. No se libera pago automáticamente con resultado simulado.",
+        });
+      }
+
       const winnerId =
         result.winner === "creator" ? challenge.creatorId
         : result.winner === "opponent" ? challenge.opponentId
@@ -238,17 +267,14 @@ export async function PATCH(
         },
       });
 
-      const apiConfigured = isGameAPIConfigured(challenge.game);
-      const sourceLabel = apiConfigured
-        ? `API real (${result.source})`
-        : "Mock (sin API key configurada)";
+      const sourceLabel = `API real (${result.source})`;
 
       return NextResponse.json({
         challenge: updated,
         result: { ...result, source: sourceLabel },
-        apiConfigured,
+        apiConfigured: true,
         message: winnerId
-          ? `Ganador: ${updated.winner?.alias}. ${apiConfigured ? "Pago liberado vía smart contract." : "Verificado con mock."}`
+          ? `Ganador: ${updated.winner?.alias}. Verificado con API real. Pago liberado vía bot.`
           : "Sin resultado claro. Se abre disputa.",
       });
     }

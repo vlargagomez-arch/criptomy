@@ -92,31 +92,6 @@ export async function GET(req: NextRequest) {
   });
 }
 
-export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const { providerId, purchaseRequest } = body as {
-    providerId: string;
-    purchaseRequest: Parameters<OnRampProvider["startPurchase"]>[0];
-  };
-
-  if (!providerId) {
-    return NextResponse.json({ error: "providerId requerido" }, { status: 400 });
-  }
-
-  try {
-    const adapter = await getOnRampAdapter(providerId);
-    if (!adapter) {
-      return NextResponse.json({ error: `Provider ${providerId} no disponible` }, { status: 400 });
-    }
-
-    const result = await adapter.startPurchase(purchaseRequest);
-    return NextResponse.json({ result });
-  } catch (err) {
-    console.error("[onramp/start]", err);
-    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
-  }
-}
-
 // Resolver adapter según providerId
 async function getOnRampAdapter(providerId: string): Promise<OnRampProvider | null> {
   if (providerId.startsWith("mock")) {
@@ -127,8 +102,5 @@ async function getOnRampAdapter(providerId: string): Promise<OnRampProvider | nu
     const { MoonpayOnRampProvider } = await import("@/lib/providers/onramp/moonpay");
     return MoonpayOnRampProvider;
   }
-  // Otros providers reales: importar dinámicamente cuando se implementen
-  // if (providerId === "transak") { ... }
-  // if (providerId === "ramp") { ... }
   return null;
 }

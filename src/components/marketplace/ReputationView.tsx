@@ -202,19 +202,11 @@ export default function ReputationView() {
             }}
           />
           <Button
-            onClick={() =>
-              setPending([
-                {
-                  tradeId: "demo",
-                  counterpartAlias: "satoshi_demo",
-                  counterpartId: "demo",
-                },
-              ])
-            }
+            onClick={fetchData}
             variant="outline"
             className="border-slate-700 text-slate-300 hover:bg-slate-800"
           >
-            Ver demo
+            Actualizar
           </Button>
         </div>
         {pending.length > 0 && (

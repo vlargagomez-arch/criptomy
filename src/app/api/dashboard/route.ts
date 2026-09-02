@@ -25,6 +25,8 @@ export async function GET(req: NextRequest) {
         avatarSeed: true,
         bio: true,
         publicKey: true,
+        createdAt: true,
+        lastSeenAt: true,
       },
     });
     if (!user) {

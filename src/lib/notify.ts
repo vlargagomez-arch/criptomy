@@ -141,7 +141,7 @@ export async function notifyPriceTargetMatches(opts: {
         type: "PRICE_ALERT",
         title,
         body,
-        url: "/?tab=mercado",
+        url: "/?tab=mercado-p2p",
         metadata: { offerId: opts.offerId, alertId: alert.id, asset: opts.asset },
       });
     }
@@ -171,7 +171,7 @@ export async function notifyNewOfferPaymentMethod(opts: {
       type: "NEW_OFFER",
       title: `🆕 Nueva oferta ${opts.offerType === "SELL" ? "de venta" : "de compra"} ${opts.asset}`,
       body: `Pago vía ${methods} · ${opts.currency}`,
-      url: "/?tab=mercado",
+      url: "/?tab=mercado-p2p",
       metadata: { offerId: opts.offerId },
     });
   }
@@ -197,7 +197,7 @@ export async function notifyTradeUpdate(opts: {
     type: "TRADE_UPDATE",
     title: m.title,
     body: m.body,
-    url: "/?tab=trades",
+    url: "/?tab=mercado-p2p",
     metadata: { tradeId: opts.tradeId, event: opts.event },
   });
 }
@@ -240,7 +240,7 @@ export async function notifyDipAlert(opts: {
     type: "DIP_ALERT",
     title: `📉 ${opts.asset} cae ${opts.dropPercent.toFixed(1)}% en ${opts.timeframeHours}h`,
     body: `Precio actual: $${opts.currentPrice.toFixed(2)}. Es buen momento para comprar en el mercado P2P.`,
-    url: "/?tab=mercado",
+    url: "/?tab=mercado-p2p",
     metadata: { alertId: opts.alertId, asset: opts.asset },
   });
 }

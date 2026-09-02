@@ -1,15 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
-// GET /api/disputes - lista disputas (en MVP: todas; en producción: solo las del user o árbitro)
+// GET /api/disputes?address=0x... - lista disputas del usuario (por wallet address)
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
-    const userId = searchParams.get("userId");
+    const address = searchParams.get("address");
 
+    // where por defecto vacío: la API NO devuelve nada si no hay filtro
+    // (privacidad: nunca exponemos disputas de otros usuarios)
     const where: Record<string, unknown> = {};
-    if (userId) {
-      where.OR = [{ openerId: userId }, { defendantId: userId }];
+
+    if (address) {
+      const user = await db.user.findUnique({
+        where: { walletAddress: address.toLowerCase() },
+        select: { id: true },
+      });
+      if (!user) {
+        return NextResponse.json({ disputes: [] });
+      }
+      where.OR = [{ openerId: user.id }, { defendantId: user.id }];
+    } else {
+      // Sin address, no devolver nada (privacidad)
+      return NextResponse.json({ disputes: [] });
     }
 
     const disputes = await db.dispute.findMany({

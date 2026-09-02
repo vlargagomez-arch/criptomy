@@ -171,22 +171,54 @@ export default function WalletView() {
       }
     }
 
-    // 3. TRX y XMR (placeholders, sin RPC call)
-    newBalances.push({
-      chain: "Tron",
-      symbol: "TRX",
-      balance: "0",
-      usdValue: null,
-      loading: false,
-      error: null,
-    });
+    // 3. Tron (TRX) - REAL vía TronGrid API pública
+    try {
+      const res = await fetch(
+        `https://apilist.tronscanapi.com/api/account?address=${user.walletAddress}`,
+        { signal: AbortSignal.timeout(8000) }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        const trxBalance = data.balance || 0;
+        newBalances.push({
+          chain: "Tron",
+          symbol: "TRX",
+          balance: String(trxBalance / 1_000_000),
+          usdValue: null, // se rellenará con precio
+          loading: false,
+          error: null,
+        });
+      } else {
+        newBalances.push({
+          chain: "Tron",
+          symbol: "TRX",
+          balance: "—",
+          usdValue: null,
+          loading: false,
+          error: "No disponible",
+        });
+      }
+    } catch (e) {
+      newBalances.push({
+        chain: "Tron",
+        symbol: "TRX",
+        balance: "—",
+        usdValue: null,
+        loading: false,
+        error: (e as Error).message.slice(0, 50),
+      });
+    }
+
+    // 4. Monero (XMR) - HONESTO: no implementado
+    // No hay RPC público gratuito confiable para consultar saldo XMR
+    // sin correr un nodo. Marcar como no soportado en lugar de mostrar 0 falso.
     newBalances.push({
       chain: "Monero",
       symbol: "XMR",
-      balance: "0",
+      balance: "—",
       usdValue: null,
       loading: false,
-      error: null,
+      error: "No soportado (requiere nodo propio o view key)",
     });
 
     setBalances(newBalances);
