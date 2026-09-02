@@ -14,7 +14,7 @@ import {
   Home, Store, ArrowLeftRight, Trophy, Wallet, Star,
   Image as ImageIcon, CalendarClock, Bell, LogOut, Copy,
   ShoppingBag, TrendingDown, Send, Download, Sparkles, Grid3x3,
-  Globe2, CreditCard, ShieldAlert, Settings, Menu, X, ChevronRight,
+  Globe2, CreditCard, ShieldAlert, Settings, Menu, X, ChevronRight, Search, Activity,
 } from "lucide-react";
 import { reputationLabel, avatarGradient } from "@/lib/format";
 import Onboarding from "./Onboarding";
@@ -25,9 +25,15 @@ type NavItem = { key: TabKey; label: string; icon: React.ElementType; desc: stri
 // Agrupación profesional: 3 categorías claras + sección de cuenta aparte
 const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   {
-    title: "Cripto",
+    title: "Inicio",
     items: [
       { key: "dashboard", label: "Inicio", icon: Home, desc: "Dashboard principal" },
+      { key: "buscador", label: "Buscador Web3", icon: Search, desc: "Busca, escanea y compara en todos los proveedores" },
+    ],
+  },
+  {
+    title: "Cripto",
+    items: [
       { key: "comprar", label: "Comprar", icon: ShoppingBag, desc: "On-ramp: fiat → cripto" },
       { key: "vender", label: "Vender", icon: TrendingDown, desc: "Off-ramp: cripto → fiat" },
       { key: "enviar", label: "Enviar", icon: Send, desc: "Transferencia on-chain" },
@@ -56,6 +62,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
 
 // Compact nav (iconos + labels cortos) para barra superior
 const COMPACT_NAV: TabKey[] = [
+  "buscador",
   "dashboard",
   "comprar",
   "vender",
@@ -63,7 +70,6 @@ const COMPACT_NAV: TabKey[] = [
   "recibir",
   "mercado-p2p",
   "retos",
-  "nft",
 ];
 
 export default function Header() {
@@ -173,6 +179,13 @@ export default function Header() {
                 >
                   <ShieldAlert className="w-3.5 h-3.5 mr-2 text-slate-400" />
                   Compliance y regulación
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-xs cursor-pointer px-2 py-1.5 hover:bg-slate-800 rounded"
+                  onClick={() => setTab("scanner-admin")}
+                >
+                  <Activity className="w-3.5 h-3.5 mr-2 text-slate-400" />
+                  Estado de proveedores
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="text-xs cursor-pointer px-2 py-1.5 hover:bg-slate-800 rounded"

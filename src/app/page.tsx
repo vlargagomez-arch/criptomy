@@ -3,6 +3,7 @@
 import { useApp } from "@/lib/store";
 import Header from "@/components/marketplace/Header";
 import HomeView from "@/components/marketplace/HomeView";
+import SmartSearchView from "@/components/marketplace/SmartSearchView";
 import ComprarView from "@/components/marketplace/ComprarView";
 import VenderView from "@/components/marketplace/VenderView";
 import EnviarView from "@/components/marketplace/EnviarView";
@@ -19,6 +20,7 @@ import ProveedoresView from "@/components/marketplace/ProveedoresView";
 import ComparadorView from "@/components/marketplace/ComparadorView";
 import ComplianceView from "@/components/marketplace/ComplianceView";
 import AdminView from "@/components/marketplace/AdminView";
+import ScannerAdminView from "@/components/marketplace/ScannerAdminView";
 import WalletView from "@/components/marketplace/WalletView";
 import ReputationView from "@/components/marketplace/ReputationView";
 
@@ -30,6 +32,7 @@ export default function Home() {
       <Header />
       <main className="flex-1">
         {tab === "inicio" && <HomeView />}
+        {tab === "buscador" && <SmartSearchView />}
         {tab === "dashboard" && <HomeView />}
         {tab === "comprar" && <ComprarView />}
         {tab === "vender" && <VenderView />}
@@ -45,6 +48,7 @@ export default function Home() {
         {tab === "oportunidades" && <OportunidadesView />}
         {tab === "proveedores" && <ProveedoresView />}
         {tab === "comparador" && <ComparadorView />}
+        {tab === "scanner-admin" && <ScannerAdminView />}
         {tab === "compliance" && <ComplianceView />}
         {tab === "admin" && <AdminView />}
         {tab === "billetera" && <WalletView />}
@@ -55,7 +59,8 @@ export default function Home() {
           © 2026 CriptoMy · Web3 LATAM · Sin custodia · Sin KYC forzado
           <br />
           ⚠️ Operar cripto puede ser ilegal en tu jurisdicción. On-ramp/off-ramp/tarjetas/remesas
-          prestados por terceros regulados. No custodiamos tus fondos.
+          prestados por terceros regulados. No custodiamos tus fondos. Datos de mercado vía APIs
+          públicas oficiales (Binance, OKX, Bybit, Kraken, Coinbase, CoinGecko).
         </div>
       </footer>
     </div>

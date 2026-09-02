@@ -19,6 +19,7 @@ export interface CurrentUser {
 // Tabs del header (top level). Mercado P2P tiene sub-tabs internos.
 export type TabKey =
   | "inicio"
+  | "buscador"
   | "dashboard"
   | "comprar"
   | "vender"
@@ -34,6 +35,7 @@ export type TabKey =
   | "oportunidades"
   | "proveedores"
   | "comparador"
+  | "scanner-admin"
   | "compliance"
   | "admin"
   | "billetera"
@@ -60,7 +62,7 @@ interface AppState {
   logout: () => void;
 }
 
-const STORAGE_VERSION = 13;
+const STORAGE_VERSION = 14;
 
 function isValidUser(user: unknown): user is CurrentUser {
   if (!user || typeof user !== "object") return false;
@@ -97,7 +99,7 @@ export const useApp = create<AppState>()(
         set({ user: null, privateKey: null, tab: "inicio", chainId: null, p2pSubTab: "explorar" }),
     }),
     {
-      name: "criptomy-v13",
+      name: "criptomy-v14",
       version: STORAGE_VERSION,
       partialize: (state) => ({
         user: state.user,
@@ -112,6 +114,7 @@ export const useApp = create<AppState>()(
         if (state.user && !isValidUser(state.user)) state.user = null;
         const validTabs: TabKey[] = [
           "inicio",
+          "buscador",
           "dashboard",
           "comprar",
           "vender",
@@ -127,6 +130,7 @@ export const useApp = create<AppState>()(
           "oportunidades",
           "proveedores",
           "comparador",
+          "scanner-admin",
           "compliance",
           "admin",
           "billetera",
