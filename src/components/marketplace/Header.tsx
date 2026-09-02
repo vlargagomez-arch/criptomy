@@ -13,6 +13,7 @@ import {
   Home, Store, PlusCircle, ArrowLeftRight, Trophy, Wallet, Star,
   Image as ImageIcon, CalendarClock, Bell, LogOut, Copy,
   ShoppingBag, TrendingDown, Send, Download, Sparkles, Grid3x3,
+  Globe2, CreditCard, ShieldAlert, Settings,
 } from "lucide-react";
 import { reputationLabel, avatarGradient } from "@/lib/format";
 import Onboarding from "./Onboarding";
@@ -35,6 +36,8 @@ const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
       { key: "vender", label: "Vender", icon: TrendingDown },
       { key: "enviar", label: "Enviar", icon: Send },
       { key: "recibir", label: "Recibir", icon: Download },
+      { key: "remesas", label: "Remesas", icon: Globe2 },
+      { key: "tarjeta", label: "Tarjeta", icon: CreditCard },
     ],
   },
   {
@@ -51,7 +54,15 @@ const NAV_SECTIONS: { title: string; items: NavItem[] }[] = [
     items: [
       { key: "oportunidades", label: "Oportunidades", icon: Sparkles },
       { key: "proveedores", label: "Proveedores", icon: Grid3x3 },
+      { key: "comparador", label: "Comparador", icon: ShoppingBag },
       { key: "alertas", label: "Alertas", icon: Bell },
+    ],
+  },
+  {
+    title: "Sistema",
+    items: [
+      { key: "compliance", label: "Compliance", icon: ShieldAlert },
+      { key: "admin", label: "Admin", icon: Settings },
     ],
   },
 ];

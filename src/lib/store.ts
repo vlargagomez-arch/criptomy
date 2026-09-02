@@ -29,9 +29,13 @@ export type TabKey =
   | "nft"
   | "drops"
   | "alertas"
+  | "remesas"
+  | "tarjeta"
   | "oportunidades"
   | "proveedores"
   | "comparador"
+  | "compliance"
+  | "admin"
   | "billetera"
   | "reputacion";
 
@@ -56,7 +60,7 @@ interface AppState {
   logout: () => void;
 }
 
-const STORAGE_VERSION = 12;
+const STORAGE_VERSION = 13;
 
 function isValidUser(user: unknown): user is CurrentUser {
   if (!user || typeof user !== "object") return false;
@@ -93,7 +97,7 @@ export const useApp = create<AppState>()(
         set({ user: null, privateKey: null, tab: "inicio", chainId: null, p2pSubTab: "explorar" }),
     }),
     {
-      name: "criptomy-v12",
+      name: "criptomy-v13",
       version: STORAGE_VERSION,
       partialize: (state) => ({
         user: state.user,
@@ -118,9 +122,13 @@ export const useApp = create<AppState>()(
           "nft",
           "drops",
           "alertas",
+          "remesas",
+          "tarjeta",
           "oportunidades",
           "proveedores",
           "comparador",
+          "compliance",
+          "admin",
           "billetera",
           "reputacion",
         ];

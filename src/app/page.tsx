@@ -7,6 +7,8 @@ import ComprarView from "@/components/marketplace/ComprarView";
 import VenderView from "@/components/marketplace/VenderView";
 import EnviarView from "@/components/marketplace/EnviarView";
 import RecibirView from "@/components/marketplace/RecibirView";
+import RemesasView from "@/components/marketplace/RemesasView";
+import TarjetaView from "@/components/marketplace/TarjetaView";
 import MercadoP2PUnifiedView from "@/components/marketplace/MercadoP2PUnifiedView";
 import RetosP2PView from "@/components/marketplace/RetosP2PView";
 import NFTMarketplaceView from "@/components/marketplace/NFTMarketplaceView";
@@ -15,6 +17,8 @@ import PriceAlertsView from "@/components/marketplace/PriceAlertsView";
 import OportunidadesView from "@/components/marketplace/OportunidadesView";
 import ProveedoresView from "@/components/marketplace/ProveedoresView";
 import ComparadorView from "@/components/marketplace/ComparadorView";
+import ComplianceView from "@/components/marketplace/ComplianceView";
+import AdminView from "@/components/marketplace/AdminView";
 import WalletView from "@/components/marketplace/WalletView";
 import ReputationView from "@/components/marketplace/ReputationView";
 
@@ -31,6 +35,8 @@ export default function Home() {
         {tab === "vender" && <VenderView />}
         {tab === "enviar" && <EnviarView />}
         {tab === "recibir" && <RecibirView />}
+        {tab === "remesas" && <RemesasView />}
+        {tab === "tarjeta" && <TarjetaView />}
         {tab === "mercado-p2p" && <MercadoP2PUnifiedView />}
         {tab === "retos" && <RetosP2PView />}
         {tab === "nft" && <NFTMarketplaceView />}
@@ -39,6 +45,8 @@ export default function Home() {
         {tab === "oportunidades" && <OportunidadesView />}
         {tab === "proveedores" && <ProveedoresView />}
         {tab === "comparador" && <ComparadorView />}
+        {tab === "compliance" && <ComplianceView />}
+        {tab === "admin" && <AdminView />}
         {tab === "billetera" && <WalletView />}
         {tab === "reputacion" && <ReputationView />}
       </main>
@@ -46,8 +54,8 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 py-6 text-xs text-slate-600 text-center">
           © 2026 CriptoMy · Web3 LATAM · Sin custodia · Sin KYC forzado
           <br />
-          ⚠️ Operar cripto puede ser ilegal en tu jurisdicción. On-ramp/off-ramp prestados por
-          terceros regulados. No custodiamos tus fondos.
+          ⚠️ Operar cripto puede ser ilegal en tu jurisdicción. On-ramp/off-ramp/tarjetas/remesas
+          prestados por terceros regulados. No custodiamos tus fondos.
         </div>
       </footer>
     </div>
