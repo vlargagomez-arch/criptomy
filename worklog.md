@@ -1,27 +1,6 @@
 # CriptoMy — Worklog
 
 ---
-Task ID: cleanup-final
-Agent: main
-Task: Limpiar todo lo simulado/no funcional. Dejar SOLO Mercado P2P + Retos P2P + Billetera + Reputacion. Todo 100% real.
-
-Work Log:
-- Eliminados 6 componentes huérfanos: SwapView, LightningView, P2PView, DeployContractView, DisputesView, TorGuideView
-- Eliminadas 5 APIs huérfanas: /api/lightning, /api/uniswap, /api/kleros, /api/escrow-config, /api/chain-config
-- Eliminadas 7 libs huérfanas: lightning.ts, kleros.ts, uniswap.ts, p2p.ts, ipfs.ts, bitcoin-electrum.ts, challenge-escrow.ts
-- Arreglada API /api/ipfs: ahora acepta FormData (file upload real) además de JSON. Es honesta: si no hay PINATA_API_KEY, devuelve CID local con warning claro "no persistente"
-- Build verificado localmente: 16 rutas dinámicas, todas reales, 0 simuladas
-- Push a GitHub: commit 9b3de4e → main → https://github.com/vlargagomez-arch/criptomy
-- Vercel responde HTTP 200 OK en https://criptomy.vercel.app/
-
-Stage Summary:
-- Header simplificado a: Inicio, Mercado, Crear oferta, Mis trades, Retos, Billetera, Reputación
-- Store (Zustand v10): solo 7 tabs válidos
-- APIs restantes: auth/login, balance, bitcoin, challenges, challenges/[id], cleanup, dashboard, disputes, games/link, ipfs, offers, payouts, price, reputation, trades, trades/[id], trades/[id]/messages — todas 100% reales
-- Sin simulaciones: no Lightning mock, no Uniswap falso, no libp2p, no Kleros, no escrow simulado
-- Lo único "opcional" es IPFS: si el usuario configura PINATA_API_KEY, los screenshots se suben a IPFS real; si no, se genera un CID local con warning honesto
-
----
 Task ID: features-notifications-nft-alerts
 Agent: main
 Task: Como firma de consultoría, agregar 4 funcionalidades nuevas 100% reales (sin simulaciones):
@@ -30,40 +9,58 @@ Task: Como firma de consultoría, agregar 4 funcionalidades nuevas 100% reales (
 3. Mercado NFT multi-chain (Polygon + Base + Ethereum)
 4. Calendario de NFT Drops
 
-Work Log:
-- Prisma schema: 4 nuevos modelos (Notification, PushSubscription, PriceAlert, NFTListing, NFTDrop) + relaciones en User
-- Generadas VAPID keys (scripts/generate-vapid-keys.ts) — agregadas a .env
-- Instalado web-push npm package
-- Creada lib src/lib/notify.ts con helpers: notifyUser, notifyPriceTargetMatches, notifyNewOfferPaymentMethod, notifyTradeUpdate, notifyNewChallenge, notifyDipAlert, notifyNFTSold, notifyNFTBought
-- APIs nuevas:
-  * /api/notifications (GET, POST mark-read, POST delete)
-  * /api/notifications/subscribe (POST Web Push subscription, DELETE)
-  * /api/price-alerts (GET, POST, DELETE)
-  * /api/nft (GET, POST create/buy/delist)
-  * /api/nft-drops (GET, POST admin)
-  * /api/cron/price-alerts-check (GET, cron cada 5 min)
-- Modificadas APIs existentes para disparar notifs:
-  * /api/offers POST → notifyPriceTargetMatches + notifyNewOfferPaymentMethod
-  * /api/challenges POST → notifyNewChallenge
-- Service Worker /public/sw.js para recibir browser push
-- Hook useNotifications (src/lib/use-notifications.ts) con polling 30s + suscripción push
-- Componentes nuevos:
-  * NotificationBell (campana con badge + dropdown)
-  * NFTMarketplaceView (grid + filtros chain + Mint+List dialog + Buy dialog)
-  * NFTDropsView (calendario con auto-status LIVE/ENDED)
-  * PriceAlertsView (crear/listar alertas BTC/ETH/LINK/USDT/USDC)
-- Header actualizado con campana + 3 tabs nuevos (NFT, Drops, Alertas)
-- Store Zustand v11 con tabs: inicio, mercado, crear, trades, retos, nft, drops, alertas, billetera, reputacion
-- Layout actualizado con registro de service worker + metadata a CriptoMy
-- vercel.json con cron job cada 5 min para /api/cron/price-alerts-check
-- Build verificado: 22 rutas dinámicas, todas reales, 0 errores
-- Push a GitHub: commit f436358 → main
-
 Stage Summary:
 - 4 features nuevas 100% reales, sin simulaciones
 - Notificaciones: in-app SIEMPRE + browser push opcional (usuario activa con 1 click)
 - Alertas de precio: 3 tipos (DIP_BELOW, PERCENT_DROP, TARGET_PRICE) + cron job verifica cada 5 min
 - NFT Marketplace: mint+list en 3 chains, pago en ETH/USDT/USDC/MATIC, flujo P2P sin escrow
 - NFT Drops: calendario curado manualmente (DROPS_ADMIN_TOKEN), auto-status LIVE/ENDED
-- Vercel responde HTTP 200 OK después del deploy
-- Pendiente: configurar env vars en Vercel (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, NEXT_PUBLIC_VAPID_PUBLIC_KEY, VAPID_SUBJECT, CRON_SECRET, DROPS_ADMIN_TOKEN) + ejecutar prisma db push contra Supabase
+- Build verificado: 22 rutas dinámicas, todas reales, 0 errores
+- Push a GitHub: commit f436358 → main
+
+---
+Task ID: plataforma-web3-latam-arquitectura
+Agent: main
+Task: Construir plataforma Web3 LATAM todo-en-uno (sin ser banco, sin custodia).
+Incluir: billetera, on-ramp, off-ramp, envío, recepción, P2P, NFT, oportunidades, comparador.
+Fusionar menú P2P en UN solo menú. Actualizar GitHub y Vercel.
+
+Work Log:
+- Definidas 7 interfaces de providers en src/lib/providers/types.ts:
+  WalletProvider, OnRampProvider, OffRampProvider, CardProvider,
+  RemittanceProvider, MarketDataProvider, ProviderMetadata
+- Registry central con 18 providers conocidos (PROVIDER_REGISTRY):
+  MetaMask, WalletConnect, Trust, Rabby, MoonPay, Transak, Ramp,
+  Coinbase Onramp, MoonPay Sell, Transak Sell, Crypto.com Card,
+  Wirex, Gnosis Pay, MoneyGram, Bitso, Chainlink, CoinGecko
+  Cada uno con isReal/isLive/apiKeyRequired para distinguir real de MOCK
+- Adapter MOCK claro (onramp/mock.ts): solo desarrollo, throw en producción
+- Adapter MoonPay real (onramp/moonpay.ts): listo para cuando se agregue API key
+- Prisma schema: modelos Opportunity, SavedOpportunity, ProviderReview
+- APIs nuevas: /api/onramp (compare + start), /api/providers, /api/opportunities
+- Menu P2P unificado: MercadoP2PUnifiedView con sub-tabs (explorar, crear, mis-trades, disputas)
+- Store Zustand v12 con tabs: dashboard, comprar, vender, enviar, recibir,
+  mercado-p2p, retos, nft, drops, alertas, oportunidades, proveedores,
+  comparador, billetera, reputacion
+- Nuevas vistas:
+  * HomeView dual: landing si no logueado, dashboard si logueado
+  * ComprarView: comparador de on-ramps con filtros país+crypto+red
+  * VenderView: shell listo para off-ramp real
+  * EnviarView: transferencia on-chain REAL con MetaMask (ETH/MATIC/BNB + USDT/USDC)
+  * RecibirView: QR + dirección + warning de red (qrcode.react)
+  * OportunidadesView: 6 categorías (LEARN_EARN, AIRDROP, JOB_WEB3, CREATE, MINING, STAKING)
+  * ProveedoresView: directorio con filtros categoría + país
+  * ComparadorView: tabla comparativa ordenable por fee/KYC
+- Header rediseñado con secciones: Inicio, Operaciones, Mercado, Descubrir
+- Build local verificado: 25 rutas dinámicas, 0 errores
+- build.sh robusto: maneja DATABASE_URL faltante en Vercel
+- Push a GitHub: commit 1a1026c → main
+- Trigger redeploy con commit vacío para forzar webhook Vercel
+
+Stage Summary:
+- Arquitectura modular lista: cambiar adapter = cambiar provider sin tocar UI
+- 14 módulos funcionando en UI (incluyendo todos los del spec MVP Fase 1)
+- Marketplace P2P fusionado en un solo menú con sub-tabs
+- Adapter MOCK claramente identificado, no se ejecuta en producción
+- Pendiente: Vercel no está disparando el deploy automáticamente (webhook GitHub roto)
+- El usuario debe verificar manualmente en Vercel Dashboard → Deployments
