@@ -10,52 +10,21 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Home, Store, PlusCircle, ArrowLeftRight, ArrowDownUp, Zap, Network,
-  Trophy, Wallet, Star, ShieldAlert, Rocket, Shield, LogOut, Copy,
+  Home, Store, PlusCircle, ArrowLeftRight, Trophy, Wallet, Star,
+  LogOut, Copy,
 } from "lucide-react";
 import { reputationLabel, avatarGradient } from "@/lib/format";
 import Onboarding from "./Onboarding";
 
 type NavItem = { key: TabKey; label: string; icon: React.ElementType };
-type NavGroup = { label: string; items: NavItem[] };
 
-const NAV_GROUPS: NavGroup[] = [
-  {
-    label: "Trade",
-    items: [
-      { key: "mercado", label: "Mercado", icon: Store },
-      { key: "crear", label: "Crear", icon: PlusCircle },
-      { key: "trades", label: "Trades", icon: ArrowLeftRight },
-    ],
-  },
-  {
-    label: "DeFi",
-    items: [
-      { key: "swap", label: "Swap", icon: ArrowDownUp },
-      { key: "lightning", label: "Lightning", icon: Zap },
-      { key: "p2p", label: "P2P", icon: Network },
-    ],
-  },
-  {
-    label: "Gaming",
-    items: [
-      { key: "retos", label: "Retos", icon: Trophy },
-    ],
-  },
-  {
-    label: "Cuenta",
-    items: [
-      { key: "billetera", label: "Billetera", icon: Wallet },
-      { key: "reputacion", label: "Reputación", icon: Star },
-      { key: "disputas", label: "Disputas", icon: ShieldAlert },
-    ],
-  },
-];
-
-const ALL_ITEMS = NAV_GROUPS.flatMap(g => g.items);
-const SECONDARY_ITEMS: NavItem[] = [
-  { key: "deploy", label: "Desplegar", icon: Rocket },
-  { key: "tor", label: "Tor", icon: Shield },
+const NAV_ITEMS: NavItem[] = [
+  { key: "mercado", label: "Mercado", icon: Store },
+  { key: "crear", label: "Crear oferta", icon: PlusCircle },
+  { key: "trades", label: "Mis trades", icon: ArrowLeftRight },
+  { key: "retos", label: "Retos", icon: Trophy },
+  { key: "billetera", label: "Billetera", icon: Wallet },
+  { key: "reputacion", label: "Reputación", icon: Star },
 ];
 
 export default function Header() {
@@ -79,7 +48,7 @@ export default function Header() {
             </div>
           </button>
 
-          {/* Nav desktop — botones directos, sin dropdown */}
+          {/* Nav desktop — botones directos */}
           <nav className="hidden md:flex items-center gap-1 flex-1">
             <button
               onClick={() => setTab("inicio")}
@@ -87,25 +56,10 @@ export default function Header() {
                 tab === "inicio" ? "text-emerald-400" : "text-slate-300 hover:text-slate-100"
               }`}
             >
+              <Home className="w-4 h-4 inline mr-1" />
               Inicio
             </button>
-            {ALL_ITEMS.map((item) => {
-              const Icon = item.icon;
-              const active = tab === item.key;
-              return (
-                <button
-                  key={item.key}
-                  onClick={() => setTab(item.key)}
-                  className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-md transition ${
-                    active ? "bg-emerald-600 text-white" : "text-slate-300 hover:text-slate-100 hover:bg-slate-800"
-                  }`}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  {item.label}
-                </button>
-              );
-            })}
-            {SECONDARY_ITEMS.map((item) => {
+            {NAV_ITEMS.map((item) => {
               const Icon = item.icon;
               const active = tab === item.key;
               return (
@@ -181,9 +135,9 @@ export default function Header() {
               tab === "inicio" ? "bg-emerald-600 text-white" : "text-slate-400 hover:bg-slate-800"
             }`}
           >
-            <Home className="w-3.5 h-3.5 inline mr-1" />Inicio
+            Inicio
           </button>
-          {ALL_ITEMS.map((item) => {
+          {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const active = tab === item.key;
             return (

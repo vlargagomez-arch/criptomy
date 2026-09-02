@@ -16,20 +16,7 @@ export interface CurrentUser {
   bio: string | null;
 }
 
-export type TabKey =
-  | "inicio"
-  | "mercado"
-  | "crear"
-  | "trades"
-  | "swap"
-  | "lightning"
-  | "p2p"
-  | "retos"
-  | "billetera"
-  | "reputacion"
-  | "disputas"
-  | "tor"
-  | "deploy";
+export type TabKey = "inicio" | "mercado" | "crear" | "trades" | "retos" | "billetera" | "reputacion";
 
 interface AppState {
   user: CurrentUser | null;
@@ -47,11 +34,8 @@ interface AppState {
   logout: () => void;
 }
 
-// Versión del storage. Cambiar este número cuando el schema cambia
-// para forzar que los navegadores descarten datos viejos.
-const STORAGE_VERSION = 9;
+const STORAGE_VERSION = 10;
 
-// Validar que un objeto user tenga todos los campos requeridos
 function isValidUser(user: unknown): user is CurrentUser {
   if (!user || typeof user !== "object") return false;
   const u = user as Record<string, unknown>;
@@ -81,43 +65,23 @@ export const useApp = create<AppState>()(
       setConnecting: (b) => set({ connecting: b }),
       setChainId: (c) => set({ chainId: c }),
       setEscrowAddress: (a) => set({ escrowAddress: a }),
-      logout: () =>
-        set({
-          user: null,
-          privateKey: null,
-          tab: "inicio",
-          chainId: null,
-        }),
+      logout: () => set({ user: null, privateKey: null, tab: "inicio", chainId: null }),
     }),
     {
-      name: "nokycswap-v9",
+      name: "nokycswap-v10",
       version: STORAGE_VERSION,
-      // Solo persistir datos serializables simples
       partialize: (state) => ({
         user: state.user,
         privateKey: state.privateKey,
         tab: state.tab,
         escrowAddress: state.escrowAddress,
       }),
-      // Migración: descartar datos viejos o inválidos
       migrate: (persistedState, version) => {
-        if (version < STORAGE_VERSION || !persistedState) {
-          return null;
-        }
-        // Validar que el user persistido tenga el schema correcto
+        if (version < STORAGE_VERSION || !persistedState) return null;
         const state = persistedState as { user?: unknown; tab?: unknown };
-        if (state.user && !isValidUser(state.user)) {
-          state.user = null;
-        }
-        // Validar que tab sea un valor válido
-        const validTabs: TabKey[] = [
-          "inicio", "mercado", "crear", "trades", "swap",
-          "lightning", "p2p", "retos", "billetera", "reputacion",
-          "disputas", "tor", "deploy"
-        ];
-        if (state.tab && !validTabs.includes(state.tab as TabKey)) {
-          state.tab = "inicio";
-        }
+        if (state.user && !isValidUser(state.user)) state.user = null;
+        const validTabs: TabKey[] = ["inicio", "mercado", "crear", "trades", "retos", "billetera", "reputacion"];
+        if (state.tab && !validTabs.includes(state.tab as TabKey)) state.tab = "inicio";
         return state;
       },
     }
