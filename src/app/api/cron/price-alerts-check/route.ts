@@ -14,15 +14,24 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // 1) Para PERCENT_DROP, primero guarda el baseline la primera vez
-    //    y compara caída actual vs baseline.
-    const percentAlerts = await db.priceAlert.findMany({
-      where: { triggered: false, alertType: "PERCENT_DROP" },
-    });
+    // Verificar que la DB esté disponible antes de hacer queries
+    let percentAlerts: Awaited<ReturnType<typeof db.priceAlert.findMany>> = [];
+    let thresholdAlerts: Awaited<ReturnType<typeof db.priceAlert.findMany>> = [];
 
-    const thresholdAlerts = await db.priceAlert.findMany({
-      where: { triggered: false, alertType: { in: ["DIP_BELOW", "TARGET_PRICE"] } },
-    });
+    try {
+      [percentAlerts, thresholdAlerts] = await Promise.all([
+        db.priceAlert.findMany({ where: { triggered: false, alertType: "PERCENT_DROP" } }),
+        db.priceAlert.findMany({ where: { triggered: false, alertType: { in: ["DIP_BELOW", "TARGET_PRICE"] } } }),
+      ]);
+    } catch (dbErr) {
+      console.warn("[cron:price-alerts] DB no disponible, skip:", (dbErr as Error).message);
+      return NextResponse.json({
+        checked: 0,
+        triggered: 0,
+        skipped: true,
+        reason: "DB no disponible. Verifica DATABASE_URL y que las tablas estén migradas (scripts/migrate-supabase.sql)",
+      });
+    }
 
     if (percentAlerts.length === 0 && thresholdAlerts.length === 0) {
       return NextResponse.json({ checked: 0, triggered: 0 });

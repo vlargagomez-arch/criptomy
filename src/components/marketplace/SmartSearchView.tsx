@@ -1,11 +1,48 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Search, Loader2, TrendingUp, TrendingDown, Award, ArrowRight, Globe2, Zap, Clock, AlertTriangle, RefreshCw, Star, Filter, ShieldOff } from "lucide-react";
+import { Search, Loader2, TrendingUp, TrendingDown, Award, ArrowRight, Globe2, Zap, Clock, AlertTriangle, RefreshCw, Star, Filter, ShieldOff, Flame, Gauge, Activity, Sparkles } from "lucide-react";
 import { QUICK_SEARCHES } from "@/lib/scanner/interpreter";
 import type { SearchResponse, SearchIntent, RankedResult } from "@/lib/scanner/types";
 
 const RECENT_SEARCHES_KEY = "criptomy:recent-searches";
+
+// ============================================================
+// Market Intel — panel de datos de mercado
+// ============================================================
+interface Intel {
+  gas: { gasPriceGwei: number; estimatedCostUsd?: number; status: string; error?: string };
+  fearGreed: { value: number; classification: string; status: string };
+  trending: {
+    id: string; name: string; symbol: string; marketCapRank?: number;
+    priceBtc: number; priceUsd?: number; priceChangePercent24h?: number;
+  }[];
+  gainers: {
+    id: string; symbol: string; name: string; priceUsd: number;
+    changePercent24h: number; marketCapRank?: number;
+  }[];
+  losers: {
+    id: string; symbol: string; name: string; priceUsd: number;
+    changePercent24h: number; marketCapRank?: number;
+  }[];
+  stakingYields: { asset: string; apyPercent: number; source: string; notes: string }[];
+}
+
+function fearGreedColor(value: number): string {
+  if (value >= 75) return "bg-emerald-600 text-white"; // Extreme Greed
+  if (value >= 55) return "bg-emerald-500 text-white"; // Greed
+  if (value >= 45) return "bg-amber-500 text-white"; // Neutral
+  if (value >= 25) return "bg-orange-500 text-white"; // Fear
+  return "bg-red-600 text-white"; // Extreme Fear
+}
+
+function fearGreedEmoji(value: number): string {
+  if (value >= 75) return "🤑";
+  if (value >= 55) return "😀";
+  if (value >= 45) return "😐";
+  if (value >= 25) return "😨";
+  return "😱";
+}
 
 export default function SmartSearchView() {
   const [query, setQuery] = useState("");
@@ -14,6 +51,8 @@ export default function SmartSearchView() {
   const [error, setError] = useState<string | null>(null);
   const [noKycOnly, setNoKycOnly] = useState(false);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [intel, setIntel] = useState<Intel | null>(null);
+  const [intelLoading, setIntelLoading] = useState(false);
 
   // Cargar búsquedas recientes de localStorage
   useEffect(() => {
@@ -25,6 +64,27 @@ export default function SmartSearchView() {
       // ignore
     }
   }, []);
+
+  // Cargar Market Intel al montar (gas, fear&greed, trending, movers, staking)
+  const loadIntel = useCallback(async () => {
+    setIntelLoading(true);
+    try {
+      const res = await fetch("/api/scanner/intel");
+      if (!res.ok) return;
+      const data = await res.json();
+      setIntel(data as Intel);
+    } catch (e) {
+      console.warn("[intel] failed:", e);
+    } finally {
+      setIntelLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadIntel();
+    const interval = setInterval(loadIntel, 5 * 60 * 1000); // refresh cada 5 min
+    return () => clearInterval(interval);
+  }, [loadIntel]);
 
   // Guardar búsqueda reciente
   const saveRecent = useCallback((q: string) => {
@@ -158,7 +218,7 @@ export default function SmartSearchView() {
         </div>
       )}
 
-      {/* Quick searches + recent */}
+      {/* Quick searches + recent + market intel */}
       {!response && !loading && (
         <div className="mb-6 space-y-4">
           {/* Búsquedas recientes */}
@@ -181,6 +241,9 @@ export default function SmartSearchView() {
               </div>
             </div>
           )}
+
+          {/* Market Intel panel */}
+          <MarketIntelPanel intel={intel} loading={intelLoading} onRefresh={loadIntel} />
 
           <div>
             <div className="text-xs text-slate-500 mb-2">Búsquedas rápidas:</div>
@@ -611,6 +674,198 @@ function ArbitrageCard({ opp }: { opp: import("@/lib/scanner/types").ArbitrageOp
       <div className="text-[10px] text-slate-500 italic">
         Supuestos: capital ${opp.capital} · fees ${opp.feesEstimated.toFixed(2)} · NO incluye transferencia entre exchanges
       </div>
+    </div>
+  );
+}
+
+// ============================================================
+// MARKET INTEL PANEL — Gas, Fear&Greed, Trending, Movers, Staking
+// ============================================================
+function MarketIntelPanel({
+  intel,
+  loading,
+  onRefresh,
+}: {
+  intel: Intel | null;
+  loading: boolean;
+  onRefresh: () => void;
+}) {
+  if (loading && !intel) {
+    return (
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center gap-3 text-slate-400">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        <span className="text-xs">Cargando Market Intel…</span>
+      </div>
+    );
+  }
+
+  if (!intel) return null;
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <Activity className="w-4 h-4 text-emerald-400" />
+        <h3 className="text-xs font-semibold text-slate-200 uppercase tracking-wide">
+          Market Intel
+        </h3>
+        <button
+          onClick={onRefresh}
+          className="ml-auto text-[10px] text-slate-500 hover:text-emerald-400 flex items-center gap-1"
+        >
+          <RefreshCw className="w-3 h-3" />
+          Refresh
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+        {/* Gas */}
+        <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
+          <div className="flex items-center gap-1.5 mb-1">
+            <Gauge className="w-3 h-3 text-cyan-400" />
+            <span className="text-[10px] uppercase tracking-wide text-slate-500">ETH Gas</span>
+          </div>
+          {intel.gas.status === "ONLINE" && intel.gas.gasPriceGwei > 0 ? (
+            <>
+              <div className="text-lg font-bold text-slate-100 font-mono">
+                {intel.gas.gasPriceGwei.toFixed(1)}
+                <span className="text-xs text-slate-500 ml-1">Gwei</span>
+              </div>
+              {intel.gas.estimatedCostUsd !== undefined && (
+                <div className="text-[10px] text-slate-500 mt-1">
+                  Transfer simple: ${intel.gas.estimatedCostUsd.toFixed(2)} USD
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="text-xs text-amber-400">No disponible</div>
+          )}
+        </div>
+
+        {/* Fear & Greed */}
+        <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
+          <div className="flex items-center gap-1.5 mb-1">
+            <Activity className="w-3 h-3 text-purple-400" />
+            <span className="text-[10px] uppercase tracking-wide text-slate-500">Fear & Greed</span>
+          </div>
+          {intel.fearGreed.status === "ONLINE" ? (
+            <>
+              <div className="flex items-center gap-2">
+                <span className={`px-2 py-0.5 rounded text-xs font-bold ${fearGreedColor(intel.fearGreed.value)}`}>
+                  {fearGreedEmoji(intel.fearGreed.value)} {intel.fearGreed.value}
+                </span>
+                <span className="text-xs text-slate-300">{intel.fearGreed.classification}</span>
+              </div>
+              <div className="text-[10px] text-slate-500 mt-1">alternative.me</div>
+            </>
+          ) : (
+            <div className="text-xs text-amber-400">No disponible</div>
+          )}
+        </div>
+
+        {/* Trending */}
+        <div className="bg-slate-900 border border-slate-800 rounded-lg p-3 sm:col-span-2">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <Flame className="w-3 h-3 text-orange-400" />
+            <span className="text-[10px] uppercase tracking-wide text-slate-500">Trending (CoinGecko)</span>
+          </div>
+          {intel.trending.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {intel.trending.slice(0, 6).map((c) => (
+                <span
+                  key={c.id}
+                  className="text-[10px] px-2 py-0.5 bg-slate-800 rounded text-slate-300"
+                >
+                  {c.symbol.toUpperCase()}
+                  {c.priceChangePercent24h !== undefined && (
+                    <span className={c.priceChangePercent24h >= 0 ? "text-emerald-400 ml-1" : "text-red-400 ml-1"}>
+                      {c.priceChangePercent24h >= 0 ? "+" : ""}{c.priceChangePercent24h.toFixed(1)}%
+                    </span>
+                  )}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <div className="text-xs text-amber-400">No disponible</div>
+          )}
+        </div>
+      </div>
+
+      {/* Top gainers / losers */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+        <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
+          <div className="flex items-center gap-1.5 mb-2">
+            <TrendingUp className="w-3 h-3 text-emerald-400" />
+            <span className="text-[10px] uppercase tracking-wide text-slate-500">Top gainers 24h</span>
+          </div>
+          {intel.gainers.length > 0 ? (
+            <div className="space-y-1">
+              {intel.gainers.slice(0, 4).map((c) => (
+                <div key={c.id} className="flex items-center justify-between text-[11px]">
+                  <span className="text-slate-300 truncate">
+                    <b>{c.symbol.toUpperCase()}</b>
+                    <span className="text-slate-500 ml-1">#{c.marketCapRank}</span>
+                  </span>
+                  <span className="text-emerald-400 font-mono">+{c.changePercent24h.toFixed(2)}%</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-xs text-amber-400">No disponible</div>
+          )}
+        </div>
+
+        <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
+          <div className="flex items-center gap-1.5 mb-2">
+            <TrendingDown className="w-3 h-3 text-red-400" />
+            <span className="text-[10px] uppercase tracking-wide text-slate-500">Top losers 24h</span>
+          </div>
+          {intel.losers.length > 0 ? (
+            <div className="space-y-1">
+              {intel.losers.slice(0, 4).map((c) => (
+                <div key={c.id} className="flex items-center justify-between text-[11px]">
+                  <span className="text-slate-300 truncate">
+                    <b>{c.symbol.toUpperCase()}</b>
+                    <span className="text-slate-500 ml-1">#{c.marketCapRank}</span>
+                  </span>
+                  <span className="text-red-400 font-mono">{c.changePercent24h.toFixed(2)}%</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-xs text-amber-400">No disponible</div>
+          )}
+        </div>
+      </div>
+
+      {/* Staking Yields */}
+      {intel.stakingYields.length > 0 && (
+        <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
+          <div className="flex items-center gap-1.5 mb-2">
+            <Sparkles className="w-3 h-3 text-yellow-400" />
+            <span className="text-[10px] uppercase tracking-wide text-slate-500">
+              Staking yields (APY aprox.)
+            </span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {intel.stakingYields.slice(0, 6).map((s) => (
+              <div
+                key={s.asset}
+                className="bg-slate-800 rounded p-2 cursor-help"
+                title={s.notes}
+              >
+                <div className="text-xs font-semibold text-slate-100">{s.asset}</div>
+                <div className="text-sm font-bold text-emerald-400 font-mono">
+                  {s.apyPercent.toFixed(1)}% APY
+                </div>
+                <div className="text-[9px] text-slate-500 italic">{s.source}</div>
+              </div>
+            ))}
+          </div>
+          <div className="text-[10px] text-slate-500 mt-2 italic">
+            ⚠️ APYs actualizados manualmente (Sept 2024). Para datos en tiempo real, integrar Staking Rewards API.
+          </div>
+        </div>
+      )}
     </div>
   );
 }
