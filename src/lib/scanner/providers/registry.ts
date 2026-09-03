@@ -225,6 +225,24 @@ export const SCANNER_PROVIDERS: ProviderConfig[] = [
     rateLimitPerMin: 30,
     notes: "Agregador (no exchange). Sin order book. Rate limit frágil (~30 calls/min). Usar como fallback.",
   },
+  {
+    id: "bingx",
+    name: "BingX",
+    baseUrl: "https://open-api.bingx.com",
+    logoUrl: "🔷",
+    websiteUrl: "https://www.bingx.com",
+    documentationUrl: "https://bingx-api.github.io/docs/",
+    requiresApiKey: false,
+    supportsP2P: false,
+    supportsMarketData: true,
+    countries: ["ALL"],
+    kycRequired: true,
+    kycLevel: "MANDATORY",
+    kycNote: "BingX requiere KYC. Market data público.",
+    liquidityTier: "TOP",
+    rateLimitPerMin: 6000,
+    notes: "Top 20 por volumen. API pública sin key. No bloquea Vercel (a diferencia de Bybit). 100 req/s. Reemplazo de Bybit.",
+  },
 ];
 
 export function getScannerProvider(id: string): ProviderConfig | undefined {

@@ -15,6 +15,7 @@ import { fetchGateTicker } from "./providers/gate";
 import { fetchMexcTicker } from "./providers/mexc";
 import { fetchKucoinTicker } from "./providers/kucoin";
 import { fetchHtxTicker } from "./providers/htx";
+import { fetchBingxTicker } from "./providers/bingx";
 import { getScannerProvider } from "./providers/registry";
 import type { MarketQuote, P2POffer, ProviderHealth, ProviderStatus } from "./types";
 
@@ -69,6 +70,7 @@ export async function scanMarketData(asset: string, quote: string): Promise<Mark
     fetchKucoinTicker(asset, quote),
     fetchHtxTicker(asset, quote),
     fetchBitgetTicker(asset, quote),
+    fetchBingxTicker(asset, quote),
     fetchCoingeckoTicker(asset, quote),
   ];
 
@@ -125,6 +127,7 @@ export async function scanProvidersHealth(): Promise<ProviderHealth[]> {
     { provider: "kucoin", fn: () => fetchKucoinTicker("BTC", "USDT") },
     { provider: "htx", fn: () => fetchHtxTicker("BTC", "USDT") },
     { provider: "bitget", fn: () => fetchBitgetTicker("BTC", "USDT") },
+    { provider: "bingx", fn: () => fetchBingxTicker("BTC", "USDT") },
     { provider: "coingecko", fn: () => fetchCoingeckoTicker("BTC", "USD") },
   ];
 

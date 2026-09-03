@@ -21,6 +21,7 @@ const PROVIDER_FEES: Record<string, { makerPercent: number; takerPercent: number
   mexc: { makerPercent: 0.1, takerPercent: 0.2, notes: "Spot 0.2% taker / 0.1% maker base. Sin KYC = mismos fees." },
   htx: { makerPercent: 0.2, takerPercent: 0.2, notes: "Spot 0.2% base. Maker discount disponible." },
   bitget: { makerPercent: 0.02, takerPercent: 0.05, notes: "Spot 0.05% taker / 0.02% maker — uno de los más baratos." },
+  bingx: { makerPercent: 0.05, takerPercent: 0.1, notes: "Spot 0.1% taker / 0.05% maker base." },
   coingecko: { makerPercent: 0, takerPercent: 0, notes: "Agregador, no aplica comisión (solo referencia)." },
 };
 
