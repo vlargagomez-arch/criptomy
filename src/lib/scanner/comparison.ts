@@ -13,13 +13,14 @@ import type { MarketQuote, P2POffer, RankedResult, ArbitrageOpportunity } from "
 const PROVIDER_FEES: Record<string, { makerPercent: number; takerPercent: number; notes: string }> = {
   binance: { makerPercent: 0.1, takerPercent: 0.1, notes: "Spot taker/maker 0.1%. P2P sin comisión de Binance." },
   okx: { makerPercent: 0.08, takerPercent: 0.1, notes: "Spot 0.08-0.1% según tier." },
-  bybit: { makerPercent: 0.1, takerPercent: 0.1, notes: "Spot 0.1%." },
+  bybit: { makerPercent: 0.1, takerPercent: 0.1, notes: "Spot 0.1% (cuando está disponible — geo-blocked en Vercel)." },
   kraken: { makerPercent: 0.16, takerPercent: 0.26, notes: "Spot 0.16% maker / 0.26% taker base." },
   coinbase: { makerPercent: 0.4, takerPercent: 0.6, notes: "Coinbase Advanced base. Coinbase App tiene fees más altos." },
   kucoin: { makerPercent: 0.1, takerPercent: 0.1, notes: "Spot 0.1% base. KuCoin Level 0 sin KYC = 0.1%." },
   gate: { makerPercent: 0.1, takerPercent: 0.2, notes: "Spot 0.2% taker / 0.1% maker base." },
   mexc: { makerPercent: 0.1, takerPercent: 0.2, notes: "Spot 0.2% taker / 0.1% maker base. Sin KYC = mismos fees." },
   htx: { makerPercent: 0.2, takerPercent: 0.2, notes: "Spot 0.2% base. Maker discount disponible." },
+  bitget: { makerPercent: 0.02, takerPercent: 0.05, notes: "Spot 0.05% taker / 0.02% maker — uno de los más baratos." },
   coingecko: { makerPercent: 0, takerPercent: 0, notes: "Agregador, no aplica comisión (solo referencia)." },
 };
 

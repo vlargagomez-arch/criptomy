@@ -7,7 +7,7 @@
 
 import { fetchBinanceTicker, fetchBinanceP2P } from "./providers/binance";
 import { fetchOkxTicker } from "./providers/okx";
-import { fetchBybitTicker } from "./providers/bybit";
+import { fetchBitgetTicker } from "./providers/bitget";
 import { fetchKrakenTicker } from "./providers/kraken";
 import { fetchCoinbaseTicker } from "./providers/coinbase";
 import { fetchCoingeckoTicker } from "./providers/coingecko";
@@ -17,6 +17,27 @@ import { fetchKucoinTicker } from "./providers/kucoin";
 import { fetchHtxTicker } from "./providers/htx";
 import { getScannerProvider } from "./providers/registry";
 import type { MarketQuote, P2POffer, ProviderHealth, ProviderStatus } from "./types";
+
+// Bybit está geo-blocked desde Vercel (HTTP 403 a todos los mirrors).
+// NO lo intentamos en cada scan — sabemos que fallará. En su lugar
+// usamos Bitget (TOP 10, sin geo-block).
+const ENABLE_BYBIT = false;
+
+// Quote placeholder para Bybit deshabilitado (no llama al API, evita bloqueos)
+function bybitDisabledQuote(asset: string, quote: string): MarketQuote {
+  return {
+    provider: "bybit",
+    providerName: "Bybit",
+    symbol: "",
+    asset,
+    quoteCurrency: quote,
+    lastPrice: 0,
+    timestamp: Date.now(),
+    latencyMs: 0,
+    status: "DISABLED" as ProviderStatus,
+    error: "Geo-blocked desde Vercel (HTTP 403). Usa Bitget en su lugar.",
+  };
+}
 
 // Enriquecer quote con metadata del registry (kycLevel, liquidityTier)
 function enrichQuote(q: MarketQuote): MarketQuote {
@@ -30,16 +51,22 @@ function enrichQuote(q: MarketQuote): MarketQuote {
 
 // Escanear market data de TODOS los providers para un par asset/quote
 export async function scanMarketData(asset: string, quote: string): Promise<MarketQuote[]> {
+  // Construir lista de tareas: si Bybit está deshabilitado, usar placeholder
+  const bybitTask: Promise<MarketQuote> = ENABLE_BYBIT
+    ? (await import("./providers/bybit")).fetchBybitTicker(asset, quote)
+    : Promise.resolve(bybitDisabledQuote(asset, quote));
+
   const tasks: Promise<MarketQuote>[] = [
     fetchBinanceTicker(asset, quote),
     fetchOkxTicker(asset, quote),
-    fetchBybitTicker(asset, quote),
+    bybitTask,
     fetchKrakenTicker(asset, quote),
     fetchCoinbaseTicker(asset, quote),
     fetchGateTicker(asset, quote),
     fetchMexcTicker(asset, quote),
     fetchKucoinTicker(asset, quote),
     fetchHtxTicker(asset, quote),
+    fetchBitgetTicker(asset, quote),
     fetchCoingeckoTicker(asset, quote),
   ];
 
@@ -68,16 +95,32 @@ export async function scanP2P(params: {
 
 // Verificar health de todos los providers (con una llamada simple)
 export async function scanProvidersHealth(): Promise<ProviderHealth[]> {
-  const checks = [
+  const checks: { provider: string; fn: () => Promise<MarketQuote> }[] = [
     { provider: "binance", fn: () => fetchBinanceTicker("BTC", "USDT") },
     { provider: "okx", fn: () => fetchOkxTicker("BTC", "USDT") },
-    { provider: "bybit", fn: () => fetchBybitTicker("BTC", "USDT") },
+    // Bybit: NO se intenta (sabemos que está geo-blocked). Devolvemos placeholder directo.
+    {
+      provider: "bybit",
+      fn: () => Promise.resolve({
+        provider: "bybit",
+        providerName: "Bybit",
+        symbol: "BTCUSDT",
+        asset: "BTC",
+        quoteCurrency: "USDT",
+        lastPrice: 0,
+        timestamp: Date.now(),
+        latencyMs: 0,
+        status: "DISABLED" as ProviderStatus,
+        error: "Geo-blocked desde Vercel (HTTP 403 a todos los mirrors oficiales).",
+      }),
+    },
     { provider: "kraken", fn: () => fetchKrakenTicker("BTC", "USDT") },
     { provider: "coinbase", fn: () => fetchCoinbaseTicker("BTC", "USDT") },
     { provider: "gate", fn: () => fetchGateTicker("BTC", "USDT") },
     { provider: "mexc", fn: () => fetchMexcTicker("BTC", "USDT") },
     { provider: "kucoin", fn: () => fetchKucoinTicker("BTC", "USDT") },
     { provider: "htx", fn: () => fetchHtxTicker("BTC", "USDT") },
+    { provider: "bitget", fn: () => fetchBitgetTicker("BTC", "USDT") },
     { provider: "coingecko", fn: () => fetchCoingeckoTicker("BTC", "USD") },
   ];
 
