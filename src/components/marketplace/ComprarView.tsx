@@ -2,27 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useApp } from "@/lib/store";
-import { Loader2, ShoppingBag, ExternalLink, AlertTriangle, Info, ShieldCheck, Wallet } from "lucide-react";
-
-interface CompareResult {
-  providerId: string;
-  name: string;
-  logo: string;
-  isReal: boolean;
-  isLive: boolean;
-  available: boolean;
-  reason?: string;
-  fee?: number;
-  feeCurrency?: string;
-  rate?: number;
-  estimatedTime?: string;
-  minAmount?: number;
-  maxAmount?: number;
-  kycRequired?: boolean;
-  countries?: string[];
-  documentationUrl?: string;
-  integrationType?: string;
-}
+import { ShoppingBag, Info, ShieldCheck, Wallet, Lock, Settings, ExternalLink, ArrowRight } from "lucide-react";
 
 const COUNTRIES = [
   { code: "CO", name: "Colombia", currency: "COP" },
@@ -36,91 +16,14 @@ const COUNTRIES = [
 const CRYPTOS = ["USDT", "USDC", "ETH", "BTC"];
 const NETWORKS = ["POLYGON", "ETHEREUM", "BASE", "ARBITRUM", "BSC"];
 
-// URLs públicas de cada on-ramp — el usuario puede comprar directamente en su sitio.
-// No requieren nuestra API key. Solo redirigimos con parámetros prellenados.
-// Estas URLs son públicas y están documentadas oficialmente por cada proveedor.
-const ONRAMP_DIRECT_URLS: Record<string, (params: {
-  crypto: string;
-  network: string;
-  walletAddress: string;
-  currency: string;
-  country: string;
-}) => string> = {
-  moonpay: (p) => {
-    // URL pública de MoonPay (no requiere nuestra API key, el usuario entra como visitante)
-    const params = new URLSearchParams({
-      currencyCode: p.crypto,
-      walletAddress: p.walletAddress || "",
-      baseCurrencyCode: p.currency,
-    });
-    return `https://buy.moonpay.com?${params.toString()}`;
-  },
-  transak: (p) => {
-    // URL pública de Transak (no requiere nuestra API key)
-    const params = new URLSearchParams({
-      cryptoCurrency: p.crypto,
-      walletAddress: p.walletAddress || "",
-      fiatCurrency: p.currency,
-      networks: p.network.toLowerCase(),
-    });
-    return `https://global.transak.com?${params.toString()}`;
-  },
-  ramp: (p) => {
-    // URL pública de Ramp Network
-    return `https://ramp.network/buy?swapAsset=${p.crypto}&userAddress=${p.walletAddress || ""}`;
-  },
-  "coinbase-onramp": (p) => {
-    // URL pública de Coinbase Onramp
-    return `https://www.coinbase.com/buy?asset=${p.crypto}&destination=${p.walletAddress || ""}`;
-  },
-};
-
 export default function ComprarView() {
-  const { user } = useApp();
+  const { user, setTab } = useApp();
   const [country, setCountry] = useState("CO");
   const [crypto, setCrypto] = useState("USDT");
   const [network, setNetwork] = useState("POLYGON");
   const [amount, setAmount] = useState("500");
-  const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<CompareResult[] | null>(null);
 
   const currency = COUNTRIES.find((c) => c.code === country)?.currency || "USD";
-
-  const compare = async () => {
-    setLoading(true);
-    setResults(null);
-    try {
-      const res = await fetch(
-        `/api/onramp/compare?country=${country}&crypto=${crypto}&network=${network}&amount=${amount}&currency=${currency}`
-      );
-      if (!res.ok) return;
-      const data = await res.json();
-      setResults(data.results || []);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    compare();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [country, crypto, network, amount]);
-
-  // Abrir el on-ramp directamente en el navegador del usuario.
-  // No pasa por nuestro backend (no tenemos API key), pero el usuario
-  // puede completar la compra en el sitio oficial del proveedor.
-  const openOnramp = (providerId: string) => {
-    const builder = ONRAMP_DIRECT_URLS[providerId];
-    if (!builder) return;
-    const url = builder({
-      crypto,
-      network,
-      walletAddress: user?.walletAddress || "",
-      currency,
-      country,
-    });
-    window.open(url, "_blank", "noopener,noreferrer");
-  };
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
@@ -131,8 +34,7 @@ export default function ComprarView() {
           Comprar cripto
         </h1>
         <p className="text-sm text-slate-400 mt-1">
-          Compara proveedores on-ramp disponibles en tu país y compra directamente en su sitio oficial.
-          KYC lo hace el proveedor, no nosotros. No custodiamos tus fondos.
+          Compra cripto dentro de CriptoMy. Sin salir de la web. Sin redirigir a terceros.
         </p>
       </div>
 
@@ -145,39 +47,24 @@ export default function ComprarView() {
           </h3>
         </div>
         <ol className="text-[12px] text-slate-400 space-y-1.5 list-decimal pl-4">
-          <li>Selecciona tu país, cripto, red y monto.</li>
+          <li>Selecciona país, cripto, red y monto.</li>
           <li>
-            <b className="text-slate-200">El sistema compara</b> los on-ramps disponibles
-            (MoonPay, Transak, Ramp, Coinbase) y te muestra comisiones, tiempo, KYC.
+            <b className="text-slate-200">El sistema muestra</b> los on-ramps disponibles
+            con comisiones, tiempo y KYC — todo dentro de la web.
           </li>
           <li>
-            <b className="text-slate-200">Click en "Comprar"</b> — te redirige al sitio oficial
-            del proveedor con tu wallet, cripto y monto prellenados.
+            <b className="text-slate-200">Completas la compra</b> en el widget embebido
+            (NO sales de CriptoMy).
           </li>
           <li>
-            <b className="text-slate-200">Completas el pago</b> en el sitio del proveedor (PSE,
-            tarjeta, etc.) y el KYC si lo requiere.
-          </li>
-          <li>
-            <b className="text-slate-200">La cripto llega a tu wallet</b> — nunca pasa por nosotros.
+            <b className="text-slate-200">La cripto llega a tu wallet</b> conectada.
           </li>
         </ol>
         <div className="mt-3 pt-3 border-t border-slate-800/50 flex items-center gap-2 text-[10px] text-slate-400">
           <ShieldCheck className="w-3 h-3 text-emerald-400" />
-          No custodiamos fondos. No tocamos tus claves. Solo te conectamos con proveedores regulados.
+          No redirigimos a sitios externos. Todo ocurre dentro de CriptoMy.
         </div>
       </div>
-
-      {/* Wallet warning */}
-      {!user && (
-        <div className="bg-amber-950/30 border border-amber-800/50 rounded-lg p-3 text-xs text-amber-300 mb-4 flex items-start gap-2">
-          <Wallet className="w-4 h-4 shrink-0 mt-0.5" />
-          <div>
-            <b>Conecta tu wallet</b> para que el proveedor sepa dónde enviar la cripto. Sin wallet
-            conectada puedes ver la comparación pero no comprar.
-          </div>
-        </div>
-      )}
 
       {/* Form */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 mb-6">
@@ -204,9 +91,7 @@ export default function ComprarView() {
               className="mt-1 w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-slate-100 text-sm"
             >
               {CRYPTOS.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
+                <option key={c} value={c}>{c}</option>
               ))}
             </select>
           </div>
@@ -218,9 +103,7 @@ export default function ComprarView() {
               className="mt-1 w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-slate-100 text-sm"
             >
               {NETWORKS.map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
+                <option key={n} value={n}>{n}</option>
               ))}
             </select>
           </div>
@@ -234,141 +117,100 @@ export default function ComprarView() {
             />
           </div>
         </div>
-        {user && (
-          <div className="mt-3 text-[11px] text-slate-500">
-            Wallet destino: <code className="text-slate-300 font-mono">{user.walletAddress.slice(0, 10)}…{user.walletAddress.slice(-6)}</code>
-          </div>
-        )}
       </div>
 
-      {/* Resultados */}
-      {loading ? (
-        <div className="flex justify-center py-20">
-          <Loader2 className="w-8 h-8 animate-spin text-emerald-400" />
+      {/* Estado: NO disponible — Requiere configuración */}
+      <div className="bg-amber-950/30 border border-amber-800/50 rounded-xl p-6 text-center">
+        <div className="flex items-center justify-center gap-2 mb-4">
+          <Lock className="w-6 h-6 text-amber-400" />
+          <h3 className="text-lg font-bold text-slate-100">
+            Comprar cripto requiere configuración
+          </h3>
         </div>
-      ) : results === null ? null : results.length === 0 ? (
-        <div className="text-center py-12 text-slate-500 border border-slate-800 rounded-xl">
-          No se encontraron proveedores on-ramp para tu configuración.
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {results.map((r) => {
-            const isAvailable = r.available && r.isReal;
-            const directUrlBuilder = ONRAMP_DIRECT_URLS[r.providerId];
+        <p className="text-sm text-slate-400 mb-4 max-w-lg mx-auto">
+          Para comprar cripto dentro de CriptoMy (sin salir de la web), necesitamos
+          integrar el widget de un on-ramp. Los proveedores disponibles
+          (<b>MoonPay</b>, <b>Transak</b>) requieren una <b className="text-amber-300">API key gratuita</b> que
+          se obtiene creando una cuenta de developer en su sitio.
+        </p>
 
-            return (
-              <div
-                key={r.providerId}
-                className={`bg-slate-900 border ${
-                  isAvailable ? "border-emerald-800/50" : "border-slate-800"
-                } rounded-xl p-4`}
-              >
-                <div className="flex items-start justify-between gap-3 flex-wrap">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-2xl">{r.logo}</span>
-                      <span className="font-semibold text-slate-100">{r.name}</span>
-                      {r.isReal && r.countries?.includes(country) && (
-                        <span className="text-[10px] px-1.5 py-0.5 bg-emerald-900/50 text-emerald-300 rounded uppercase">
-                          ✓ Disponible en {country}
-                        </span>
-                      )}
-                      {r.kycRequired && (
-                        <span
-                          className="text-[10px] px-1.5 py-0.5 bg-blue-900/50 text-blue-300 rounded uppercase cursor-help"
-                          title="El proveedor requiere verificación de identidad (gov ID, selfie). Lo hace el proveedor, no nosotros."
-                        >
-                          KYC
-                        </span>
-                      )}
-                      {r.integrationType && (
-                        <span className="text-[10px] px-1.5 py-0.5 bg-slate-800 text-slate-400 rounded uppercase">
-                          {r.integrationType}
-                        </span>
-                      )}
-                    </div>
-
-                    {isAvailable ? (
-                      <div className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-                        {r.fee !== undefined && (
-                          <div title="Comisión estimada del proveedor">
-                            <div className="text-slate-500 text-[10px]">Comisión est.</div>
-                            <div className="text-slate-200">
-                              {r.fee ? `${r.fee} ${r.feeCurrency}` : "Variable"}
-                            </div>
-                          </div>
-                        )}
-                        {r.estimatedTime && (
-                          <div title="Tiempo estimado de entrega de la cripto">
-                            <div className="text-slate-500 text-[10px]">Tiempo</div>
-                            <div className="text-slate-200">{r.estimatedTime}</div>
-                          </div>
-                        )}
-                        {(r.minAmount || r.maxAmount) && (
-                          <div title="Monto mínimo y máximo por operación">
-                            <div className="text-slate-500 text-[10px]">Min/Max ({r.feeCurrency})</div>
-                            <div className="text-slate-200">
-                              {r.minAmount || "—"} / {r.maxAmount || "—"}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="mt-2 text-xs text-slate-500">
-                        {r.reason || "No disponible para tu configuración"}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* CTA: SIEMPRE disponible si es real, aún sin wallet conectada */}
-                  {isAvailable && directUrlBuilder ? (
-                    <button
-                      onClick={() => openOnramp(r.providerId)}
-                      className="shrink-0 px-4 py-2 text-xs bg-emerald-600 hover:bg-emerald-500 text-white rounded inline-flex items-center gap-1.5"
-                      title={`Ir al sitio oficial de ${r.name} con tus parámetros prellenados`}
-                    >
-                      Comprar en {r.name}
-                      <ExternalLink className="w-3 h-3" />
-                    </button>
-                  ) : !isAvailable ? (
-                    <span className="shrink-0 text-[10px] text-slate-500 italic">
-                      No disponible en {country}
-                    </span>
-                  ) : null}
+        {/* Lista de qué se necesita */}
+        <div className="bg-slate-900 border border-slate-800 rounded-lg p-4 mb-4 text-left max-w-lg mx-auto">
+          <div className="flex items-center gap-2 mb-3">
+            <Settings className="w-4 h-4 text-slate-400" />
+            <span className="text-xs font-semibold text-slate-200 uppercase">
+              Lo que falta configurar
+            </span>
+          </div>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-800">
+              <div>
+                <div className="text-sm font-medium text-slate-100">🌙 MoonPay</div>
+                <div className="text-[10px] text-slate-500">
+                  Widget embebido. Disponible en Colombia. KYC lo hace MoonPay.
                 </div>
-
-                {/* Footer con info del proveedor */}
-                {isAvailable && (
-                  <div className="mt-3 pt-3 border-t border-slate-800 flex items-center justify-between gap-2 flex-wrap">
-                    <div className="text-[10px] text-slate-500">
-                      💡 Serás redirigido al sitio oficial de {r.name}. Ellos hacen el KYC y procesan
-                      el pago. Nosotros no tocamos tus fondos ni tus datos.
-                    </div>
-                    {r.documentationUrl && (
-                      <a
-                        href={r.documentationUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-[10px] text-slate-400 hover:text-slate-200 inline-flex items-center gap-1"
-                      >
-                        Docs <ExternalLink className="w-2.5 h-2.5" />
-                      </a>
-                    )}
-                  </div>
-                )}
               </div>
-            );
-          })}
+              <a
+                href="https://www.moonpay.com/business"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[11px] px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded inline-flex items-center gap-1 shrink-0"
+              >
+                Obtener key <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium text-slate-100">🎯 Transak</div>
+                <div className="text-[10px] text-slate-500">
+                  SDK iframe. Soporta PSE y Bancolombia en Colombia.
+                </div>
+              </div>
+              <a
+                href="https://transak.com/partners"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[11px] px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded inline-flex items-center gap-1 shrink-0"
+              >
+                Obtener key <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+          </div>
+          <div className="mt-3 pt-3 border-t border-slate-800 text-[10px] text-slate-500">
+            Una vez que tengas la API key, agrégala en Vercel → Settings → Environment Variables:
+            <code className="block mt-1 text-slate-300 font-mono">NEXT_PUBLIC_MOONPAY_API_KEY</code>
+            <code className="block text-slate-300 font-mono">NEXT_PUBLIC_TRANSAK_API_KEY</code>
+          </div>
         </div>
-      )}
 
-      {/* Disclaimer */}
+        {/* Alternativa: Mercado P2P */}
+        <div className="bg-emerald-950/30 border border-emerald-800/50 rounded-lg p-4 max-w-lg mx-auto">
+          <h4 className="text-sm font-semibold text-slate-100 mb-2 flex items-center gap-2">
+            💡 Alternativa disponible AHORA: Mercado P2P
+          </h4>
+          <p className="text-xs text-slate-400 mb-3">
+            Si no quieres esperar a la configuración del on-ramp, puedes comprar cripto
+            <b className="text-emerald-400"> persona-a-persona</b> dentro de CriptoMy.
+            Otros usuarios venden USDT/BTC/ETH por COP, MXN, ARS vía transferencia bancaria,
+            Nequi, PSE — todo dentro de la web, sin KYC, sin salir.
+          </p>
+          <button
+            onClick={() => setTab("mercado-p2p")}
+            className="text-xs px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded inline-flex items-center gap-1.5"
+          >
+            Ir al Mercado P2P
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Footer */}
       <div className="mt-6 text-[10px] text-slate-500 flex items-start gap-2">
-        <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5 text-amber-400" />
+        <Info className="w-3 h-3 shrink-0 mt-0.5 text-slate-500" />
         <div>
-          Las comisiones y disponibilidad mostradas son referenciales. El proveedor confirma el
-          precio final al iniciar la compra. Verifica siempre la URL del proveedor antes de
-          ingresar datos (debe ser https:// y el dominio oficial).
+          Cuando se configuren las API keys, el widget de MoonPay/Transak se embeberá aquí
+          dentro (iframe). El usuario completa el pago sin salir de CriptoMy.
+          No redirigimos a sitios externos.
         </div>
       </div>
     </div>
