@@ -30,6 +30,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     items: [
       { key: "dashboard", label: "Inicio", icon: Home, desc: "Dashboard principal" },
       { key: "buscador", label: "Buscador Web3", icon: Search, desc: "Busca, escanea y compara en todos los proveedores" },
+      { key: "conversor", label: "Conversor", icon: ArrowLeftRight, desc: "Convierte cripto a tu moneda local en tiempo real" },
     ],
   },
   {
@@ -62,6 +63,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
 const COMPACT_NAV: TabKey[] = [
   "buscador",
   "dashboard",
+  "conversor",
   "enviar",
   "recibir",
   "mercado-p2p",
