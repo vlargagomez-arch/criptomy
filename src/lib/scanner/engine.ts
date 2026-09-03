@@ -18,10 +18,11 @@ import { fetchHtxTicker } from "./providers/htx";
 import { getScannerProvider } from "./providers/registry";
 import type { MarketQuote, P2POffer, ProviderHealth, ProviderStatus } from "./types";
 
-// Bybit está geo-blocked desde Vercel (HTTP 403 a todos los mirrors).
-// NO lo intentamos en cada scan — sabemos que fallará. En su lugar
-// usamos Bitget (TOP 10, sin geo-block).
-const ENABLE_BYBIT = false;
+// Bybit está geo-blocked desde Vercel (HTTP 403 a todos los mirrors oficiales).
+// Si BYBIT_PROXY_URL está configurada (Cloudflare Worker), intentamos llamar
+// al proxy. Si no, devolvemos DISABLED con mensaje claro.
+// Documentación del proxy en docs/bybit-proxy/README.md.
+const ENABLE_BYBIT = true; // ahora sí, usa proxy si configurado, DISABLED si no
 
 // Quote placeholder para Bybit deshabilitado (no llama al API, evita bloqueos)
 function bybitDisabledQuote(asset: string, quote: string): MarketQuote {
@@ -35,7 +36,7 @@ function bybitDisabledQuote(asset: string, quote: string): MarketQuote {
     timestamp: Date.now(),
     latencyMs: 0,
     status: "DISABLED" as ProviderStatus,
-    error: "Geo-blocked desde Vercel (HTTP 403). Usa Bitget en su lugar.",
+    error: "Geo-blocked desde Vercel. Configura BYBIT_PROXY_URL (Cloudflare Worker — ver docs/bybit-proxy/README.md).",
   };
 }
 
@@ -51,8 +52,9 @@ function enrichQuote(q: MarketQuote): MarketQuote {
 
 // Escanear market data de TODOS los providers para un par asset/quote
 export async function scanMarketData(asset: string, quote: string): Promise<MarketQuote[]> {
-  // Construir lista de tareas: si Bybit está deshabilitado, usar placeholder
-  const bybitTask: Promise<MarketQuote> = ENABLE_BYBIT
+  // Bybit: usa proxy si configurado, si no, DISABLED con razón
+  const bybitProxy = process.env.BYBIT_PROXY_URL;
+  const bybitTask: Promise<MarketQuote> = bybitProxy
     ? (await import("./providers/bybit")).fetchBybitTicker(asset, quote)
     : Promise.resolve(bybitDisabledQuote(asset, quote));
 
@@ -95,13 +97,11 @@ export async function scanP2P(params: {
 
 // Verificar health de todos los providers (con una llamada simple)
 export async function scanProvidersHealth(): Promise<ProviderHealth[]> {
-  const checks: { provider: string; fn: () => Promise<MarketQuote> }[] = [
-    { provider: "binance", fn: () => fetchBinanceTicker("BTC", "USDT") },
-    { provider: "okx", fn: () => fetchOkxTicker("BTC", "USDT") },
-    // Bybit: NO se intenta (sabemos que está geo-blocked). Devolvemos placeholder directo.
-    {
-      provider: "bybit",
-      fn: () => Promise.resolve({
+  // Para Bybit: si hay proxy configurado, llamar al API; si no, devolver DISABLED
+  const bybitProxy = process.env.BYBIT_PROXY_URL;
+  const bybitFn = bybitProxy
+    ? async () => (await import("./providers/bybit")).fetchBybitTicker("BTC", "USDT")
+    : async () => ({
         provider: "bybit",
         providerName: "Bybit",
         symbol: "BTCUSDT",
@@ -111,9 +111,13 @@ export async function scanProvidersHealth(): Promise<ProviderHealth[]> {
         timestamp: Date.now(),
         latencyMs: 0,
         status: "DISABLED" as ProviderStatus,
-        error: "Geo-blocked desde Vercel (HTTP 403 a todos los mirrors oficiales).",
-      }),
-    },
+        error: "Geo-blocked desde Vercel. Configura BYBIT_PROXY_URL (Cloudflare Worker — ver docs/bybit-proxy/README.md).",
+      });
+
+  const checks: { provider: string; fn: () => Promise<MarketQuote> }[] = [
+    { provider: "binance", fn: () => fetchBinanceTicker("BTC", "USDT") },
+    { provider: "okx", fn: () => fetchOkxTicker("BTC", "USDT") },
+    { provider: "bybit", fn: bybitFn },
     { provider: "kraken", fn: () => fetchKrakenTicker("BTC", "USDT") },
     { provider: "coinbase", fn: () => fetchCoinbaseTicker("BTC", "USDT") },
     { provider: "gate", fn: () => fetchGateTicker("BTC", "USDT") },
