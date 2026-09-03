@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose,
 } from "@/components/ui/dialog";
-import { Bell, BellRing, Plus, Loader2, Trash2, TrendingDown, TrendingUp, Percent } from "lucide-react";
+import { Bell, BellRing, Plus, Loader2, Trash2, TrendingDown, TrendingUp, Percent, Info, Zap, RefreshCw } from "lucide-react";
 
 interface PriceAlert {
   id: string;
@@ -57,6 +57,8 @@ export default function PriceAlertsView() {
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [checkResult, setCheckResult] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -74,6 +76,26 @@ export default function PriceAlertsView() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Verificar manualmente las alertas (llama al cron endpoint público)
+  const checkNow = async () => {
+    setChecking(true);
+    setCheckResult(null);
+    try {
+      const res = await fetch("/api/cron/price-alerts-check");
+      const data = await res.json();
+      if (data.skipped) {
+        setCheckResult(`⏭ ${data.reason}`);
+      } else {
+        setCheckResult(`✓ ${data.checked} alertas verificadas, ${data.triggered} disparadas`);
+        load(); // recargar para ver nuevas triggered
+      }
+    } catch (e) {
+      setCheckResult(`Error: ${(e as Error).message}`);
+    } finally {
+      setChecking(false);
+    }
+  };
 
   if (!user) {
     return (
@@ -95,7 +117,7 @@ export default function PriceAlertsView() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6">
-      <div className="flex justify-between items-start gap-4 mb-6">
+      <div className="flex justify-between items-start gap-4 mb-6 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
             <BellRing className="w-6 h-6 text-emerald-400" />
@@ -107,13 +129,50 @@ export default function PriceAlertsView() {
             Notificaciones in-app + browser push (si las activas).
           </p>
         </div>
-        <Button
-          onClick={() => setShowCreate(true)}
-          className="bg-emerald-600 hover:bg-emerald-500 text-white"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Nueva alerta
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={checkNow}
+            disabled={checking}
+            variant="outline"
+            className="border-slate-700 text-slate-300 hover:bg-slate-800"
+          >
+            {checking ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Zap className="w-4 h-4 mr-2" />}
+            Verificar ahora
+          </Button>
+          <Button
+            onClick={() => setShowCreate(true)}
+            className="bg-emerald-600 hover:bg-emerald-500 text-white"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Nueva alerta
+          </Button>
+        </div>
+      </div>
+
+      {checkResult && (
+        <div className="mb-4 p-3 bg-slate-900 border border-slate-800 rounded-lg text-xs text-slate-300 flex items-start gap-2">
+          <Info className="w-4 h-4 shrink-0 mt-0.5 text-emerald-400" />
+          <div>{checkResult}</div>
+        </div>
+      )}
+
+      {/* Cómo funcionan */}
+      <div className="mb-6 bg-slate-900/50 border border-slate-800/50 rounded-lg p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Info className="w-4 h-4 text-cyan-400" />
+          <h3 className="text-xs font-semibold text-slate-200 uppercase">Cómo funcionan las alertas</h3>
+        </div>
+        <ol className="text-[11px] text-slate-400 space-y-1 list-decimal pl-4">
+          <li>Creas una alerta (precio objetivo, % caída, o target de venta).</li>
+          <li>El sistema verifica precios de Chainlink (BTC, ETH, USDT, USDC, LINK) cada vez que visitas esta página o presionas "Verificar ahora".</li>
+          <li>Si la condición se cumple, se crea una <b className="text-emerald-400">notificación</b> que verás en la campana del header.</li>
+          <li>Si activaste browser push, también la recibirás como notificación del navegador (even si no estás en la página).</li>
+        </ol>
+        <div className="mt-2 text-[10px] text-slate-500 italic">
+          💡 Tip: Para automatizar verificaciones periódicas sin tener que abrir la página,
+          configura un cron externo (cron-job.org, GitHub Actions) que llame a
+          <code className="text-slate-300"> /api/cron/price-alerts-check</code> cada 5 min.
+        </div>
       </div>
 
       {/* Lista de alertas */}
