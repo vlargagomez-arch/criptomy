@@ -18,7 +18,7 @@ import { fetchWithCache } from "./cache";
 // No incluye EIP-1559 priority fee; es una estimación rápida.
 
 export interface GasInfo {
-  gasPriceWei: bigint;
+  gasPriceWei: string; // serializado como string (BigInt no se puede JSON.stringify)
   gasPriceGwei: number;
   estimatedCostUsd?: number; // costo estimado de una transferencia simple (21000 gas)
   ethPriceUsd?: number;
@@ -43,11 +43,11 @@ export async function fetchEthGasPrice(): Promise<GasInfo> {
       signal: AbortSignal.timeout(6000),
     });
     if (!res.ok) {
-      return { gasPriceWei: 0n, gasPriceGwei: 0, timestamp: Date.now(), latencyMs: Date.now() - start, status: "ERROR", error: `HTTP ${res.status}` };
+      return { gasPriceWei: "0", gasPriceGwei: 0, timestamp: Date.now(), latencyMs: Date.now() - start, status: "ERROR", error: `HTTP ${res.status}` };
     }
     const data = (await res.json()) as { result?: string };
     if (!data.result) {
-      return { gasPriceWei: 0n, gasPriceGwei: 0, timestamp: Date.now(), latencyMs: Date.now() - start, status: "ERROR", error: "Sin resultado" };
+      return { gasPriceWei: "0", gasPriceGwei: 0, timestamp: Date.now(), latencyMs: Date.now() - start, status: "ERROR", error: "Sin resultado" };
     }
     const gasPriceWei = BigInt(data.result);
     const gasPriceGwei = Number(gasPriceWei) / 1e9;
@@ -67,7 +67,7 @@ export async function fetchEthGasPrice(): Promise<GasInfo> {
     }
 
     return {
-      gasPriceWei,
+      gasPriceWei: gasPriceWei.toString(), // Serializar como string (BigInt no se puede JSON.stringify)
       gasPriceGwei,
       estimatedCostUsd,
       ethPriceUsd,
@@ -76,7 +76,7 @@ export async function fetchEthGasPrice(): Promise<GasInfo> {
       status: "ONLINE",
     };
   } catch (err) {
-    return { gasPriceWei: 0n, gasPriceGwei: 0, timestamp: Date.now(), latencyMs: Date.now() - start, status: "ERROR", error: (err as Error).message };
+    return { gasPriceWei: "0", gasPriceGwei: 0, timestamp: Date.now(), latencyMs: Date.now() - start, status: "ERROR", error: (err as Error).message };
   }
 }
 
