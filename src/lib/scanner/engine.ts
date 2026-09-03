@@ -37,7 +37,7 @@ function bybitDisabledQuote(asset: string, quote: string): MarketQuote {
     timestamp: Date.now(),
     latencyMs: 0,
     status: "DISABLED" as ProviderStatus,
-    error: "Geo-blocked desde Vercel. Configura BYBIT_PROXY_URL (Cloudflare Worker — ver docs/bybit-proxy/README.md).",
+    error: "No disponible desde el servidor (geo-block de Bybit). Visible en el panel admin vía navegador.",
   };
 }
 

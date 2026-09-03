@@ -12,15 +12,15 @@ import type { MarketQuote, ProviderStatus } from "../types";
 const MEXC_BASE = "https://api.mexc.com";
 
 const MEXC_SYMBOLS: Record<string, Record<string, string>> = {
-  BTC: { USDT: "BTCUSDT", USDC: "BTCUSDC" },
-  ETH: { USDT: "ETHUSDT", USDC: "ETHUSDC" },
-  USDT: { USD: "USDTUSD" },
-  USDC: { USDT: "USDCUSDT" },
-  SOL: { USDT: "SOLUSDT", USDC: "SOLUSDC" },
-  BNB: { USDT: "BNBUSDT" },
-  XRP: { USDT: "XRPUSDT" },
-  DOGE: { USDT: "DOGEUSDT" },
-  ADA: { USDT: "ADAUSDT" },
+  BTC: { USDT: "BTCUSDT", USDC: "BTCUSDC", USD: "BTCUSDT" },
+  ETH: { USDT: "ETHUSDT", USDC: "ETHUSDC", USD: "ETHUSDT" },
+  USDT: { USD: "USDTUSDC", USDC: "USDTUSDC" },
+  USDC: { USDT: "USDCUSDT", USD: "USDCUSDT" },
+  SOL: { USDT: "SOLUSDT", USDC: "SOLUSDC", USD: "SOLUSDT" },
+  BNB: { USDT: "BNBUSDT", USD: "BNBUSDT" },
+  XRP: { USDT: "XRPUSDT", USD: "XRPUSDT" },
+  DOGE: { USDT: "DOGEUSDT", USD: "DOGEUSDT" },
+  ADA: { USDT: "ADAUSDT", USD: "ADAUSDT" },
 };
 
 export function mexcSymbol(asset: string, quote: string): string | null {
