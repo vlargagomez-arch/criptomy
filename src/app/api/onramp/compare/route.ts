@@ -29,23 +29,34 @@ export async function GET(req: NextRequest) {
   );
 
   // Para cada provider en catálogo, consultar su adapter si existe
-  // Si no existe adapter real, devolver status "no activo"
+  // Si no existe adapter real (no tenemos API key), devolver available: true
+  // porque el usuario puede ir DIRECTO al sitio oficial del on-ramp.
+  // La integración en nuestra app no existe, pero el proveedor sí es funcional
+  // desde su sitio público.
   const results = await Promise.all(
     onRampProviders.map(async (p) => {
       try {
         const adapter = await getOnRampAdapter(p.id);
         if (!adapter) {
+          // Sin adapter en nuestra app, pero el provider es real y su sitio público
+          // está disponible. Devolvemos available: true con metadata del provider.
           return {
             providerId: p.id,
             name: p.name,
             logo: p.logoUrl,
             isReal: p.isReal,
-            isLive: p.isLive,
-            available: false,
-            reason: p.isLive ? "Adapter no implementado" : "Requiere API key",
-            kycRequired: p.requiresKyc,
+            isLive: false, // false = no tenemos integración con API nuestra
+            available: p.isReal, // true = el provider SÍ está disponible vía sitio público
+            reason: p.isReal
+              ? "Sin integración API en nuestra app. Te redirigimos al sitio oficial del on-ramp para completar la compra."
+              : "MOCK provider",
+            kycRequired: p.kycRequired,
             countries: p.countries,
             documentationUrl: p.documentationUrl,
+            integrationType: "REDIRECT_DIRECT",
+            estimatedTime: "10-30 min (sitio oficial)",
+            minAmount: 20,
+            maxAmount: 10000,
           };
         }
 
