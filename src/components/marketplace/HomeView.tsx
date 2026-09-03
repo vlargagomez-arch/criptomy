@@ -102,20 +102,6 @@ function Landing() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {[
             {
-              icon: ShoppingBag,
-              title: "Comprar cripto",
-              desc: "On-ramp con MoonPay, Transak, Ramp. Paga con PSE, Bancolombia, tarjeta.",
-              tab: "comprar",
-              color: "text-emerald-400",
-            },
-            {
-              icon: TrendingDown,
-              title: "Vender cripto",
-              desc: "Off-ramp a tu cuenta bancaria o Nequi. USDT/USDC → COP en minutos.",
-              tab: "vender",
-              color: "text-amber-400",
-            },
-            {
               icon: Store,
               title: "Mercado P2P",
               desc: "Compra y vende cripto persona-a-persona sin KYC, como LocalBitcoins.",
@@ -128,13 +114,6 @@ function Landing() {
               desc: "Apuesta USDT en 1v1 de LoL, Valorant, FIFA. Verificación con APIs reales.",
               tab: "retos",
               color: "text-blue-400",
-            },
-            {
-              icon: ImageIcon,
-              title: "Mercado NFT",
-              desc: "Mintea, lista y compra NFTs en Polygon, Base y Ethereum.",
-              tab: "nft",
-              color: "text-pink-400",
             },
             {
               icon: Send,
@@ -252,16 +231,14 @@ function Dashboard() {
       </div>
 
       {/* Quick actions */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2 mb-8">
         {[
-          { icon: ShoppingBag, label: "Comprar", tab: "comprar", color: "bg-emerald-600" },
-          { icon: TrendingDown, label: "Vender", tab: "vender", color: "bg-amber-600" },
-          { icon: Send, label: "Enviar", tab: "enviar", color: "bg-cyan-600" },
-          { icon: Download, label: "Recibir", tab: "recibir", color: "bg-purple-600" },
           { icon: Store, label: "Mercado P2P", tab: "mercado-p2p", color: "bg-slate-700" },
           { icon: Trophy, label: "Retos", tab: "retos", color: "bg-blue-600" },
-          { icon: ImageIcon, label: "NFT", tab: "nft", color: "bg-pink-600" },
+          { icon: Send, label: "Enviar", tab: "enviar", color: "bg-cyan-600" },
+          { icon: Download, label: "Recibir", tab: "recibir", color: "bg-purple-600" },
           { icon: Sparkles, label: "Oportunidades", tab: "oportunidades", color: "bg-yellow-600" },
+          { icon: Search, label: "Buscador", tab: "buscador", color: "bg-emerald-600" },
         ].map((a) => {
           const Icon = a.icon;
           return (
@@ -311,16 +288,6 @@ function Dashboard() {
           <h3 className="text-sm font-semibold text-slate-100">Alertas de precio</h3>
           <p className="text-xs text-slate-400 mt-1">
             Recibe notificaciones cuando BTC/ETH caiga a tu objetivo.
-          </p>
-        </button>
-        <button
-          onClick={() => setTab("drops")}
-          className="text-left bg-slate-900 border border-slate-800 rounded-xl p-4 hover:border-emerald-600/50 transition"
-        >
-          <ImageIcon className="w-5 h-5 text-pink-400 mb-2" />
-          <h3 className="text-sm font-semibold text-slate-100">NFT Drops</h3>
-          <p className="text-xs text-slate-400 mt-1">
-            Calendario de lanzamientos verificados.
           </p>
         </button>
         <button
