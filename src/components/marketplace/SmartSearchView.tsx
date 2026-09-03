@@ -845,9 +845,38 @@ function ArbitrageCard({ opp, rank }: { opp: ArbitrageOpportunity; rank: number 
   // Barra de progreso visual del ROI
   const roiBarWidth = Math.max(0, Math.min(100, Math.abs(roi) * 10));
 
+  // Info de cada exchange (comprador y vendedor)
+  const exchangeInfo: Record<string, { rank: string; trust: string; vol: string; kyc: string; transferTime: string; withdrawFee: string }> = {
+    Binance: { rank: "#1", trust: "Alta", vol: "$15B+", kyc: "Obligatorio", transferTime: "Inmediato (red BSC/Polygon)", withdrawFee: "$1-5 USDT" },
+    OKX: { rank: "#5", trust: "Alta", vol: "$3B+", kyc: "Obligatorio", transferTime: "5-15 min", withdrawFee: "$1-3 USDT" },
+    Bybit: { rank: "#3", trust: "Alta", vol: "$5B+", kyc: "Obligatorio", transferTime: "5-15 min", withdrawFee: "$1-3 USDT" },
+    Kraken: { rank: "#10", trust: "Muy alta", vol: "$1B+", kyc: "Obligatorio", transferTime: "5-30 min", withdrawFee: "$2-5 USDT" },
+    Coinbase: { rank: "#3", trust: "Muy alta", vol: "$2B+", kyc: "Obligatorio", transferTime: "5-30 min", withdrawFee: "$1-3 USDT" },
+    KuCoin: { rank: "#8", trust: "Media-alta", vol: "$1B+", kyc: "Obligatorio", transferTime: "5-15 min", withdrawFee: "$1-3 USDT" },
+    "Gate.io": { rank: "#15", trust: "Media", vol: "$500M+", kyc: "Obligatorio", transferTime: "5-15 min", withdrawFee: "$1-3 USDT" },
+    MEXC: { rank: "#10", trust: "Media", vol: "$1B+", kyc: "Opcional", transferTime: "5-15 min", withdrawFee: "$1-3 USDT" },
+    "HTX (Huobi)": { rank: "#15", trust: "Media", vol: "$500M+", kyc: "Obligatorio", transferTime: "5-15 min", withdrawFee: "$1-3 USDT" },
+    Bitget: { rank: "#10", trust: "Media", vol: "$1B+", kyc: "Obligatorio", transferTime: "5-15 min", withdrawFee: "$0.5-2 USDT" },
+    BingX: { rank: "#20", trust: "Media", vol: "$300M+", kyc: "Obligatorio", transferTime: "5-15 min", withdrawFee: "$1-3 USDT" },
+    CoinGecko: { rank: "N/A", trust: "Referencia", vol: "N/A", kyc: "N/A", transferTime: "N/A", withdrawFee: "N/A" },
+  };
+
+  const buyInfo = exchangeInfo[opp.buyAt.provider] || { rank: "?", trust: "?", vol: "?", kyc: "?", transferTime: "?", withdrawFee: "?" };
+  const sellInfo = exchangeInfo[opp.sellAt.provider] || { rank: "?", trust: "?", vol: "?", kyc: "?", transferTime: "?", withdrawFee: "?" };
+
+  // Pasos a seguir para ejecutar el arbitraje
+  const steps = [
+    `1. Deposita $${opp.capital} USD en ${opp.buyAt.provider} (KYC: ${buyInfo.kyc})`,
+    `2. Compra ${opp.asset} a $${opp.buyAt.price.toFixed(4)} en ${opp.buyAt.provider} (Rank ${buyInfo.rank}, Confianza ${buyInfo.trust})`,
+    `3. Retira ${opp.asset} de ${opp.buyAt.provider} a tu wallet (${buyInfo.transferTime}, fee: ${buyInfo.withdrawFee})`,
+    `4. Transfiere ${opp.asset} de tu wallet a ${opp.sellAt.provider} (gas de red ~$1-5)`,
+    `5. Vende ${opp.asset} a $${opp.sellAt.price.toFixed(4)} en ${opp.sellAt.provider} (Rank ${sellInfo.rank}, Confianza ${sellInfo.trust})`,
+    `6. Retira los USD de ${opp.sellAt.provider} (${sellInfo.transferTime}, fee: ${sellInfo.withdrawFee})`,
+  ];
+
   return (
     <div className={`bg-slate-900 border rounded-xl p-4 ${positive ? "border-emerald-800/50" : "border-slate-800"}`}>
-      {/* Header */}
+      {/* Header con ranking y exchanges */}
       <div className="flex items-center justify-between gap-3 mb-3">
         <div className="flex items-center gap-3">
           <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${positive ? "bg-emerald-950/50 text-emerald-400" : "bg-red-950/50 text-red-400"}`}>
@@ -859,7 +888,7 @@ function ArbitrageCard({ opp, rank }: { opp: ArbitrageOpportunity; rank: number 
               <ArrowRight className="w-3 h-3 text-slate-500" />
               Vender en <b className="text-amber-400">{opp.sellAt.provider}</b>
             </div>
-            <div className="text-[10px] text-slate-500">{opp.asset} · Capital: ${opp.capital}</div>
+            <div className="text-[10px] text-slate-500">{opp.asset} · Capital: ${opp.capital.toLocaleString()}</div>
           </div>
         </div>
         <div className="text-right">
@@ -873,21 +902,49 @@ function ArbitrageCard({ opp, rank }: { opp: ArbitrageOpportunity; rank: number 
       {/* Métricas en grid */}
       <div className="grid grid-cols-4 gap-3 mb-3">
         <div>
-          <div className="text-[9px] text-slate-500 uppercase">Compra</div>
-          <div className="text-sm text-slate-100 font-mono">${opp.buyAt.price.toFixed(2)}</div>
+          <div className="text-[9px] text-slate-500 uppercase">Precio compra</div>
+          <div className="text-sm text-slate-100 font-mono">${opp.buyAt.price.toFixed(4)}</div>
+          <div className="text-[9px] text-slate-600">{buyInfo.rank} · {buyInfo.trust}</div>
         </div>
         <div>
-          <div className="text-[9px] text-slate-500 uppercase">Venta</div>
-          <div className="text-sm text-slate-100 font-mono">${opp.sellAt.price.toFixed(2)}</div>
+          <div className="text-[9px] text-slate-500 uppercase">Precio venta</div>
+          <div className="text-sm text-slate-100 font-mono">${opp.sellAt.price.toFixed(4)}</div>
+          <div className="text-[9px] text-slate-600">{sellInfo.rank} · {sellInfo.trust}</div>
         </div>
         <div>
           <div className="text-[9px] text-slate-500 uppercase">Spread</div>
           <div className={`text-sm font-mono ${positive ? "text-emerald-400" : "text-red-400"}`}>{spreadPct.toFixed(2)}%</div>
         </div>
         <div>
-          <div className="text-[9px] text-slate-500 uppercase">Ganancia net</div>
+          <div className="text-[9px] text-slate-500 uppercase">Ganancia neta</div>
           <div className={`text-sm font-mono font-bold ${positive ? "text-emerald-400" : "text-red-400"}`}>
             ${opp.netProfit.toFixed(2)}
+          </div>
+        </div>
+      </div>
+
+      {/* Info detallada de cada exchange */}
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <div className="bg-slate-800/50 rounded-lg p-2">
+          <div className="text-[10px] uppercase text-emerald-400 mb-1">📍 {opp.buyAt.provider} (compra)</div>
+          <div className="text-[10px] text-slate-400 space-y-0.5">
+            <div>Rank global: <b className="text-slate-300">{buyInfo.rank}</b></div>
+            <div>Confianza: <b className="text-slate-300">{buyInfo.trust}</b></div>
+            <div>Vol 24h: <b className="text-slate-300">{buyInfo.vol}</b></div>
+            <div>KYC: <b className="text-slate-300">{buyInfo.kyc}</b></div>
+            <div>Retiro: <b className="text-slate-300">{buyInfo.transferTime}</b></div>
+            <div>Fee retiro: <b className="text-slate-300">{buyInfo.withdrawFee}</b></div>
+          </div>
+        </div>
+        <div className="bg-slate-800/50 rounded-lg p-2">
+          <div className="text-[10px] uppercase text-amber-400 mb-1">💰 {opp.sellAt.provider} (venta)</div>
+          <div className="text-[10px] text-slate-400 space-y-0.5">
+            <div>Rank global: <b className="text-slate-300">{sellInfo.rank}</b></div>
+            <div>Confianza: <b className="text-slate-300">{sellInfo.trust}</b></div>
+            <div>Vol 24h: <b className="text-slate-300">{sellInfo.vol}</b></div>
+            <div>KYC: <b className="text-slate-300">{sellInfo.kyc}</b></div>
+            <div>Retiro: <b className="text-slate-300">{sellInfo.transferTime}</b></div>
+            <div>Fee retiro: <b className="text-slate-300">{sellInfo.withdrawFee}</b></div>
           </div>
         </div>
       </div>
@@ -906,29 +963,45 @@ function ArbitrageCard({ opp, rank }: { opp: ArbitrageOpportunity; rank: number 
         </div>
       </div>
 
-      {/* Botón expandir supuestos */}
+      {/* Botón expandir */}
       <button
         onClick={() => setExpanded(!expanded)}
         className="text-[10px] text-slate-500 hover:text-slate-300 flex items-center gap-1 transition"
       >
-        {expanded ? "Ocultar" : "Ver"} supuestos y advertencias
+        {expanded ? "Ocultar" : "Ver"} pasos a seguir + supuestos + advertencias
         {expanded ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
       </button>
 
       {expanded && (
-        <div className="mt-3 pt-3 border-t border-slate-800 space-y-2">
-          <div className="text-[10px] uppercase text-slate-500 mb-1">Supuestos del cálculo</div>
-          <ul className="text-[10px] text-slate-400 space-y-0.5 list-disc pl-4">
-            {opp.assumptions.map((a, i) => (
-              <li key={i}>{a}</li>
-            ))}
-          </ul>
-          <div className="text-[10px] text-amber-400 bg-amber-950/30 border border-amber-800/50 rounded p-2 flex items-start gap-2 mt-2">
+        <div className="mt-3 pt-3 border-t border-slate-800 space-y-3">
+          {/* Pasos a seguir */}
+          <div>
+            <div className="text-[10px] uppercase text-emerald-400 mb-1">📋 Pasos para ejecutar</div>
+            <ol className="text-[10px] text-slate-400 space-y-1 list-decimal pl-4">
+              {steps.map((s, i) => (
+                <li key={i}>{s}</li>
+              ))}
+            </ol>
+          </div>
+
+          {/* Supuestos */}
+          <div>
+            <div className="text-[10px] uppercase text-slate-500 mb-1">Supuestos del cálculo</div>
+            <ul className="text-[10px] text-slate-400 space-y-0.5 list-disc pl-4">
+              {opp.assumptions.map((a, i) => (
+                <li key={i}>{a}</li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Warning */}
+          <div className="text-[10px] text-amber-400 bg-amber-950/30 border border-amber-800/50 rounded p-2 flex items-start gap-2">
             <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
             <div>
               <b>Importante:</b> Estimación basada en precios del momento del escaneo. Los precios
-              cambian constantemente. La ganancia real puede ser menor por slippage, latencia,
-              fees de transferencia, KYC distinto, y tiempo de confirmación.
+              cambian constantemente. La ganancia real puede ser menor por: slippage, latencia,
+              fees de transferencia, KYC distinto en cada exchange, gas de red, y tiempo de
+              confirmación. El capital queda inmovilizado durante la transferencia (5-30 min).
             </div>
           </div>
         </div>
