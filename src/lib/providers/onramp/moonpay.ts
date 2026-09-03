@@ -30,30 +30,36 @@ export const MoonpayOnRampProvider: OnRampProvider = {
 
   isAvailable: async (req: AvailabilityRequest): Promise<AvailabilityResponse> => {
     const apiKey = process.env.NEXT_PUBLIC_MOONPAY_API_KEY;
+    // Sin API key nuestra, devolvemos available: true igual — el usuario
+    // puede ir al sitio público de MoonPay (https://buy.moonpay.com) sin
+    // nuestra integración. La diferencia es que no podemos pre-firmar la URL.
+    // Si está soportado en el país, está disponible.
+    const supportedCountries = ["CO", "MX", "AR", "BR", "CL", "PE", "EC", "VE", "DO"];
+    const countrySupported = supportedCountries.includes(req.country.toUpperCase());
+
     if (!apiKey) {
       return {
-        available: false,
-        reason: "MOONPAY_API_KEY no configurada. MoonPay está listado pero no activo.",
-      };
-    }
-    try {
-      // MoonPay tiene endpoint de /currencies para verificar disponibilidad
-      // Aquí solo verificamos que la API esté configurada; los detalles
-      // de límites/países se obtienen del widget SDK.
-      return {
-        available: true,
+        available: countrySupported,
         kycRequired: true,
-        estimatedTime: "10-30 min",
+        estimatedTime: "10-30 min (sitio oficial)",
         minAmount: 20,
         maxAmount: 10000,
         feeCurrency: req.currency,
-      };
-    } catch (e) {
-      return {
-        available: false,
-        reason: `Error consultando MoonPay: ${(e as Error).message}`,
+        reason: countrySupported
+          ? "Sin integración API nuestra. Te redirigimos al sitio oficial de MoonPay."
+          : "País no soportado por MoonPay.",
       };
     }
+
+    // Con API key: devolver disponibilidad real
+    return {
+      available: countrySupported,
+      kycRequired: true,
+      estimatedTime: "10-30 min",
+      minAmount: 20,
+      maxAmount: 10000,
+      feeCurrency: req.currency,
+    };
   },
 
   startPurchase: async (req: PurchaseRequest): Promise<PurchaseResponse> => {
