@@ -15,6 +15,7 @@ import {
   Image as ImageIcon, CalendarClock, Bell, LogOut, Copy,
   ShoppingBag, TrendingDown, Send, Download, Sparkles, Grid3x3,
   Globe2, CreditCard, ShieldAlert, Settings, Menu, X, ChevronRight, Search, Activity,
+  Heart, BookOpen,
 } from "lucide-react";
 import { reputationLabel, avatarGradient } from "@/lib/format";
 import Onboarding from "./Onboarding";
@@ -48,6 +49,8 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   {
     title: "Servicios",
     items: [
+      { key: "donaciones", label: "Donaciones", icon: Heart, desc: "Dona cripto a causas sociales verificadas" },
+      { key: "educacion", label: "Educación", icon: BookOpen, desc: "Aprende cripto gratis en español" },
       { key: "remesas", label: "Remesas", icon: Globe2, desc: "Transferencias internacionales" },
       { key: "tarjeta", label: "Tarjeta cripto", icon: CreditCard, desc: "Solicitar tarjeta de proveedores" },
       { key: "oportunidades", label: "Oportunidades", icon: Sparkles, desc: "Learn&Earn, airdrops, staking" },

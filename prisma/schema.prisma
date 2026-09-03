@@ -53,6 +53,9 @@ model User {
   // Plataforma: oportunidades, proveedores favoritos, comentarios
   savedOpportunities  SavedOpportunity[]
   providerReviews    ProviderReview[]
+
+  // Educación
+  courseEnrollments  CourseEnrollment[]
 }
 
 // Oferta P2P: "vendo X BTC por Y COP vía Nequi"
@@ -490,3 +493,98 @@ model ProviderReview {
   @@index([providerId])
 }
 
+// ============================================================
+// MÓDULO: Donaciones Cripto — Impacto Social
+// ============================================================
+// Causas sociales verificadas que reciben donaciones en cripto.
+// Sin KYC, sin intermediarios, 100% transparente.
+// Inspirado en Gitcoin (bienes públicos) + Global Giving (causas sociales).
+
+model Cause {
+  id              String   @id @default(cuid())
+  title           String
+  description     String
+  category        String   // EMERGENCY, EDUCATION, HEALTH, FOOD, SHELTER, COMMUNITY
+  country         String   // CO, MX, AR, VE, etc.
+  organizerName   String   // nombre del organizador (persona u ONG)
+  organizerWallet String   // wallet que recibe las donaciones
+  imageUrl       String?  // URL de imagen de la causa
+  websiteUrl     String?  // sitio web verificable del organizador
+  goalAmount     Float    // meta de recaudación en USD
+  raisedAmount   Float    @default(0) // recaudado hasta ahora en USD
+  donorCount     Int      @default(0) // número de donantes únicos
+  verified       Boolean  @default(false) // verificada por admin
+  active         Boolean  @default(true) // activa para recibir donaciones
+  deadline       DateTime? // fecha límite opcional
+
+  donations      Donation[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([category, active, verified])
+  @@index([country, active])
+}
+
+model Donation {
+  id              String   @id @default(cuid())
+  causeId         String
+  cause           Cause    @relation(fields: [causeId], references: [id], onDelete: Cascade)
+
+  donorWallet     String   // wallet del donante (puede ser anónima)
+  donorAlias      String?  // alias opcional del donante
+  amount          Float    // cantidad donada en USD
+  currency        String   @default("USDT") // cripto usada
+  txHash          String?  // hash de transacción on-chain (si aplica)
+  message         String?  // mensaje del donante (opcional)
+  anonymous       Boolean  @default(true) // donación anónima por defecto
+
+  createdAt       DateTime @default(now())
+
+  @@index([causeId, createdAt])
+  @@index([donorWallet])
+}
+
+// ============================================================
+// MÓDULO: Educación Financiera Cripto
+// ============================================================
+// Cursos gratuitos en español sobre cómo usar cripto de forma segura.
+
+model Course {
+  id              String   @id @default(cuid())
+  title           String
+  description     String
+  category        String   // WALLET, SECURITY, TRADING, TAXES, REMESAS, BASICS
+  level           String   @default("BEGINNER") // BEGINNER, INTERMEDIATE, ADVANCED
+  durationMin     Int      // duración estimada en minutos
+  content         String   // contenido del curso (markdown)
+  imageUrl       String?
+  order           Int      @default(0) // orden de visualización
+  active          Boolean  @default(true)
+
+  enrollments     CourseEnrollment[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([category, active])
+  @@index([active, order])
+}
+
+model CourseEnrollment {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId        String
+  course         Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  progress        Int      @default(0) // 0-100 (% completado)
+  completed       Boolean  @default(false)
+  completedAt     DateTime?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userId, courseId])
+  @@index([userId])
+}
