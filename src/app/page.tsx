@@ -5,16 +5,12 @@ import { useApp, TabKey } from "@/lib/store";
 import Header from "@/components/marketplace/Header";
 import HomeView from "@/components/marketplace/HomeView";
 import SmartSearchView from "@/components/marketplace/SmartSearchView";
-import ComprarView from "@/components/marketplace/ComprarView";
-import VenderView from "@/components/marketplace/VenderView";
 import EnviarView from "@/components/marketplace/EnviarView";
 import RecibirView from "@/components/marketplace/RecibirView";
 import RemesasView from "@/components/marketplace/RemesasView";
 import TarjetaView from "@/components/marketplace/TarjetaView";
 import MercadoP2PUnifiedView from "@/components/marketplace/MercadoP2PUnifiedView";
 import RetosP2PView from "@/components/marketplace/RetosP2PView";
-import NFTMarketplaceView from "@/components/marketplace/NFTMarketplaceView";
-import NFTDropsView from "@/components/marketplace/NFTDropsView";
 import PriceAlertsView from "@/components/marketplace/PriceAlertsView";
 import OportunidadesView from "@/components/marketplace/OportunidadesView";
 import ProveedoresView from "@/components/marketplace/ProveedoresView";
@@ -26,8 +22,8 @@ import WalletView from "@/components/marketplace/WalletView";
 import ReputationView from "@/components/marketplace/ReputationView";
 
 const VALID_TABS: TabKey[] = [
-  "inicio", "buscador", "dashboard", "comprar", "vender", "enviar", "recibir",
-  "mercado-p2p", "retos", "nft", "drops", "alertas", "remesas", "tarjeta",
+  "inicio", "buscador", "dashboard", "enviar", "recibir",
+  "mercado-p2p", "retos", "alertas", "remesas", "tarjeta",
   "oportunidades", "proveedores", "comparador", "scanner-admin", "compliance",
   "admin", "billetera", "reputacion",
 ];
@@ -66,16 +62,12 @@ export default function Home() {
         {tab === "inicio" && <HomeView />}
         {tab === "buscador" && <SmartSearchView />}
         {tab === "dashboard" && <HomeView />}
-        {tab === "comprar" && <ComprarView />}
-        {tab === "vender" && <VenderView />}
         {tab === "enviar" && <EnviarView />}
         {tab === "recibir" && <RecibirView />}
         {tab === "remesas" && <RemesasView />}
         {tab === "tarjeta" && <TarjetaView />}
         {tab === "mercado-p2p" && <MercadoP2PUnifiedView />}
         {tab === "retos" && <RetosP2PView />}
-        {tab === "nft" && <NFTMarketplaceView />}
-        {tab === "drops" && <NFTDropsView />}
         {tab === "alertas" && <PriceAlertsView />}
         {tab === "oportunidades" && <OportunidadesView />}
         {tab === "proveedores" && <ProveedoresView />}
@@ -90,9 +82,8 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 py-6 text-xs text-slate-600 text-center">
           © 2026 CriptoMy · Web3 LATAM · Sin custodia · Sin KYC forzado
           <br />
-          ⚠️ Operar cripto puede ser ilegal en tu jurisdicción. On-ramp/off-ramp/tarjetas/remesas
-          prestados por terceros regulados. No custodiamos tus fondos. Datos de mercado vía APIs
-          públicas oficiales (Binance, OKX, Bybit, Kraken, Coinbase, CoinGecko).
+          ⚠️ Operar cripto puede ser ilegal en tu jurisdicción. No custodiamos tus fondos.
+          Datos de mercado vía APIs públicas oficiales.
         </div>
       </footer>
     </div>

@@ -21,14 +21,10 @@ export type TabKey =
   | "inicio"
   | "buscador"
   | "dashboard"
-  | "comprar"
-  | "vender"
   | "enviar"
   | "recibir"
-  | "mercado-p2p"   // unifica mercado + crear + trades
+  | "mercado-p2p"
   | "retos"
-  | "nft"
-  | "drops"
   | "alertas"
   | "remesas"
   | "tarjeta"
@@ -62,7 +58,7 @@ interface AppState {
   logout: () => void;
 }
 
-const STORAGE_VERSION = 14;
+const STORAGE_VERSION = 15;
 
 function isValidUser(user: unknown): user is CurrentUser {
   if (!user || typeof user !== "object") return false;
@@ -111,7 +107,7 @@ export const useApp = create<AppState>()(
         set({ user: null, privateKey: null, tab: "inicio", chainId: null, p2pSubTab: "explorar" }),
     }),
     {
-      name: "criptomy-v14",
+      name: "criptomy-v15",
       version: STORAGE_VERSION,
       partialize: (state) => ({
         user: state.user,
@@ -128,14 +124,10 @@ export const useApp = create<AppState>()(
           "inicio",
           "buscador",
           "dashboard",
-          "comprar",
-          "vender",
           "enviar",
           "recibir",
           "mercado-p2p",
           "retos",
-          "nft",
-          "drops",
           "alertas",
           "remesas",
           "tarjeta",

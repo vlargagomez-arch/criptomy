@@ -34,8 +34,6 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   {
     title: "Cripto",
     items: [
-      { key: "comprar", label: "Comprar", icon: ShoppingBag, desc: "On-ramp: fiat → cripto" },
-      { key: "vender", label: "Vender", icon: TrendingDown, desc: "Off-ramp: cripto → fiat" },
       { key: "enviar", label: "Enviar", icon: Send, desc: "Transferencia on-chain" },
       { key: "recibir", label: "Recibir", icon: Download, desc: "Tu dirección + QR" },
     ],
@@ -45,8 +43,6 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     items: [
       { key: "mercado-p2p", label: "Mercado P2P", icon: Store, desc: "Compra/venta persona a persona" },
       { key: "retos", label: "Retos gaming", icon: Trophy, desc: "Apuestas 1v1 con verificación" },
-      { key: "nft", label: "Mercado NFT", icon: ImageIcon, desc: "Mint, list, buy NFTs" },
-      { key: "drops", label: "NFT Drops", icon: CalendarClock, desc: "Calendario de lanzamientos" },
     ],
   },
   {
@@ -64,8 +60,6 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
 const COMPACT_NAV: TabKey[] = [
   "buscador",
   "dashboard",
-  "comprar",
-  "vender",
   "enviar",
   "recibir",
   "mercado-p2p",
