@@ -520,15 +520,42 @@ function BestOptionCard({ result }: { result: RankedResult }) {
   const spreadPercent = result.spreadPercent ?? 0;
   const liquidity = result.liquidity ?? 0;
 
-  const exchangeWebsites: Record<string, string> = {
-    binance: "https://www.binance.com", okx: "https://www.okx.com",
-    bybit: "https://www.bybit.com", kraken: "https://www.kraken.com",
-    coinbase: "https://www.coinbase.com", kucoin: "https://www.kucoin.com",
-    gate: "https://www.gate.io", mexc: "https://www.mexc.com",
-    htx: "https://www.htx.com", bitget: "https://www.bitget.com",
-    coingecko: "https://www.coingecko.com",
+  // URLs de trading específicas del par (no homepage genérico)
+  // Cada exchange tiene una URL de trading del par BTC/USDT, ETH/USDT, etc.
+  const exchangeTradeUrls: Record<string, (asset: string, quote: string) => string> = {
+    binance: (a, q) => `https://www.binance.com/en/trade/${a}_${q}?type=spot`,
+    okx: (a, q) => `https://www.okx.com/trade-spot/${a.toLowerCase()}-${q.toLowerCase()}`,
+    bybit: (a, q) => `https://www.bybit.com/en-US/trade/spot/${a}${q}`,
+    kraken: (a, q) => `https://www.kraken.com/prices/${a.toLowerCase()}`,
+    coinbase: (a, q) => `https://www.coinbase.com/price/${a.toLowerCase()}`,
+    kucoin: (a, q) => `https://www.kucoin.com/trade/${a}-${q}`,
+    gate: (a, q) => `https://www.gate.io/trade/${a}_${q}`,
+    mexc: (a, q) => `https://www.mexc.com/exchange/${a}_${q}`,
+    htx: (a, q) => `https://www.htx.com/en-us/exchange/${a.toLowerCase()}_${q.toLowerCase()}/`,
+    bitget: (a, q) => `https://www.bitget.com/spot/${a}${q}_SPBL`,
+    bingx: (a, q) => `https://www.bingx.com/en/spot/${a}-${q}/`,
+    coingecko: (a, q) => `https://www.coingecko.com/en/coins/${a.toLowerCase()}`,
   };
-  const url = exchangeWebsites[result.provider] || "#";
+
+  // Información de reputación del exchange
+  const exchangeInfo: Record<string, { rank: string; trust: string; vol24h: string; since: string; desc: string }> = {
+    binance: { rank: "#1", trust: "Alta", vol24h: "$15B+", since: "2017", desc: "Mayor exchange del mundo por volumen. Liquidez extrema. KYC obligatorio." },
+    okx: { rank: "#5", trust: "Alta", vol24h: "$3B+", since: "2017", desc: "Top 5 global. Liquidez TOP. KYC obligatorio." },
+    bybit: { rank: "#3", trust: "Alta", vol24h: "$5B+", since: "2018", desc: "Top 3 global. Liquidez TOP. KYC obligatorio." },
+    kraken: { rank: "#10", trust: "Muy alta", vol24h: "$1B+", since: "2011", desc: "Exchange más regulado de USA/Europa. Confianza institucional." },
+    coinbase: { rank: "#3", trust: "Muy alta", vol24h: "$2B+", since: "2012", desc: "Exchange regulado de USA. Listado en NASDAQ. Máxima confianza." },
+    kucoin: { rank: "#8", trust: "Media-alta", vol24h: "$1B+", since: "2017", desc: "Top 10. Amplia variedad de tokens. KYC obligatorio." },
+    gate: { rank: "#15", trust: "Media", vol24h: "$500M+", since: "2013", desc: "Top 20. Buena liquidez para altcoins." },
+    mexc: { rank: "#10", trust: "Media", vol24h: "$1B+", since: "2018", desc: "Top 10. Listado rápido de tokens. KYC opcional (único)." },
+    htx: { rank: "#15", trust: "Media", vol24h: "$500M+", since: "2013", desc: "Antes Huobi. Top 20. Liquidez media." },
+    bitget: { rank: "#10", trust: "Media", vol24h: "$1B+", since: "2018", desc: "Top 10. Fees más baratos (0.05% taker). Copy trading." },
+    bingx: { rank: "#20", trust: "Media", vol24h: "$300M+", since: "2018", desc: "Top 20. No bloquea Vercel. Reemplazo de Bybit en el buscador." },
+    coingecko: { rank: "N/A", trust: "Referencia", vol24h: "N/A", since: "2014", desc: "Agregador (no exchange). Precios de referencia de miles de fuentes." },
+  };
+
+  const info = exchangeInfo[result.provider] || { rank: "?", trust: "?", vol24h: "?", since: "?", desc: "" };
+  const tradeUrl = exchangeTradeUrls[result.provider]?.(result.asset || "BTC", result.fiat || "USDT") || "#";
+  const url = tradeUrl;
 
   const kycInfo = result.kycLevel === "NO_KYC"
     ? { color: "text-teal-300", bg: "bg-teal-950/50", label: "🔓 Sin KYC" }
@@ -549,11 +576,21 @@ function BestOptionCard({ result }: { result: RankedResult }) {
           </div>
           <div>
             <div className="text-lg font-bold text-slate-100">{result.providerName}</div>
-            <div className="text-xs text-slate-400">
-              {result.liquidityTier === "TOP" && "🌊 Liquidez TOP"}
-              {result.liquidityTier === "MEDIUM" && "Liquidez media"}
-              {result.liquidityTier === "AGGREGATOR" && "📊 Agregador"}
-              {result.liquidityTier && " · "}
+            <div className="text-xs text-slate-400 flex items-center gap-2 flex-wrap">
+              {info.rank !== "?" && (
+                <span className="text-[10px] px-1.5 py-0.5 bg-slate-800 rounded text-slate-300">
+                  Rank {info.rank}
+                </span>
+              )}
+              {info.trust !== "?" && (
+                <span className="text-[10px] text-slate-400">Confianza: {info.trust}</span>
+              )}
+              {info.since !== "?" && (
+                <span className="text-[10px] text-slate-600">· Desde {info.since}</span>
+              )}
+              {result.liquidityTier === "TOP" && <span>🌊 TOP</span>}
+              {result.liquidityTier === "MEDIUM" && <span>Med</span>}
+              {result.liquidityTier === "AGGREGATOR" && <span>📊 Agregador</span>}
               <span className={kycInfo.color}>{kycInfo.label}</span>
             </div>
           </div>
@@ -563,6 +600,13 @@ function BestOptionCard({ result }: { result: RankedResult }) {
           <div className="text-sm text-slate-300 font-mono">{result.latencyMs || 0}ms</div>
         </div>
       </div>
+
+      {/* Descripción del exchange */}
+      {info.desc && (
+        <div className="mb-3 text-[11px] text-slate-500 italic bg-slate-800/30 rounded-lg px-3 py-2">
+          {info.desc}
+        </div>
+      )}
 
       {/* Métricas principales — grid 4 */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
