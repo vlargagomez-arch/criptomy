@@ -1,14 +1,34 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Activity, RefreshCw, Loader2, Server, Zap, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
+import { Activity, RefreshCw, Loader2, Server, Zap, AlertTriangle, CheckCircle2, XCircle, Globe } from "lucide-react";
 import { SCANNER_PROVIDERS } from "@/lib/scanner/providers/registry";
 import type { ProviderHealth } from "@/lib/scanner/types";
+
+// Bybit tiene geo-block contra IPs de Vercel (cloud provider).
+// PERO el navegador del usuario tiene IP residencial y Bybit permite CORS.
+// Hacemos la verificación desde el navegador (no desde el servidor).
+const BYBIT_DIRECT_URL = "https://api.bybit.com/v5/market/tickers?category=spot&symbol=BTCUSDT";
+
+interface ClientSideCheck {
+  provider: string;
+  status: "ONLINE" | "OFFLINE" | "CHECKING" | "ERROR";
+  latencyMs: number;
+  lastPrice?: number;
+  error?: string;
+  viaClient: boolean; // true = verificado desde el navegador (no desde Vercel)
+}
 
 export default function ScannerAdminView() {
   const [health, setHealth] = useState<ProviderHealth[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<number>(0);
+  const [bybitClientCheck, setBybitClientCheck] = useState<ClientSideCheck>({
+    provider: "bybit",
+    status: "CHECKING",
+    latencyMs: 0,
+    viaClient: true,
+  });
 
   const checkAll = useCallback(async () => {
     setLoading(true);
@@ -24,15 +44,81 @@ export default function ScannerAdminView() {
     }
   }, []);
 
+  // Verificación directa de Bybit desde el navegador del usuario
+  // (no desde Vercel — Vercel está bloqueado por Bybit, pero la IP del
+  // usuario no). Bybit permite CORS, así que el fetch funciona.
+  const checkBybitDirect = useCallback(async () => {
+    setBybitClientCheck({ provider: "bybit", status: "CHECKING", latencyMs: 0, viaClient: true });
+    const start = Date.now();
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch(BYBIT_DIRECT_URL, {
+        signal: controller.signal,
+        headers: { Accept: "application/json" },
+      });
+      clearTimeout(timeoutId);
+      const latencyMs = Date.now() - start;
+      if (!res.ok) {
+        setBybitClientCheck({
+          provider: "bybit",
+          status: "ERROR",
+          latencyMs,
+          viaClient: true,
+          error: `HTTP ${res.status} (desde tu IP)`,
+        });
+        return;
+      }
+      const data = await res.json();
+      const lastPrice = data?.result?.list?.[0]?.lastPrice
+        ? parseFloat(data.result.list[0].lastPrice)
+        : 0;
+      setBybitClientCheck({
+        provider: "bybit",
+        status: "ONLINE",
+        latencyMs,
+        lastPrice,
+        viaClient: true,
+      });
+    } catch (err) {
+      setBybitClientCheck({
+        provider: "bybit",
+        status: "OFFLINE",
+        latencyMs: Date.now() - start,
+        viaClient: true,
+        error: (err as Error).message,
+      });
+    }
+  }, []);
+
   useEffect(() => {
     checkAll();
-    const interval = setInterval(checkAll, 30_000); // cada 30s
+    checkBybitDirect();
+    const interval = setInterval(() => {
+      checkAll();
+      checkBybitDirect();
+    }, 30_000);
     return () => clearInterval(interval);
-  }, [checkAll]);
+  }, [checkAll, checkBybitDirect]);
 
-  const online = health.filter((h) => h.status === "ONLINE").length;
-  const total = health.length;
-  const avgLatency = health.filter((h) => h.status === "ONLINE").reduce((acc, h) => acc + h.latencyMs, 0) / (online || 1);
+  // Combinar health del backend con el check directo de Bybit
+  const effectiveHealth: ProviderHealth[] = health.map((h) => {
+    if (h.provider === "bybit" && bybitClientCheck.status !== "CHECKING") {
+      // Reemplazar el status del backend con el del navegador
+      return {
+        ...h,
+        status: bybitClientCheck.status === "ONLINE" ? "ONLINE" : bybitClientCheck.status as never,
+        latencyMs: bybitClientCheck.latencyMs,
+        lastError: bybitClientCheck.error || (bybitClientCheck.status === "ONLINE" ? undefined : h.lastError),
+        endpointsOk: bybitClientCheck.status === "ONLINE" ? 1 : 0,
+      };
+    }
+    return h;
+  });
+
+  const online = effectiveHealth.filter((h) => h.status === "ONLINE").length;
+  const total = effectiveHealth.length;
+  const avgLatency = effectiveHealth.filter((h) => h.status === "ONLINE").reduce((acc, h) => acc + h.latencyMs, 0) / (online || 1);
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
@@ -47,7 +133,10 @@ export default function ScannerAdminView() {
           </p>
         </div>
         <button
-          onClick={checkAll}
+          onClick={() => {
+            checkAll();
+            checkBybitDirect();
+          }}
           disabled={loading}
           className="text-xs px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-200 flex items-center gap-1"
         >
@@ -77,8 +166,10 @@ export default function ScannerAdminView() {
       {/* Lista de providers */}
       <div className="space-y-2">
         {SCANNER_PROVIDERS.map((p) => {
-          const h = health.find((h) => h.provider === p.id);
+          const h = effectiveHealth.find((h) => h.provider === p.id);
           const status = h?.status || "OFFLINE";
+          const isBybitViaClient = p.id === "bybit" && bybitClientCheck.status === "ONLINE";
+          const bybitLastPrice = p.id === "bybit" ? bybitClientCheck.lastPrice : undefined;
           return (
             <div
               key={p.id}
@@ -88,14 +179,23 @@ export default function ScannerAdminView() {
                 <div className="flex items-center gap-3">
                   <span className="text-2xl">{p.logoUrl}</span>
                   <div>
-                    <div className="font-semibold text-slate-100 text-sm flex items-center gap-2">
+                    <div className="font-semibold text-slate-100 text-sm flex items-center gap-2 flex-wrap">
                       {p.name}
                       <StatusBadge status={status} />
+                      {isBybitViaClient && (
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-900/50 text-cyan-300 flex items-center gap-1">
+                          <Globe className="w-3 h-3" />
+                          vía navegador
+                        </span>
+                      )}
                     </div>
                     <div className="text-[10px] text-slate-500 mt-0.5">
                       {p.supportsMarketData && "📊 Market data"}
                       {p.supportsP2P && " · 🤝 P2P"}
                       {p.requiresApiKey ? " · 🔑 Requiere API key" : " · 🟢 Sin auth"}
+                      {isBybitViaClient && bybitLastPrice && (
+                        <span className="text-emerald-400 ml-1">· BTC: ${bybitLastPrice.toFixed(0)}</span>
+                      )}
                     </div>
                   </div>
                 </div>
