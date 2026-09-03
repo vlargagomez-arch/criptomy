@@ -75,7 +75,7 @@ export const SCANNER_PROVIDERS: ProviderConfig[] = [
     kycNote: "Bybit exige KYC desde 2023 para todos los usuarios. Market data público.",
     liquidityTier: "TOP",
     rateLimitPerMin: 600,
-    notes: "Top 5 por volumen. P2P no disponible vía API. 403 desde Vercel por geo-block.",
+    notes: "Top 5 por volumen. P2P no disponible vía API. ⚠️ Desde Vercel puede dar HTTP 403 (geo-block). El conector prueba mirrors oficiales (api.bytick.com, api2.bybit.com) antes de fallar.",
   },
   {
     id: "coinbase",

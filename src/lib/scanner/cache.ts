@@ -50,7 +50,7 @@ interface BreakerState {
 
 const breakers = new Map<string, BreakerState>();
 const FAILURE_THRESHOLD = 3;
-const OPEN_DURATION_MS = 60_000; // 1 min
+const OPEN_DURATION_MS = 30_000; // 30s (antes 1 min) — reintentamos más rápido
 
 export function isCircuitOpen(provider: string): boolean {
   const state = breakers.get(provider);
