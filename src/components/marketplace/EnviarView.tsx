@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useApp } from "@/lib/store";
-import { Send, Loader2, AlertTriangle, CheckCircle2, ExternalLink } from "lucide-react";
+import { Send, Loader2, AlertTriangle, CheckCircle2, ExternalLink, Info, ShieldCheck, Wallet } from "lucide-react";
 
 const NETWORKS = [
   { id: "ETHEREUM", chainIdHex: "0x1", name: "Ethereum", symbol: "ETH", explorer: "https://etherscan.io/tx/" },
@@ -157,9 +157,45 @@ export default function EnviarView() {
           Enviar cripto
         </h1>
         <p className="text-sm text-slate-400 mt-1">
-          Transfiere desde tu propia wallet. Tú firmas, nosotros nunca tocamos tus claves.
+          Transfiere desde tu propia wallet a cualquier dirección. Tú firmas, nosotros nunca tocamos tus claves.
         </p>
       </div>
+
+      {/* Panel explicativo */}
+      <div className="mb-6 bg-slate-900/50 border border-slate-800/50 rounded-xl p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Info className="w-4 h-4 text-cyan-400" />
+          <h3 className="text-xs font-semibold text-slate-200 uppercase tracking-wide">¿Cómo funciona?</h3>
+        </div>
+        <ol className="text-[12px] text-slate-400 space-y-1.5 list-decimal pl-4">
+          <li>Selecciona red (Ethereum, Polygon, BNB Chain, Base, Arbitrum) y token.</li>
+          <li>Pega la dirección destino (verifica que sea compatible con la red elegida).</li>
+          <li>Escribe la cantidad.</li>
+          <li>
+            <b className="text-slate-200">Click en "Enviar"</b> — se abre tu MetaMask pidiendo
+            firmar la transacción. Tú confirmas, nosotros no firmamos por ti.
+          </li>
+          <li>
+            <b className="text-slate-200">MetaMask envía la transacción on-chain</b>. Te
+            mostramos el hash y un link al explorer para ver el estado.
+          </li>
+        </ol>
+        <div className="mt-3 pt-3 border-t border-slate-800/50 flex items-center gap-2 text-[10px] text-slate-400">
+          <ShieldCheck className="w-3 h-3 text-emerald-400" />
+          100% non-custodial. La transacción va directa de tu wallet a la dirección destino.
+          Nosotros nunca tocamos tus fondos ni tus claves privadas.
+        </div>
+      </div>
+
+      {!user && (
+        <div className="bg-amber-950/30 border border-amber-800/50 rounded-lg p-3 text-xs text-amber-300 mb-4 flex items-start gap-2">
+          <Wallet className="w-4 h-4 shrink-0 mt-0.5" />
+          <div>
+            <b>Conecta tu wallet (MetaMask)</b> para enviar cripto. Necesitas tener saldo
+            del token que quieres enviar en la red elegida.
+          </div>
+        </div>
+      )}
 
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
         <div className="grid grid-cols-2 gap-3">
