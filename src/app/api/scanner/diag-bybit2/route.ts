@@ -20,16 +20,18 @@ export async function GET() {
         });
         clearTimeout(timeoutId);
         const latencyMs = Date.now() - start;
+
+        // Leer body una sola vez como texto
+        const text = await res.text();
         let lastPrice = 0;
-        let body = "";
+        let bodyPreview = text.slice(0, 300);
         try {
-          const data = await res.json();
+          const data = JSON.parse(text);
           lastPrice = data?.result?.list?.[0]?.lastPrice ? parseFloat(data.result.list[0].lastPrice) : 0;
-          body = JSON.stringify(data).slice(0, 300);
         } catch {
-          body = (await res.text()).slice(0, 300);
+          // body wasn't JSON, keep as text preview
         }
-        return { url, status: res.status, latencyMs, lastPrice, bodyPreview: body };
+        return { url, status: res.status, latencyMs, lastPrice, bodyPreview };
       } catch (err) {
         return { url, status: 0, latencyMs: Date.now() - start, lastPrice: 0, error: (err as Error).message };
       }
