@@ -20,12 +20,11 @@ import AdminView from "@/components/marketplace/AdminView";
 import ScannerAdminView from "@/components/marketplace/ScannerAdminView";
 import WalletView from "@/components/marketplace/WalletView";
 import ReputationView from "@/components/marketplace/ReputationView";
-import DonacionesView from "@/components/marketplace/DonacionesView";
 import EducacionView from "@/components/marketplace/EducacionView";
 
 const VALID_TABS: TabKey[] = [
   "inicio", "buscador", "dashboard", "enviar", "recibir",
-  "mercado-p2p", "retos", "donaciones", "educacion", "alertas",
+  "mercado-p2p", "retos", "educacion", "alertas",
   "remesas", "tarjeta", "oportunidades", "proveedores", "comparador",
   "scanner-admin", "compliance", "admin", "billetera", "reputacion",
 ];
@@ -70,7 +69,6 @@ export default function Home() {
         {tab === "tarjeta" && <TarjetaView />}
         {tab === "mercado-p2p" && <MercadoP2PUnifiedView />}
         {tab === "retos" && <RetosP2PView />}
-        {tab === "donaciones" && <DonacionesView />}
         {tab === "educacion" && <EducacionView />}
         {tab === "alertas" && <PriceAlertsView />}
         {tab === "oportunidades" && <OportunidadesView />}

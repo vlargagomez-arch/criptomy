@@ -49,7 +49,6 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   {
     title: "Servicios",
     items: [
-      { key: "donaciones", label: "Donaciones", icon: Heart, desc: "Dona cripto a causas sociales verificadas" },
       { key: "educacion", label: "Educación", icon: BookOpen, desc: "Aprende cripto gratis en español" },
       { key: "remesas", label: "Remesas", icon: Globe2, desc: "Transferencias internacionales" },
       { key: "tarjeta", label: "Tarjeta cripto", icon: CreditCard, desc: "Solicitar tarjeta de proveedores" },
