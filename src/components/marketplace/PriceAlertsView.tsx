@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose,
 } from "@/components/ui/dialog";
-import { Bell, BellRing, Plus, Loader2, Trash2, TrendingDown, TrendingUp, Percent, Info, Zap, RefreshCw } from "lucide-react";
+import { Bell, BellRing, Plus, Loader2, Trash2, TrendingDown, TrendingUp, Percent, Info, Zap, RefreshCw, ShieldOff, Activity } from "lucide-react";
 
 interface PriceAlert {
   id: string;
@@ -21,6 +21,18 @@ interface PriceAlert {
   triggeredAt: string | null;
   triggeredPrice: number | null;
   createdAt: string;
+}
+
+// Precios en vivo (vía CoinGecko API pública) para mostrar junto a cada alerta
+async function fetchCurrentPrice(asset: string): Promise<number | null> {
+  try {
+    const res = await fetch(`/api/price?pair=${asset}/USD`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.price || null;
+  } catch {
+    return null;
+  }
 }
 
 const ASSETS = [
@@ -59,6 +71,7 @@ export default function PriceAlertsView() {
   const [showCreate, setShowCreate] = useState(false);
   const [checking, setChecking] = useState(false);
   const [checkResult, setCheckResult] = useState<string | null>(null);
+  const [currentPrices, setCurrentPrices] = useState<Record<string, number | null>>({});
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -76,6 +89,45 @@ export default function PriceAlertsView() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Cargar precios actuales para los assets de las alertas activas
+  useEffect(() => {
+    if (alerts.length === 0) return;
+    const assetsToFetch = [...new Set(alerts.map((a) => a.asset))];
+    Promise.all(
+      assetsToFetch.map(async (asset) => {
+        const price = await fetchCurrentPrice(asset);
+        return [asset, price] as const;
+      })
+    ).then((results) => {
+      const map: Record<string, number | null> = {};
+      results.forEach(([asset, price]) => {
+        map[asset] = price;
+      });
+      setCurrentPrices(map);
+    });
+  }, [alerts]);
+
+  // Auto-refresh de precios cada 30s
+  useEffect(() => {
+    if (alerts.length === 0) return;
+    const interval = setInterval(() => {
+      const assetsToFetch = [...new Set(alerts.map((a) => a.asset))];
+      Promise.all(
+        assetsToFetch.map(async (asset) => {
+          const price = await fetchCurrentPrice(asset);
+          return [asset, price] as const;
+        })
+      ).then((results) => {
+        const map: Record<string, number | null> = {};
+        results.forEach(([asset, price]) => {
+          map[asset] = price;
+        });
+        setCurrentPrices(map);
+      });
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, [alerts]);
 
   // Verificar manualmente las alertas (llama al cron endpoint público)
   const checkNow = async () => {
@@ -199,6 +251,18 @@ export default function PriceAlertsView() {
           {alerts.map((a) => {
             const asset = ASSETS.find((x) => x.sym === a.asset);
             const type = ALERT_TYPES.find((x) => x.id === a.alertType);
+            const currentPrice = currentPrices[a.asset];
+            const hasCurrent = currentPrice !== undefined && currentPrice !== null;
+
+            // Calcular distancia al threshold
+            let distanceStr: string | null = null;
+            let distanceColor = "text-slate-400";
+            if (hasCurrent && a.thresholdPrice) {
+              const distance = ((a.thresholdPrice - currentPrice!) / currentPrice!) * 100;
+              distanceStr = `${distance >= 0 ? "+" : ""}${distance.toFixed(2)}% del objetivo`;
+              distanceColor = distance >= 0 ? "text-amber-400" : "text-emerald-400";
+            }
+
             return (
               <div
                 key={a.id}
@@ -230,16 +294,41 @@ export default function PriceAlertsView() {
                       <>Avísame si <b className="text-slate-200">{a.asset}</b> cae <b className="text-red-400">{a.thresholdPercent}%</b> en {a.timeframeHours}h</>
                     )}
                   </div>
+
+                  {/* Precio actual + distancia al objetivo */}
+                  {hasCurrent && !a.triggered && (
+                    <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-3 flex-wrap">
+                      <span className="flex items-center gap-1">
+                        <Activity className="w-3 h-3 text-cyan-400" />
+                        Precio actual: <b className="text-slate-200">${currentPrice!.toLocaleString(undefined, { maximumFractionDigits: 2 })}</b>
+                      </span>
+                      {distanceStr && (
+                        <span className={distanceColor}>{distanceStr}</span>
+                      )}
+                    </div>
+                  )}
+
                   {a.triggered && a.triggeredPrice && (
                     <div className="text-[11px] text-emerald-400 mt-1">
-                      Activada a ${a.triggeredPrice.toFixed(2)} ·{" "}
+                      ✓ Activada a ${a.triggeredPrice.toFixed(2)} ·{" "}
                       {new Date(a.triggeredAt || "").toLocaleString("es-CO")}
+                    </div>
+                  )}
+
+                  {/* Indicación de qué hacer cuando se active */}
+                  {a.triggered && (
+                    <div className="mt-2 text-[10px] text-slate-500 italic flex items-center gap-1">
+                      <Info className="w-3 h-3" />
+                      {a.alertType === "DIP_BELOW" && "Recibiste notificación. Es buen momento para comprar según tu alerta."}
+                      {a.alertType === "TARGET_PRICE" && "Recibiste notificación. Es buen momento para vender según tu alerta."}
+                      {a.alertType === "PERCENT_DROP" && "Recibiste notificación. Detección de caída en el timeframe."}
                     </div>
                   )}
                 </div>
                 <button
                   onClick={() => remove(a.id)}
                   className="text-slate-500 hover:text-red-400 p-1"
+                  title="Eliminar alerta"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
