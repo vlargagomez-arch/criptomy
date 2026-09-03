@@ -51,16 +51,45 @@ export async function POST(req: NextRequest) {
     const fiat = intent.fiat || "USD";
     const amount = intent.amount || 100;
 
+    // Si fiat es local (COP, MXN, ARS, BRL, etc.), escanear contra USD
+    // y luego convertir. Solo Binance tiene pares como USDT/COP en spot.
+    const LOCAL_FIATS = ["COP", "MXN", "ARS", "BRL", "CLP", "PEN", "VES", "DOP"];
+    const isLocalFiat = LOCAL_FIATS.includes(fiat);
+    const scanQuote = isLocalFiat ? "USD" : fiat; // escanear contra USD si fiat es local
+
     // Market data scan: para BUY/SELL/COMPARE/ARBITRAGE
     if (["BUY", "SELL", "COMPARE", "ARBITRAGE"].includes(intent.operation)) {
-      const quotes = await scanMarketData(asset, fiat);
+      // Escanear contra USD (o la fiat original si no es local)
+      const quotes = await scanMarketData(asset, scanQuote);
       providersChecked = quotes.length;
       providersOk = quotes.filter((q) => q.status === "ONLINE").length;
 
-      // Log errors
-      quotes.filter((q) => q.status !== "ONLINE").forEach((q) => {
+      // Log errors solo de providers que respondieron pero fallaron
+      // (no de los que simplemente no tienen el par)
+      quotes.filter((q) => q.status !== "ONLINE" && !q.error?.includes("Symbol no soportado")).forEach((q) => {
         if (q.error) errors.push({ provider: q.provider, error: q.error });
       });
+
+      // Si fiat es local, convertir precios USD → fiat usando Chainlink o tasa aproximada
+      if (isLocalFiat && fiat !== "USD") {
+        // Tasa aproximada (en producción se podría obtener de Chainlink o API de cambio)
+        const fiatRates: Record<string, number> = {
+          COP: 4100, MXN: 18.5, ARS: 950, BRL: 5.05, CLP: 950, PEN: 3.75, VES: 36, DOP: 58,
+        };
+        const rate = fiatRates[fiat] || 1;
+        // Convertir cada quote a la fiat local
+        quotes.forEach((q) => {
+          if (q.status === "ONLINE" && q.lastPrice > 0) {
+            q.lastPrice *= rate;
+            q.bidPrice = q.bidPrice ? q.bidPrice * rate : undefined;
+            q.askPrice = q.askPrice ? q.askPrice * rate : undefined;
+            q.spread = q.spread ? q.spread * rate : undefined;
+            q.spreadPercent = q.spreadPercent;
+            q.quoteCurrency = fiat;
+            q.quoteVolume24h = q.quoteVolume24h ? q.quoteVolume24h * rate : undefined;
+          }
+        });
+      }
 
       // Convertir quotes a RankedResults con costo total
       if (intent.operation === "BUY" || intent.operation === "SELL" || intent.operation === "COMPARE") {
