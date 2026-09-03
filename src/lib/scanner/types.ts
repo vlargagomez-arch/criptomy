@@ -41,6 +41,8 @@ export interface MarketQuote {
   latencyMs: number;         // tiempo de respuesta del provider
   status: ProviderStatus;
   error?: string;
+  kycLevel?: KycLevel;       // KYC que requiere este exchange
+  liquidityTier?: "TOP" | "MEDIUM" | "LOW" | "AGGREGATOR";
 }
 
 // Oferta P2P normalizada (de cualquier exchange con P2P)
@@ -68,7 +70,7 @@ export interface P2POffer {
 // Resultado con costo total calculado
 export interface RankedResult {
   rank: number;              // 1 = mejor
-  badge?: "BEST" | "CHEAPEST" | "FASTEST" | "MOST_LIQUID";
+  badge?: "BEST" | "CHEAPEST" | "FASTEST" | "MOST_LIQUID" | "NO_KYC";
   reason: string;            // por qué este ranking
   provider: string;
   providerName: string;
@@ -85,10 +87,13 @@ export interface RankedResult {
   totalCostCurrency?: string;
   effectivePrice: number;    // totalCost / amount
   spread?: number;
+  spreadPercent?: number;
   liquidity?: number;
   estimatedTime?: string;
   kycRequired?: boolean;
+  kycLevel?: KycLevel;       // NO_KYC / OPTIONAL / MANDATORY / UNKNOWN
   kycNote?: string;
+  liquidityTier?: "TOP" | "MEDIUM" | "LOW" | "AGGREGATOR";
   paymentMethods?: string[];
   countries?: string[];
   timestamp: number;
@@ -122,10 +127,15 @@ export interface ProviderConfig {
   supportsP2P: boolean;
   supportsMarketData: boolean;
   countries: string[];          // Países soportados
-  kycRequired: boolean;
+  kycRequired: boolean;         // KYC obligatorio para usar el exchange
+  kycLevel: KycLevel;           // Granularidad: NO_KYC / OPTIONAL / MANDATORY / UNKNOWN
+  kycNote?: string;              // Detalle honesto sobre KYC
+  liquidityTier: "TOP" | "MEDIUM" | "LOW" | "AGGREGATOR"; // Nivel de liquidez
   rateLimitPerMin: number;
   notes?: string;
 }
+
+export type KycLevel = "NO_KYC" | "OPTIONAL" | "MANDATORY" | "UNKNOWN";
 
 // Respuesta del endpoint /api/search
 export interface SearchResponse {

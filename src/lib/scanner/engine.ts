@@ -11,7 +11,22 @@ import { fetchBybitTicker } from "./providers/bybit";
 import { fetchKrakenTicker } from "./providers/kraken";
 import { fetchCoinbaseTicker } from "./providers/coinbase";
 import { fetchCoingeckoTicker } from "./providers/coingecko";
+import { fetchGateTicker } from "./providers/gate";
+import { fetchMexcTicker } from "./providers/mexc";
+import { fetchKucoinTicker } from "./providers/kucoin";
+import { fetchHtxTicker } from "./providers/htx";
+import { getScannerProvider } from "./providers/registry";
 import type { MarketQuote, P2POffer, ProviderHealth, ProviderStatus } from "./types";
+
+// Enriquecer quote con metadata del registry (kycLevel, liquidityTier)
+function enrichQuote(q: MarketQuote): MarketQuote {
+  const config = getScannerProvider(q.provider);
+  return {
+    ...q,
+    kycLevel: config?.kycLevel,
+    liquidityTier: config?.liquidityTier,
+  };
+}
 
 // Escanear market data de TODOS los providers para un par asset/quote
 export async function scanMarketData(asset: string, quote: string): Promise<MarketQuote[]> {
@@ -21,11 +36,18 @@ export async function scanMarketData(asset: string, quote: string): Promise<Mark
     fetchBybitTicker(asset, quote),
     fetchKrakenTicker(asset, quote),
     fetchCoinbaseTicker(asset, quote),
+    fetchGateTicker(asset, quote),
+    fetchMexcTicker(asset, quote),
+    fetchKucoinTicker(asset, quote),
+    fetchHtxTicker(asset, quote),
     fetchCoingeckoTicker(asset, quote),
   ];
 
   const results = await Promise.allSettled(tasks);
-  return results.map((r) => (r.status === "fulfilled" ? r.value : null)).filter((q): q is MarketQuote => q !== null);
+  return results
+    .map((r) => (r.status === "fulfilled" ? r.value : null))
+    .filter((q): q is MarketQuote => q !== null)
+    .map(enrichQuote);
 }
 
 // Escanear P2P offers (solo Binance por ahora; OKX/Bybit requieren advertiser role)
@@ -52,6 +74,10 @@ export async function scanProvidersHealth(): Promise<ProviderHealth[]> {
     { provider: "bybit", fn: () => fetchBybitTicker("BTC", "USDT") },
     { provider: "kraken", fn: () => fetchKrakenTicker("BTC", "USDT") },
     { provider: "coinbase", fn: () => fetchCoinbaseTicker("BTC", "USDT") },
+    { provider: "gate", fn: () => fetchGateTicker("BTC", "USDT") },
+    { provider: "mexc", fn: () => fetchMexcTicker("BTC", "USDT") },
+    { provider: "kucoin", fn: () => fetchKucoinTicker("BTC", "USDT") },
+    { provider: "htx", fn: () => fetchHtxTicker("BTC", "USDT") },
     { provider: "coingecko", fn: () => fetchCoingeckoTicker("BTC", "USD") },
   ];
 

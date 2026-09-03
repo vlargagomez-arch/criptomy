@@ -16,6 +16,10 @@ const PROVIDER_FEES: Record<string, { makerPercent: number; takerPercent: number
   bybit: { makerPercent: 0.1, takerPercent: 0.1, notes: "Spot 0.1%." },
   kraken: { makerPercent: 0.16, takerPercent: 0.26, notes: "Spot 0.16% maker / 0.26% taker base." },
   coinbase: { makerPercent: 0.4, takerPercent: 0.6, notes: "Coinbase Advanced base. Coinbase App tiene fees más altos." },
+  kucoin: { makerPercent: 0.1, takerPercent: 0.1, notes: "Spot 0.1% base. KuCoin Level 0 sin KYC = 0.1%." },
+  gate: { makerPercent: 0.1, takerPercent: 0.2, notes: "Spot 0.2% taker / 0.1% maker base." },
+  mexc: { makerPercent: 0.1, takerPercent: 0.2, notes: "Spot 0.2% taker / 0.1% maker base. Sin KYC = mismos fees." },
+  htx: { makerPercent: 0.2, takerPercent: 0.2, notes: "Spot 0.2% base. Maker discount disponible." },
   coingecko: { makerPercent: 0, takerPercent: 0, notes: "Agregador, no aplica comisión (solo referencia)." },
 };
 
@@ -63,8 +67,10 @@ export function calculateQuoteResult(quote: MarketQuote, operation: "BUY" | "SEL
     spreadPercent: quote.spreadPercent,
     liquidity: quote.quoteVolume24h,
     estimatedTime: "Inmediato (spot)",
-    kycRequired: true,
+    kycRequired: quote.kycLevel === "MANDATORY",
+    kycLevel: quote.kycLevel,
     kycNote: feeInfo.notes,
+    liquidityTier: quote.liquidityTier,
     timestamp: quote.timestamp,
     source: `${quote.providerName} API`,
     latencyMs: quote.latencyMs,
@@ -96,8 +102,10 @@ export function calculateP2PResult(offer: P2POffer, amount: number): RankedResul
     effectivePrice: offer.price,
     paymentMethods: offer.paymentMethods,
     estimatedTime: "15-60 min (negociación con advertiser)",
-    kycRequired: false, // P2P no requiere KYC de Binance para el usuario final (aunque el advertiser sí)
+    kycRequired: false, // P2P: el advertiser está verificado, tú no necesitas KYC
+    kycLevel: "NO_KYC", // P2P desde la perspectiva del usuario final
     kycNote: "P2P: el advertiser está verificado por Binance. Tú no necesitas KYC de Binance.",
+    liquidityTier: "MEDIUM", // Binance P2P tiene alta liquidez
     timestamp: offer.timestamp,
     source: `${offer.providerName} P2P API`,
     latencyMs: offer.latencyMs,
@@ -139,7 +147,7 @@ export function rankResults(results: RankedResult[], sortBy: "totalCost" | "fee"
     };
   });
 
-  // Marcar extras: cheapest fee, most liquid
+  // Marcar extras: cheapest fee, most liquid, no kyc
   if (ranked.length > 1) {
     const minFee = Math.min(...valid.map((r) => r.fee));
     const cheapest = ranked.find((r) => r.fee === minFee && r.rank > 1);
@@ -153,6 +161,13 @@ export function rankResults(results: RankedResult[], sortBy: "totalCost" | "fee"
     if (mostLiquid) {
       mostLiquid.badge = "MOST_LIQUID";
       mostLiquid.reason = `Mayor liquidez 24h: ${(mostLiquid.liquidity || 0).toLocaleString()} ${mostLiquid.totalCostCurrency}.`;
+    }
+
+    // Badge NO_KYC: si el rank 1 NO es NO_KYC pero hay otros que sí, marcar el primero
+    const firstNoKyc = ranked.find((r) => (r.kycLevel === "NO_KYC" || r.kycLevel === "OPTIONAL") && r.rank > 1);
+    if (firstNoKyc && ranked[0]?.kycLevel === "MANDATORY") {
+      firstNoKyc.badge = "NO_KYC";
+      firstNoKyc.reason = `Mejor opción SIN KYC obligatorio: ${firstNoKyc.providerName}. ${firstNoKyc.kycLevel === "OPTIONAL" ? "KYC opcional para límites más altos." : "No requiere KYC."} Costo total: ${firstNoKyc.totalCost.toFixed(2)} ${firstNoKyc.totalCostCurrency}.`;
     }
   }
 

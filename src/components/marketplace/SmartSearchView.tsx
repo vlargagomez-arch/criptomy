@@ -1,21 +1,69 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { Search, Loader2, TrendingUp, TrendingDown, Award, ArrowRight, Globe2, Zap, Clock, AlertTriangle, RefreshCw, Star } from "lucide-react";
+import { useState, useCallback, useEffect } from "react";
+import { Search, Loader2, TrendingUp, TrendingDown, Award, ArrowRight, Globe2, Zap, Clock, AlertTriangle, RefreshCw, Star, Filter, ShieldOff } from "lucide-react";
 import { QUICK_SEARCHES } from "@/lib/scanner/interpreter";
-import type { SearchResponse, SearchIntent } from "@/lib/scanner/types";
+import type { SearchResponse, SearchIntent, RankedResult } from "@/lib/scanner/types";
+
+const RECENT_SEARCHES_KEY = "criptomy:recent-searches";
 
 export default function SmartSearchView() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<SearchResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [noKycOnly, setNoKycOnly] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+
+  // Cargar búsquedas recientes de localStorage
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(RECENT_SEARCHES_KEY) || "[]");
+      if (Array.isArray(saved)) setRecentSearches(saved.slice(0, 5));
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Guardar búsqueda reciente
+  const saveRecent = useCallback((q: string) => {
+    if (typeof window === "undefined") return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(RECENT_SEARCHES_KEY) || "[]");
+      const filtered = (saved as string[]).filter((s) => s !== q);
+      const updated = [q, ...filtered].slice(0, 5);
+      localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated));
+      setRecentSearches(updated);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Sync URL con query
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const urlQuery = params.get("q");
+    if (urlQuery && !query) {
+      setQuery(urlQuery);
+      search(urlQuery);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const search = useCallback(async (q: string) => {
     if (!q.trim()) return;
     setLoading(true);
     setError(null);
     setResponse(null);
+    saveRecent(q);
+    // Actualizar URL para deep-linking
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("q", q);
+      window.history.replaceState({}, "", url.toString());
+    }
     try {
       const res = await fetch("/api/search", {
         method: "POST",
@@ -33,12 +81,22 @@ export default function SmartSearchView() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [saveRecent]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     search(query);
   };
+
+  // Filtro de solo Sin KYC en el cliente (post-search)
+  const filterNoKyc = (results: RankedResult[]): RankedResult[] => {
+    if (!noKycOnly) return results;
+    return results.filter((r) => r.kycLevel === "NO_KYC" || r.kycLevel === "OPTIONAL");
+  };
+
+  const filteredResults = response ? filterNoKyc(response.results) : [];
+  const filteredBest = response ? filterNoKyc(response.bestOption ? [response.bestOption] : []) : [];
+  const filteredAlternatives = response ? filterNoKyc(response.alternatives) : [];
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
@@ -49,13 +107,14 @@ export default function SmartSearchView() {
           Buscador Web3
         </h1>
         <p className="text-sm text-slate-400 mt-1">
-          Escribe lo que quieres hacer. El sistema escanea múltiples proveedores
-          (Binance, OKX, Bybit, Kraken, Coinbase, CoinGecko) y encuentra las mejores opciones.
+          Escribe lo que quieres hacer. El sistema escanea <b>10 exchanges</b> en paralelo
+          (Binance, OKX, Bybit, Kraken, Coinbase, KuCoin, Gate.io, MEXC, HTX, CoinGecko)
+          y encuentra las mejores opciones con costo total real.
         </p>
       </div>
 
       {/* Buscador */}
-      <form onSubmit={submit} className="relative mb-6">
+      <form onSubmit={submit} className="relative mb-4">
         <div className="relative">
           <input
             type="text"
@@ -77,27 +136,72 @@ export default function SmartSearchView() {
         </div>
       </form>
 
-      {/* Quick searches */}
+      {/* Filtro Sin KYC */}
+      {(response || loading) && (
+        <div className="flex items-center gap-3 mb-4 flex-wrap">
+          <button
+            onClick={() => setNoKycOnly((v) => !v)}
+            className={`text-xs px-3 py-1.5 rounded-md transition flex items-center gap-1.5 ${
+              noKycOnly
+                ? "bg-teal-600 text-white"
+                : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+            }`}
+          >
+            <ShieldOff className="w-3.5 h-3.5" />
+            Solo sin KYC obligatorio
+          </button>
+          {response && (
+            <div className="text-xs text-slate-500 ml-auto">
+              {filteredResults.length} resultados · {response.providersOk}/{response.providersChecked} providers · {response.executionTimeMs}ms
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Quick searches + recent */}
       {!response && !loading && (
-        <div className="mb-6">
-          <div className="text-xs text-slate-500 mb-2">Búsquedas rápidas:</div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {QUICK_SEARCHES.map((q) => (
-              <button
-                key={q.query}
-                onClick={() => {
-                  setQuery(q.query);
-                  search(q.query);
-                }}
-                className="text-left p-3 bg-slate-900 border border-slate-800 rounded-lg hover:border-emerald-600/50 transition flex items-center gap-3"
-              >
-                <span className="text-xl">{q.icon}</span>
-                <div>
-                  <div className="text-xs text-slate-200">{q.label}</div>
-                  <div className="text-[10px] text-slate-500">Toca para ejecutar</div>
-                </div>
-              </button>
-            ))}
+        <div className="mb-6 space-y-4">
+          {/* Búsquedas recientes */}
+          {recentSearches.length > 0 && (
+            <div>
+              <div className="text-xs text-slate-500 mb-2">Recientes:</div>
+              <div className="flex gap-2 flex-wrap">
+                {recentSearches.map((q) => (
+                  <button
+                    key={q}
+                    onClick={() => {
+                      setQuery(q);
+                      search(q);
+                    }}
+                    className="text-xs px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-full transition"
+                  >
+                    {q.length > 40 ? q.slice(0, 40) + "…" : q}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <div className="text-xs text-slate-500 mb-2">Búsquedas rápidas:</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {QUICK_SEARCHES.map((q) => (
+                <button
+                  key={q.query}
+                  onClick={() => {
+                    setQuery(q.query);
+                    search(q.query);
+                  }}
+                  className="text-left p-3 bg-slate-900 border border-slate-800 rounded-lg hover:border-emerald-600/50 transition flex items-center gap-3"
+                >
+                  <span className="text-xl">{q.icon}</span>
+                  <div>
+                    <div className="text-xs text-slate-200">{q.label}</div>
+                    <div className="text-[10px] text-slate-500">Toca para ejecutar</div>
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -114,33 +218,61 @@ export default function SmartSearchView() {
         <div className="flex items-center justify-center py-16">
           <div className="text-center">
             <Loader2 className="w-8 h-8 animate-spin text-emerald-400 mx-auto mb-3" />
-            <p className="text-sm text-slate-400">Escaneando proveedores…</p>
-            <p className="text-xs text-slate-500 mt-1">Binance, OKX, Bybit, Kraken, Coinbase, CoinGecko</p>
+            <p className="text-sm text-slate-400">Escaneando 10 exchanges en paralelo…</p>
+            <p className="text-xs text-slate-500 mt-1">Binance · OKX · Bybit · Kraken · Coinbase · KuCoin · Gate.io · MEXC · HTX · CoinGecko</p>
           </div>
         </div>
       )}
 
       {/* Resultados */}
       {response && !loading && (
-        <SearchResults response={response} onRetry={() => search(query)} />
+        <SearchResults
+          response={response}
+          filteredBest={filteredBest}
+          filteredAlternatives={filteredAlternatives}
+          filteredResults={filteredResults}
+          noKycOnly={noKycOnly}
+          onRetry={() => search(query)}
+        />
       )}
     </div>
   );
 }
 
-function SearchResults({ response, onRetry }: { response: SearchResponse; onRetry: () => void }) {
-  const { intent, results, bestOption, alternatives, p2pOffers, arbitrageOpportunities, providersOk, providersChecked, errors, executionTimeMs } = response;
+function SearchResults({
+  response,
+  filteredBest,
+  filteredAlternatives,
+  filteredResults,
+  noKycOnly,
+  onRetry,
+}: {
+  response: SearchResponse;
+  filteredBest: RankedResult[];
+  filteredAlternatives: RankedResult[];
+  filteredResults: RankedResult[];
+  noKycOnly: boolean;
+  onRetry: () => void;
+}) {
+  const { intent, p2pOffers, arbitrageOpportunities, providersOk, providersChecked, errors, executionTimeMs } = response;
 
-  if (results.length === 0 && p2pOffers.length === 0 && arbitrageOpportunities.length === 0) {
+  const hasResults = filteredResults.length > 0 || p2pOffers.length > 0 || arbitrageOpportunities.length > 0;
+
+  if (!hasResults) {
     return (
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center">
         <AlertTriangle className="w-10 h-10 mx-auto mb-3 text-amber-400" />
         <p className="text-sm text-slate-300">
-          No se encontraron opciones para esta búsqueda.
+          No se encontraron opciones{noKycOnly ? " sin KYC obligatorio" : ""} para esta búsqueda.
         </p>
         <p className="text-xs text-slate-500 mt-2">
-          Proveedores consultados: {providersOk}/{providersChecked} OK.
+          Proveedores consultados: {providersOk}/{providersChecked} OK en {executionTimeMs}ms.
         </p>
+        {noKycOnly && (
+          <p className="text-[11px] text-slate-500 mt-2">
+            Desactiva el filtro "Solo sin KYC" para ver todas las opciones disponibles.
+          </p>
+        )}
         {errors.length > 0 && (
           <div className="mt-4 text-left text-xs text-slate-500 space-y-1">
             {errors.slice(0, 3).map((e, i) => (
@@ -153,6 +285,8 @@ function SearchResults({ response, onRetry }: { response: SearchResponse; onRetr
       </div>
     );
   }
+
+  const bestOption = filteredBest[0];
 
   return (
     <div className="space-y-5">
@@ -176,11 +310,11 @@ function SearchResults({ response, onRetry }: { response: SearchResponse; onRetr
       )}
 
       {/* Alternativas */}
-      {alternatives.length > 0 && (
+      {filteredAlternatives.length > 0 && (
         <div>
           <h3 className="text-xs uppercase tracking-wide text-slate-500 mb-2">Otras opciones</h3>
           <div className="space-y-3">
-            {alternatives.map((r, i) => (
+            {filteredAlternatives.map((r, i) => (
               <ResultCard key={`alt-${r.provider}-${i}`} result={r} />
             ))}
           </div>
@@ -191,11 +325,11 @@ function SearchResults({ response, onRetry }: { response: SearchResponse; onRetr
       {p2pOffers.length > 0 && (
         <div>
           <h3 className="text-xs uppercase tracking-wide text-slate-500 mb-2">
-            Ofertas P2P (Binance) · {p2pOffers.length} encontradas
+            Ofertas P2P (Binance) · {p2pOffers.length} encontradas · <span className="text-teal-400">🔓 Sin KYC para ti</span>
           </h3>
           <div className="space-y-2">
             {p2pOffers.slice(0, 8).map((o, i) => (
-              <P2POfferCard key={i} offer={o} />
+              <P2POfferCard key={`p2p-${o.advertiser}-${i}`} offer={o} />
             ))}
           </div>
         </div>
@@ -209,7 +343,7 @@ function SearchResults({ response, onRetry }: { response: SearchResponse; onRetr
           </h3>
           <div className="space-y-2">
             {arbitrageOpportunities.slice(0, 5).map((opp, i) => (
-              <ArbitrageCard key={i} opp={opp} />
+              <ArbitrageCard key={`arb-${i}`} opp={opp} />
             ))}
           </div>
         </div>
@@ -265,6 +399,15 @@ function ResultCard({ result, highlight }: { result: import("@/lib/scanner/types
     CHEAPEST: "bg-blue-600 text-white",
     MOST_LIQUID: "bg-purple-600 text-white",
     FASTEST: "bg-amber-600 text-white",
+    NO_KYC: "bg-teal-600 text-white",
+  };
+
+  const badgeLabels: Record<string, string> = {
+    BEST: "🥇 Mejor opción",
+    CHEAPEST: "💰 Menor comisión",
+    MOST_LIQUID: "🌊 Mayor liquidez",
+    FASTEST: "⚡ Más rápido",
+    NO_KYC: "🔓 Sin KYC obligatorio",
   };
 
   // Defensivo: cualquier campo puede ser null/undefined en runtime
@@ -278,19 +421,47 @@ function ResultCard({ result, highlight }: { result: import("@/lib/scanner/types
   const priceDecimals = price < 1 ? 6 : price < 100 ? 2 : 0;
   const effPriceDecimals = effectivePrice < 1 ? 6 : effectivePrice < 100 ? 4 : 2;
 
+  // KYC badge style
+  const kycBadge = result.kycLevel === "NO_KYC"
+    ? { color: "bg-teal-900/50 text-teal-300", label: "🔓 Sin KYC" }
+    : result.kycLevel === "OPTIONAL"
+      ? { color: "bg-amber-900/50 text-amber-300", label: "🔓 KYC opcional" }
+      : result.kycLevel === "MANDATORY"
+        ? { color: "bg-red-900/50 text-red-300", label: "🔒 KYC obligatorio" }
+        : { color: "bg-slate-800 text-slate-400", label: "❔ KYC no confirmado" };
+
+  // Liquidez badge
+  const liqBadge = result.liquidityTier === "TOP"
+    ? { color: "bg-emerald-900/50 text-emerald-300", label: "🌊 Liquidez TOP" }
+    : result.liquidityTier === "MEDIUM"
+      ? { color: "bg-slate-800 text-slate-300", label: "Liquidez media" }
+      : result.liquidityTier === "AGGREGATOR"
+        ? { color: "bg-blue-900/50 text-blue-300", label: "📊 Agregador" }
+        : null;
+
   return (
     <div className={`bg-slate-900 border rounded-xl p-4 ${highlight ? "border-emerald-600 shadow-lg shadow-emerald-900/20" : "border-slate-800"}`}>
-      <div className="flex items-start justify-between gap-3 mb-3">
+      <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
           {result.badge && (
             <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${badgeColors[result.badge]}`}>
-              {result.badge === "BEST" ? "🥇 Mejor opción" : result.badge === "CHEAPEST" ? "💰 Menor comisión" : "🌊 Mayor liquidez"}
+              {badgeLabels[result.badge] || result.badge}
             </span>
           )}
           <span className="text-base font-semibold text-slate-100">{result.providerName || "Provider"}</span>
           <span className={`text-[10px] px-2 py-0.5 rounded ${result.status === "ONLINE" ? "bg-emerald-900/50 text-emerald-300" : "bg-red-900/50 text-red-300"}`}>
             {result.status === "ONLINE" ? "● Online" : "● " + (result.status || "OFFLINE")}
           </span>
+          {kycBadge && (
+            <span className={`text-[10px] px-2 py-0.5 rounded ${kycBadge.color}`}>
+              {kycBadge.label}
+            </span>
+          )}
+          {liqBadge && (
+            <span className={`text-[10px] px-2 py-0.5 rounded ${liqBadge.color}`}>
+              {liqBadge.label}
+            </span>
+          )}
         </div>
         <div className="text-right">
           <div className="text-[10px] text-slate-500">Latencia</div>

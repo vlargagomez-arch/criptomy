@@ -191,6 +191,7 @@ export function interpretQuery(raw: string): SearchIntent {
 // Sugerencias rápidas para el UI
 export const QUICK_SEARCHES = [
   { label: "Comprar 1000 USDT con COP", query: "Quiero comprar 1000 USDT con COP", icon: "🛒" },
+  { label: "Comprar BTC sin KYC", query: "Quiero comprar 0.01 BTC sin KYC", icon: "🔓" },
   { label: "Vender 500 USDT", query: "Quiero vender 500 USDT", icon: "💸" },
   { label: "Enviar 500.000 COP a México", query: "Quiero enviar 500.000 COP a México", icon: "🌐" },
   { label: "Mejor oferta P2P de USDT", query: "Quiero encontrar la mejor oferta P2P de USDT", icon: "🤝" },
@@ -198,4 +199,5 @@ export const QUICK_SEARCHES = [
   { label: "Mejor precio de BTC", query: "Quiero el mejor precio para BTC", icon: "₿" },
   { label: "Cambiar USDT por BTC", query: "Quiero cambiar USDT por BTC", icon: "🔄" },
   { label: "Comprar ETH en Argentina", query: "Quiero comprar 0.5 ETH en Argentina", icon: "Ξ" },
+  { label: "Comprar SOL sin KYC", query: "Quiero comprar 10 SOL sin KYC", icon: "🌞" },
 ];
