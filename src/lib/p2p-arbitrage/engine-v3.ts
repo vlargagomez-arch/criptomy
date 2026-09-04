@@ -255,14 +255,13 @@ export async function scanP2PArbitrage(params: {
   let sellAds = filteredAds.filter((a) => a.side === "SELL");
 
   // === PASO 3: Conversión de precios Kraken (USDT → fiat local) ===
-  // Si tenemos Kraken, su precio está en USDT. Convertir a fiat local usando
-  // el FX implícito del mercado P2P (promedio precios P2P / 1 USDT).
+  // IMPORTANTE: Hacer la conversión ANTES del filtro de price band, porque
+  // el precio de Kraken convertido a fiat local puede estar fuera de banda
+  // (porque es precio spot, no P2P). Pero como Kraken es spot (no P2P), se
+  // incluye siempre.
   if (krakenQuote && krakenQuote.last > 0) {
-    // FX_rate = promedio P2P / 1 USDT (solo para USDT; para otros assets
-    // Kraken devuelve precio en USDT y necesitamos convertir a fiat local)
-    // Para asset != USDT, el FX se calcula como: avgP2P / krakenSpotUSDT
-    const allPrices = [...buyAds.map(a => a.price), ...sellAds.map(a => a.price)];
-    const avgP2P = allPrices.length > 0 ? allPrices.reduce((s, p) => s + p, 0) / allPrices.length : 0;
+    const p2pOnlyPrices = [...buyAds.map(a => a.price), ...sellAds.map(a => a.price)];
+    const avgP2P = p2pOnlyPrices.length > 0 ? p2pOnlyPrices.reduce((s, p) => s + p, 0) / p2pOnlyPrices.length : 0;
     const krakenPriceUSDT = krakenQuote.last;
 
     if (asset.toUpperCase() === "USDT") {
@@ -299,6 +298,11 @@ export async function scanP2PArbitrage(params: {
       }
     }
   }
+
+  // Recalcular filteredAds después de agregar Kraken
+  const filteredAdsWithKraken = [...filteredAds, ...buyAds.filter(a => a.exchange === "Kraken"), ...sellAds.filter(a => a.exchange === "Kraken")];
+  // Reemplazar buyAds y sellAds con la versión que incluye Kraken
+  // (filteredAds ya tiene los P2P filtrados; le agregamos Kraken)
 
   // === PASO 4: Sort ===
   const sortedBuy = [...buyAds].sort((a, b) => a.price - b.price); // BUY asc

@@ -103,13 +103,14 @@ export async function fetchKrakenSpot(asset: string, quote = "USDT"): Promise<Kr
     if (!tickerKey) return null;
     const t = data.result[tickerKey];
 
-    return {
+    const quote: KrakenQuote = {
       exchange: "Kraken",
       bid: parseFloat(t.b[0]),
       ask: parseFloat(t.a[0]),
       last: parseFloat(t.c[0]),
       volume24hBase: parseFloat(t.v[1]),
-      volume24hQuote: parseFloat(t.q[1]),
+      // Kraken no siempre devuelve 'q' (volume quote). Si no existe, usar 0.
+      volume24hQuote: t.q ? parseFloat(t.q[1]) : 0,
       high24h: parseFloat(t.h[1]),
       low24h: parseFloat(t.l[1]),
       // Compatibilidad con P2PAd (no es real P2P, pero lo normalizamos)
@@ -123,6 +124,7 @@ export async function fetchKrakenSpot(asset: string, quote = "USDT"): Promise<Kr
       paymentMethods: [],
       tradeCount: 0,
     };
+    return quote;
   } catch {
     clearTimeout(timeoutId);
     return null;

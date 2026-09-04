@@ -285,12 +285,6 @@ export default function P2PArbitragePanel() {
               <span className="text-slate-500 text-xs">({reputation.merchantsFilteredOut} merchants filtrados)</span>
             </span>
           )}
-          {suspiciousCount > 0 && (
-            <span className="flex items-center gap-1.5 text-xs text-amber-400">
-              <AlertTriangle className="w-3 h-3" />
-              {suspiciousCount} sospechosas
-            </span>
-          )}
         </div>
         <p className="text-xs text-slate-500 italic">
           * Arbitraje real: comprar barato en un P2P, vender caro en otro · fee de retiro ya descontado
@@ -387,12 +381,6 @@ function OpportunityCard({ opp, rank, fiat, expanded, onToggle }: {
           {isCross && (
             <span className="text-[10px] px-2 py-0.5 border border-amber-500 text-amber-300 rounded font-semibold tracking-wide">
               CROSS-EXCHANGE
-            </span>
-          )}
-          {suspicious && (
-            <span className="text-[10px] px-2 py-0.5 border border-red-500 text-red-300 rounded font-semibold flex items-center gap-1">
-              <AlertTriangle className="w-2.5 h-2.5" />
-              SOSPECHOSO
             </span>
           )}
         </div>
@@ -600,14 +588,6 @@ function OpportunityCard({ opp, rank, fiat, expanded, onToggle }: {
               <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
                 <Check className="w-3 h-3 text-blue-400" />
                 Método de pago común: <b className="text-blue-300">{opp.commonPaymentMethod}</b> · facilita el round-trip fiat
-              </div>
-            )}
-            {suspicious && (
-              <div className="bg-red-950/30 border border-red-700/40 rounded p-2 text-[11px] text-red-300 flex items-start gap-2">
-                <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
-                <span>
-                  Spread &gt; 30% es prácticamente imposible en P2P real. Probable bait ad — el merchant recibe tu pago pero no libera el crypto. Verifica en el exchange directamente antes de operar.
-                </span>
               </div>
             )}
           </div>

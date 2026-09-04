@@ -53,18 +53,21 @@ export async function fetchBybitP2PAds(params: {
   const sideParam = side === "BUY" ? "0" : "1";
   const url = "https://api2.bybit.com/fiat/otc/item/online/";
 
-  const formData = new URLSearchParams({
+  // IMPORTANTE: NO enviar el campo 'payment' si no hay filtro específico.
+  // Enviar payment: "" (vacío) hace que la API devuelva ret_code 912000004 con 0 ads.
+  // Solo se incluye el campo si hay un paymentMethod específico.
+  const formDataObj: Record<string, string> = {
     userId: "",
     tokenId: asset,
     currencyId: fiat,
-    payment: "",
     side: sideParam,
     size: String(size),
     page: "1",
     amount: "",
     authMaker: "false",
     canTrade: "false",
-  }).toString();
+  };
+  const formData = new URLSearchParams(formDataObj).toString();
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 8000);
