@@ -396,6 +396,92 @@ export async function scanBitgetP2PFromBrowser(params: {
 }
 
 // ============================================================
+// MEXC P2P — desde el navegador
+// ============================================================
+export async function scanMexcP2PFromBrowser(params: {
+  asset: string;
+  fiat: string;
+  tradeType: "BUY" | "SELL";
+}): Promise<P2PProviderResult> {
+  const start = Date.now();
+  const side = params.tradeType === "BUY" ? "BUY" : "SELL";
+
+  const endpoints = [
+    {
+      url: "https://www.mexc.com/api/p2p/online/list",
+      body: { asset: params.asset, fiat: params.fiat, side, page: 1, size: 20 },
+    },
+    {
+      url: "https://www.mexc.com/api/p2p/adv/list",
+      body: { asset: params.asset, fiat: params.fiat, side, page: 1, size: 20 },
+    },
+    {
+      url: "https://www.mexc.com/api/p2p/ads/online",
+      body: { asset: params.asset, fiat: params.fiat, side, page: 1, size: 20 },
+    },
+  ];
+
+  for (const ep of endpoints) {
+    const result = await clientFetch(ep.url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(ep.body),
+      credentials: "include",
+    });
+
+    if ("error" in result) continue;
+    if (result.status !== 200) continue;
+
+    const data = result.data;
+    if (!data || (data.code && data.code !== 0 && data.code !== "200" && data.code !== "200000")) continue;
+    const items = data.data?.list || data.data?.items || data.data?.advertisements || (Array.isArray(data.data) ? data.data : []);
+    if (!Array.isArray(items) || items.length === 0) continue;
+
+    const offers: P2POffer[] = items
+      .filter((it: any) => it.price && parseFloat(it.price) > 0)
+      .slice(0, 20)
+      .map((it: any) => ({
+        provider: "mexc-p2p",
+        providerName: "MEXC P2P",
+        advertiser: it.nickName || it.userName || it.user?.nickname || "anónimo",
+        asset: params.asset,
+        fiat: params.fiat,
+        tradeType: params.tradeType,
+        price: parseFloat(it.price),
+        minAmount: parseFloat(it.minAmount || it.min_limit || "0"),
+        maxAmount: parseFloat(it.maxAmount || it.max_limit || "0"),
+        available: parseFloat(it.surplusAmount || it.available_amount || "0"),
+        paymentMethods: (it.payments || it.payment_methods || []).map((p: any) => p.name || p.payName || p),
+        tradeCount: it.recentOrderNum || it.user?.tradeCount || 0,
+        completionRate: (it.user?.completionRate !== undefined ? it.user.completionRate / 100 : undefined),
+        timestamp: Date.now(),
+        latencyMs: Date.now() - start,
+        status: "ONLINE" as const,
+      }))
+      .filter((o) => o.price > 0);
+
+    if (offers.length > 0) {
+      return {
+        providerId: "mexc-p2p",
+        providerName: "MEXC P2P",
+        offers,
+        status: "ONLINE",
+        latencyMs: Date.now() - start,
+      };
+    }
+  }
+
+  return {
+    providerId: "mexc-p2p",
+    providerName: "MEXC P2P",
+    offers: [],
+    status: "DISABLED",
+    error: "MEXC bloquea las llamadas desde servidores cloud (Akamai). Tu navegador puede acceder — visita mexc.com/p2p primero para setear cookies.",
+    latencyMs: Date.now() - start,
+  };
+}
+
+// ============================================================
 // ORQUESTADOR CLIENT-SIDE — ejecuta todos desde el navegador
 // ============================================================
 export async function scanAllP2PFromBrowser(params: {
@@ -408,6 +494,7 @@ export async function scanAllP2PFromBrowser(params: {
     scanHtxP2PFromBrowser(params),
     scanKucoinP2PFromBrowser(params),
     scanBitgetP2PFromBrowser(params),
+    scanMexcP2PFromBrowser(params),
   ]);
   return results;
 }

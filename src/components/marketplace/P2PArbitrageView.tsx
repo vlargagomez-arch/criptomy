@@ -66,14 +66,28 @@ interface BuySellOffer {
 interface Opportunity {
   asset: string;
   fiat: string;
+  rank?: number;
   buyAt: BuySellOffer;
   sellAt: BuySellOffer;
   matchedRange: { min: number; max: number; executable: boolean };
   type?: "INTRA-EXCHANGE" | "CROSS-EXCHANGE";
-  spread: number;
-  spreadPercent: number;
-  estimatedProfit: number;
-  estimatedRoiPercent: number;
+  crossExchange?: boolean;
+  operationSize?: number;
+  // v1 fields (legacy)
+  spread?: number;
+  spreadPercent?: number;
+  estimatedProfit?: number;
+  estimatedRoiPercent?: number;
+  // v2 fields (nuevo algoritmo)
+  grossSpread?: number;
+  grossSpreadPercent?: number;
+  withdrawalFee?: number;
+  withdrawalFeeFiat?: number;
+  netProfit?: number;
+  netSpreadPercent?: number;
+  unitsBought?: number;
+  grossRevenue?: number;
+  grossProfit?: number;
   spotReference: { provider: string; price: number; note: string } | null;
   timestamp: number;
   warnings: string[];
@@ -88,15 +102,30 @@ interface P2PProvider {
   latencyMs?: number;
 }
 
+interface ApiStats {
+  totalBuyOffers: number;
+  totalSellOffers: number;
+  afterReputationFilterBuy: number;
+  afterReputationFilterSell: number;
+  topNBuy: number;
+  topNSell: number;
+  crossMatched: number;
+  afterNetSpreadFilter: number;
+  finalOpportunities: number;
+}
+
 interface ApiResponse {
   asset: string;
   fiat: string;
   opportunities: Opportunity[];
   buyOffers: BuySellOffer[];
   sellOffers: BuySellOffer[];
+  filteredBuy?: BuySellOffer[];
+  filteredSell?: BuySellOffer[];
   spotRef: unknown;
   spotProviders: unknown[];
   p2pProviders?: P2PProvider[];
+  stats?: ApiStats;
   timestamp: number;
   error?: string;
 }
@@ -130,7 +159,26 @@ export default function P2PArbitrageView() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/scanner/p2p-arbitrage?asset=${asset}&fiat=${fiat}`);
+      // Si hay ofertas client-side, las mandamos vía POST para que el engine
+      // las considere en el cross-match. Si no, GET simple.
+      const clientBuyOffers = clientResults.filter((p) => p.offers.length > 0 && p.offers[0]?.tradeType === "BUY").flatMap((p) => p.offers);
+      const clientSellOffers = clientResults.filter((p) => p.offers.length > 0 && p.offers[0]?.tradeType === "SELL").flatMap((p) => p.offers);
+
+      let res: Response;
+      if (clientBuyOffers.length > 0 || clientSellOffers.length > 0) {
+        res = await fetch(`/api/scanner/p2p-arbitrage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            asset, fiat,
+            clientBuyOffers,
+            clientSellOffers,
+            withdrawalNetwork: "TRC20",
+          }),
+        });
+      } else {
+        res = await fetch(`/api/scanner/p2p-arbitrage?asset=${asset}&fiat=${fiat}`);
+      }
       const json = await res.json() as ApiResponse;
       if (!res.ok) {
         setError(json.error || "Error al escanear");
@@ -142,7 +190,7 @@ export default function P2PArbitrageView() {
     } finally {
       setLoading(false);
     }
-  }, [asset, fiat]);
+  }, [asset, fiat, clientResults]);
 
   useEffect(() => {
     load();
@@ -423,27 +471,48 @@ export default function P2PArbitrageView() {
           <KPI
             label="Oportunidades"
             value={String(opps.length)}
-            sub={`${opps.filter((o) => o.matchedRange.executable).length} ejecutables`}
+            sub={data.stats ? `de ${data.stats.crossMatched} combinaciones` : `${opps.filter((o) => o.matchedRange.executable).length} ejecutables`}
             color="text-purple-400"
           />
           <KPI
-            label="Mejor ROI"
-            value={opps.length > 0 ? `${opps[0].estimatedRoiPercent.toFixed(2)}%` : "—"}
-            sub={opps.length > 0 ? `Spread ${opps[0].spreadPercent.toFixed(2)}%` : "Sin oportunidades"}
+            label="Mejor spread neto"
+            value={opps.length > 0 ? `${(opps[0].netSpreadPercent ?? opps[0].estimatedRoiPercent ?? 0).toFixed(2)}%` : "—"}
+            sub={opps.length > 0 ? `Profit ${fmtPrice(opps[0].netProfit ?? opps[0].estimatedProfit ?? 0, 2)} ${fiat}` : "Sin oportunidades"}
             color="text-emerald-400"
           />
           <KPI
             label="Ofertas BUY"
-            value={String(buyOffers.length)}
-            sub="Compradores de cripto"
+            value={data.stats ? `${data.stats.afterReputationFilterBuy}` : String(buyOffers.length)}
+            sub={data.stats ? `de ${data.stats.totalBuyOffers} (filtro ≥80%)` : "Compradores"}
             color="text-emerald-400"
           />
           <KPI
             label="Ofertas SELL"
-            value={String(sellOffers.length)}
-            sub="Vendedores de cripto"
+            value={data.stats ? `${data.stats.afterReputationFilterSell}` : String(sellOffers.length)}
+            sub={data.stats ? `de ${data.stats.totalSellOffers} (filtro ≥80%)` : "Vendedores"}
             color="text-amber-400"
           />
+        </div>
+      )}
+
+      {/* Algoritmo pipeline — visualización del flujo */}
+      {data?.stats && (
+        <div className="mb-6 bg-slate-900/50 border border-slate-800 rounded-xl p-3">
+          <div className="text-[10px] uppercase text-slate-500 mb-2 flex items-center gap-1.5">
+            <Activity className="w-3 h-3 text-purple-400" />
+            Pipeline del algoritmo (v2)
+          </div>
+          <div className="flex items-center gap-1 text-[10px] overflow-x-auto">
+            <PipelineStep label="Fetch" value={`${data.stats.totalBuyOffers + data.stats.totalSellOffers}`} desc="ofertas 4 exchanges" color="text-blue-400" />
+            <ArrowRight className="w-3 h-3 text-slate-600 shrink-0" />
+            <PipelineStep label="Filtro reputación ≥80%" value={`${data.stats.afterReputationFilterBuy + data.stats.afterReputationFilterSell}`} desc="merchant válidos" color="text-cyan-400" />
+            <ArrowRight className="w-3 h-3 text-slate-600 shrink-0" />
+            <PipelineStep label="Top 12×12" value={String(data.stats.crossMatched)} desc="combinaciones" color="text-purple-400" />
+            <ArrowRight className="w-3 h-3 text-slate-600 shrink-0" />
+            <PipelineStep label="NetSpread ≥0.1%" value={String(data.stats.afterNetSpreadFilter)} desc="filtradas" color="text-amber-400" />
+            <ArrowRight className="w-3 h-3 text-slate-600 shrink-0" />
+            <PipelineStep label="Top 30" value={String(data.stats.finalOpportunities)} desc="mejores" color="text-emerald-400" />
+          </div>
         </div>
       )}
 
@@ -600,6 +669,19 @@ function KPI({ label, value, sub, color }: { label: string; value: string; sub?:
 }
 
 // ============================================================
+// Pipeline Step — visualización del flujo del algoritmo
+// ============================================================
+function PipelineStep({ label, value, desc, color }: { label: string; value: string; desc: string; color: string }) {
+  return (
+    <div className="shrink-0 px-2.5 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg min-w-[100px]">
+      <div className="text-[9px] text-slate-500 uppercase mb-0.5">{label}</div>
+      <div className={`text-base font-bold ${color}`}>{value}</div>
+      <div className="text-[9px] text-slate-500">{desc}</div>
+    </div>
+  );
+}
+
+// ============================================================
 // Opportunity Card
 // ============================================================
 function OpportunityCard({
@@ -607,9 +689,21 @@ function OpportunityCard({
 }: {
   opp: Opportunity; rank: number; expanded: boolean; onToggle: () => void;
 }) {
-  const positive = opp.estimatedProfit > 0;
+  // v2 campos (preferidos) o fallback a v1
+  const netProfit = opp.netProfit ?? opp.estimatedProfit ?? 0;
+  const netSpreadPct = opp.netSpreadPercent ?? opp.estimatedRoiPercent ?? 0;
+  const grossSpreadPct = opp.grossSpreadPercent ?? opp.spreadPercent ?? 0;
+  const grossSpread = opp.grossSpread ?? opp.spread ?? 0;
+  const operationSize = opp.operationSize ?? opp.matchedRange.max ?? 0;
+  const withdrawalFeeFiat = opp.withdrawalFeeFiat ?? 0;
+  const withdrawalFeeAsset = opp.withdrawalFee ?? 0;
+  const unitsBought = opp.unitsBought ?? (operationSize > 0 && opp.buyAt.price > 0 ? operationSize / opp.buyAt.price : 0);
+  const grossRevenue = opp.grossRevenue ?? (unitsBought * opp.sellAt.price);
+  const grossProfit = opp.grossProfit ?? (grossRevenue - operationSize);
+
+  const positive = netProfit > 0;
   const fiat = opp.fiat;
-  const isCross = opp.type === "CROSS-EXCHANGE";
+  const isCross = opp.type === "CROSS-EXCHANGE" || opp.crossExchange;
   const sameProvider = opp.buyAt.provider === opp.sellAt.provider;
 
   return (
@@ -641,36 +735,76 @@ function OpportunityCard({
         </div>
         <div className="text-right">
           <div className={`text-lg font-bold ${positive ? "text-emerald-400" : "text-red-400"}`}>
-            +{opp.estimatedRoiPercent.toFixed(2)}%
+            +{netSpreadPct.toFixed(2)}%
           </div>
-          <div className="text-[9px] text-slate-500 uppercase">ROI est.</div>
+          <div className="text-[9px] text-slate-500 uppercase">Spread neto</div>
         </div>
       </div>
 
-      {/* Métricas */}
+      {/* Métricas principales — v2 con desglose */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
         <div>
-          <div className="text-[9px] text-slate-500 uppercase">Precio compra (BUY)</div>
+          <div className="text-[9px] text-slate-500 uppercase">Precio BUY</div>
           <div className="text-sm text-emerald-400 font-mono font-semibold">
             {fmtPrice(opp.buyAt.price)} {fiat}
           </div>
         </div>
         <div>
-          <div className="text-[9px] text-slate-500 uppercase">Precio venta (SELL)</div>
+          <div className="text-[9px] text-slate-500 uppercase">Precio SELL</div>
           <div className="text-sm text-amber-400 font-mono font-semibold">
             {fmtPrice(opp.sellAt.price)} {fiat}
           </div>
         </div>
         <div>
-          <div className="text-[9px] text-slate-500 uppercase">Spread</div>
-          <div className={`text-sm font-mono ${positive ? "text-emerald-400" : "text-red-400"}`}>
-            {opp.spreadPercent.toFixed(2)}%
+          <div className="text-[9px] text-slate-500 uppercase">Spread bruto</div>
+          <div className="text-sm text-slate-300 font-mono">
+            {grossSpreadPct.toFixed(2)}%
+            <div className="text-[9px] text-slate-500">{fmtPrice(grossSpread, 2)} {fiat}/u</div>
           </div>
         </div>
         <div>
-          <div className="text-[9px] text-slate-500 uppercase">Ganancia est.</div>
+          <div className="text-[9px] text-slate-500 uppercase">Profit neto</div>
           <div className={`text-sm font-mono font-bold ${positive ? "text-emerald-400" : "text-red-400"}`}>
-            +{fmtPrice(opp.estimatedProfit, 2)} {fiat}
+            +{fmtPrice(netProfit, 2)} {fiat}
+          </div>
+        </div>
+      </div>
+
+      {/* Cálculo detallado del profit (v2) */}
+      <div className="bg-slate-950/50 border border-slate-800/50 rounded-lg p-3 mb-3 text-[11px]">
+        <div className="text-[10px] uppercase text-purple-400 mb-2 flex items-center gap-1.5">
+          <TrendingUp className="w-3 h-3" />
+          Cálculo del profit neto (algoritmo v2)
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 font-mono">
+          <div>
+            <div className="text-slate-500 text-[10px]">Tamaño op.</div>
+            <div className="text-slate-200">{fmtAmount(operationSize)} {fiat}</div>
+          </div>
+          <div>
+            <div className="text-slate-500 text-[10px]">Unidades compradas</div>
+            <div className="text-slate-200">{unitsBought.toFixed(4)} {opp.asset}</div>
+          </div>
+          <div>
+            <div className="text-slate-500 text-[10px]">Revenue bruto</div>
+            <div className="text-amber-300">{fmtPrice(grossRevenue, 2)} {fiat}</div>
+          </div>
+          <div>
+            <div className="text-slate-500 text-[10px]">Profit bruto</div>
+            <div className="text-emerald-300">+{fmtPrice(grossProfit, 2)} {fiat}</div>
+          </div>
+          <div>
+            <div className="text-slate-500 text-[10px]">Fee retiro {isCross ? "(TRC20)" : ""}</div>
+            <div className="text-red-400">
+              {isCross ? `−${fmtPrice(withdrawalFeeFiat, 2)} ${fiat}` : "—"}
+              {isCross && <div className="text-[9px] text-slate-500">{withdrawalFeeAsset} {opp.asset}</div>}
+            </div>
+          </div>
+          <div>
+            <div className="text-slate-500 text-[10px]">Profit NETO</div>
+            <div className={`font-bold ${positive ? "text-emerald-400" : "text-red-400"}`}>
+              +{fmtPrice(netProfit, 2)} {fiat}
+            </div>
           </div>
         </div>
       </div>

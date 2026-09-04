@@ -627,6 +627,25 @@ export async function scanGateP2P(params: {
 }
 
 // ============================================================
+// 8. MEXC P2P — bloqueado por Akamai desde server ⚠️
+// ============================================================
+export async function scanMexcP2P(params: {
+  asset: string;
+  fiat: string;
+  tradeType: "BUY" | "SELL";
+}): Promise<P2PProviderResult> {
+  const start = Date.now();
+  return {
+    providerId: "mexc-p2p",
+    providerName: "MEXC P2P",
+    offers: [],
+    status: "DISABLED",
+    error: "MEXC bloqueado por Akamai (403 Access Denied desde server). Disponible vía 'Escanear desde mi navegador'.",
+    latencyMs: Date.now() - start,
+  };
+}
+
+// ============================================================
 // ORQUESTADOR: Llama a todos los providers en paralelo
 // ============================================================
 export async function scanAllP2PProviders(params: {
@@ -646,6 +665,7 @@ export async function scanAllP2PProviders(params: {
     scanKucoinP2P(params),
     scanBitgetP2P(params),
     scanGateP2P(params),
+    scanMexcP2P(params),
   ]);
 
   const totalOffers = results.reduce((sum, r) => sum + r.offers.length, 0);
