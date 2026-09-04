@@ -13,7 +13,7 @@ import type { NextRequest, NextResponse } from "next/server";
 const AAVE_POOLS: Record<string, { address: string; rpc: string; name: string }> = {
   POLYGON: {
     address: "0x794a61358D6845594F94dc1DB02A252b5b4814aD",
-    rpc: "https://polygon-bor.publicnode.com",
+    rpc: "https://1rpc.io/matic",
     name: "Polygon",
   },
   BASE: {
