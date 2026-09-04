@@ -91,19 +91,46 @@ export default function Onboarding() {
     setConnecting(true);
     try {
       const kp = await generateKeyPair();
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          walletAddress: walletAddr,
+      const finalAlias = alias.trim() || randomAlias();
+
+      // Intentar login via API (crea usuario en DB)
+      let user;
+      try {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            walletAddress: walletAddr,
+            publicKey: kp.publicKey,
+            alias: finalAlias,
+            torOnly,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          user = data.user;
+        }
+      } catch (apiErr) {
+        console.warn("[onboarding] API login failed, creating local user:", apiErr);
+      }
+
+      // Fallback: crear usuario local si la API falló
+      if (!user) {
+        user = {
+          id: "local_" + Date.now(),
+          alias: finalAlias,
+          walletAddress: walletAddr.toLowerCase(),
           publicKey: kp.publicKey,
-          alias: alias.trim() || undefined,
           torOnly,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error");
-      setUser(data.user);
+          reputationScore: 0,
+          totalTrades: 0,
+          completedTrades: 0,
+          avatarSeed: null,
+          bio: null,
+        };
+      }
+
+      setUser(user);
       setPrivateKey(kp.privateKey);
       setOpen(false);
       setTab("inicio");

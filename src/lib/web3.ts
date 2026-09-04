@@ -28,30 +28,47 @@ export function getProvider(): BrowserProvider | null {
   return new BrowserProvider(window.ethereum!);
 }
 
-// Conectar wallet y devolver signer + address + chainId
+// Conectar wallet y devolver address + chainId
+// NO devolvemos signer (ethers.BrowserProvider.getSigner() puede crashear)
+// En su lugar, usamos window.ethereum directamente
 export async function connectWallet(): Promise<{
   address: string;
   chainId: number;
-  signer: ethers.JsonRpcSigner;
 }> {
   if (!hasWallet()) {
     throw new Error(
       "No se detectó wallet. Instale MetaMask desde https://metamask.io"
     );
   }
-  const accounts = (await window.ethereum!.request({
-    method: "eth_requestAccounts",
-  })) as string[];
+
+  // 1) Pedir cuentas
+  let accounts: string[];
+  try {
+    accounts = (await window.ethereum!.request({
+      method: "eth_requestAccounts",
+    })) as string[];
+  } catch (e) {
+    throw new Error("Wallet rechazó la conexión: " + (e as Error).message);
+  }
+
   if (!accounts || accounts.length === 0) {
     throw new Error("No se autorizó el acceso a la wallet");
   }
-  const provider = getProvider()!;
-  const signer = await provider.getSigner();
-  const network = await provider.getNetwork();
+
+  // 2) Obtener chainId (sin ethers, directo del provider)
+  let chainId: number;
+  try {
+    const chainIdHex = (await window.ethereum!.request({
+      method: "eth_chainId",
+    })) as string;
+    chainId = parseInt(chainIdHex, 16);
+  } catch {
+    chainId = 1; // default Ethereum
+  }
+
   return {
     address: accounts[0],
-    chainId: Number(network.chainId),
-    signer,
+    chainId,
   };
 }
 
