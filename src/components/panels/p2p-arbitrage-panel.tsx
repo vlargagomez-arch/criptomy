@@ -100,7 +100,7 @@ export default function P2PArbitragePanel() {
       const params = new URLSearchParams({
         asset, fiat: country.fiat, rows: "15",
         exchanges: "binance,okx,bybit,kraken",
-        minReputation: "80", minNetSpread: "0.1",
+        minReputation: "90", minNetSpread: "0.1",
       });
       if (payment) params.set("payment", payment);
       const res = await fetch(`/api/arbitrage/p2p?${params.toString()}`);
@@ -307,6 +307,49 @@ export default function P2PArbitragePanel() {
               </span>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ===== BANNER FILTROS ANTI-ESTAFA ===== */}
+      {data?.reputation && (
+        <div className="bg-emerald-950/30 border border-emerald-700/40 rounded-xl p-3">
+          <div className="text-[10px] uppercase text-emerald-400 font-semibold mb-2 flex items-center gap-1.5">
+            <Shield className="w-3 h-3" />
+            Filtros anti-estafa aplicados
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+            <div className="bg-slate-950/40 rounded-lg p-2">
+              <div className="text-slate-500 text-[9px] uppercase">Reputación mínima</div>
+              <div className="text-emerald-400 font-bold">{data.reputation.minRequired}%</div>
+              <div className="text-[9px] text-slate-500">{data.reputation.filteredByReputation} filtrados</div>
+            </div>
+            <div className="bg-slate-950/40 rounded-lg p-2">
+              <div className="text-slate-500 text-[9px] uppercase">Órdenes mínimas</div>
+              <div className="text-emerald-400 font-bold">≥ 50</div>
+              <div className="text-[9px] text-slate-500">{data.reputation.filteredByOrders} cuentas nuevas</div>
+            </div>
+            <div className="bg-slate-950/40 rounded-lg p-2">
+              <div className="text-slate-500 text-[9px] uppercase">Banda precio mercado</div>
+              <div className="text-emerald-400 font-bold">
+                {fmtPrice(data.reputation.priceBand.low)} - {fmtPrice(data.reputation.priceBand.high)}
+              </div>
+              <div className="text-[9px] text-slate-500">{data.reputation.filteredByPriceBand} bait ads</div>
+            </div>
+            <div className="bg-slate-950/40 rounded-lg p-2">
+              <div className="text-slate-500 text-[9px] uppercase">Precio mercado (mediana)</div>
+              <div className="text-amber-400 font-bold font-mono">{fmtPrice(data.reputation.marketPrice)}</div>
+              <div className="text-[9px] text-slate-500">referencia para filtros</div>
+            </div>
+          </div>
+          <div className="mt-2 text-[10px] text-slate-400 flex items-start gap-2">
+            <Info className="w-3 h-3 text-emerald-400 shrink-0 mt-0.5" />
+            <span>
+              <b className="text-slate-300">{data.reputation.merchantsBeforeFilter}</b> merchants escaneados →{" "}
+              <b className="text-emerald-400">{data.reputation.merchantsAfterFilter}</b> válidos →{" "}
+              <b className="text-red-400">{data.reputation.merchantsFilteredOut}</b> filtrados por estafa.
+              Bait ads (precio demasiado bajo para ser real) se descartan automáticamente.
+            </span>
+          </div>
         </div>
       )}
 

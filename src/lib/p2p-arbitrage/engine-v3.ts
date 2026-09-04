@@ -116,6 +116,12 @@ export interface ArbitrageResponse {
     merchantsFilteredOut: number;
     merchantsBeforeFilter: number;
     merchantsAfterFilter: number;
+    // Anti-estafa detallado
+    marketPrice: number;
+    priceBand: { low: number; high: number };
+    filteredByOrders: number;
+    filteredByReputation: number;
+    filteredByPriceBand: number;
   };
   asset: string;
   fiat: string;
@@ -198,14 +204,49 @@ export async function scanP2PArbitrage(params: {
   const flatResults = allResults.flat();
   const merchantsBeforeFilter = flatResults.length;
 
-  // === PASO 2: Filtro de reputación (completionRate >= 80%) ===
-  // Excluir null/undefined (anti-estafa)
-  const filteredAds = flatResults.filter((ad) => {
-    // Kraken no tiene reputación, siempre se incluye
+  // === PASO 2: Filtro ANTI-ESTAFA (reputación + órdenes + precio de mercado) ===
+  // Anti-estafa robusto. Un merchant con 99% reputación pero precio 45% bajo
+  // mercado es un "bait ad" — nunca va a responder, es fake.
+  //
+  // Filtros aplicados:
+  //   1. Reputación >= reputationThreshold (default 80%)
+  //   2. Órdenes completadas >= minOrderCount (default 50) — filtra cuentas nuevas
+  //   3. Precio dentro de banda razonable del mercado (default ±15%)
+  //
+  // El precio de mercado se calcula como la MEDIANA de todos los precios
+  // válidos (no la media — la mediana es robusta a outliers como el fake 1719).
+  const filteredByReputation = flatResults.filter((ad) => {
+    // Kraken no tiene reputación ni órdenes, siempre se incluye
     if (ad.exchange === "Kraken") return true;
     if (ad.completionRate === null || ad.completionRate === undefined) return false;
-    return ad.completionRate >= reputationThreshold;
+    if (ad.completionRate < reputationThreshold) return false;
+    // Mínimo de órdenes completadas (excepto Kraken)
+    if (ad.tradeCount < 50) return false;
+    return true;
   });
+
+  // Calcular precio de mercado (mediana) para filtrar bait ads
+  const p2pPrices = filteredByReputation
+    .filter(a => a.exchange !== "Kraken")
+    .map(a => a.price)
+    .sort((a, b) => a - b);
+  const marketPrice = p2pPrices.length > 0
+    ? p2pPrices[Math.floor(p2pPrices.length / 2)]
+    : 0;
+
+  // Filtro de precio: rechazar ads que estén más del 15% por debajo del mercado
+  // (bait ads típicos: precio irrealmente bajo para atraer compradores)
+  // Y más del 25% por encima (ads que probablemente no se ejecutan nunca)
+  const PRICE_BAND_LOW = 0.85;  // -15%
+  const PRICE_BAND_HIGH = 1.25; // +25%
+  const filteredAds = marketPrice > 0
+    ? filteredByReputation.filter(ad => {
+        if (ad.exchange === "Kraken") return true;
+        const ratio = ad.price / marketPrice;
+        return ratio >= PRICE_BAND_LOW && ratio <= PRICE_BAND_HIGH;
+      })
+    : filteredByReputation;
+
   const merchantsFilteredOut = merchantsBeforeFilter - filteredAds.length;
   const merchantsAfterFilter = filteredAds.length;
 
@@ -498,6 +539,19 @@ export async function scanP2PArbitrage(params: {
     rawAdsByExchange[ad.exchange] = (rawAdsByExchange[ad.exchange] || 0) + 1;
   }
 
+  // Cálculo de filters
+  const filteredByReputationCount = flatResults.length - filteredByReputation.length;
+  const filteredByOrdersCount = flatResults.filter(ad =>
+    ad.exchange !== "Kraken" && ad.tradeCount < 50
+  ).length;
+  const filteredByPriceBandCount = marketPrice > 0
+    ? filteredByReputation.filter(ad => {
+        if (ad.exchange === "Kraken") return false;
+        const ratio = ad.price / marketPrice;
+        return ratio < PRICE_BAND_LOW || ratio > PRICE_BAND_HIGH;
+      }).length
+    : 0;
+
   // Diversidad: qué exchanges aparecen en las opportunities finales
   const buySet = new Set<string>();
   const sellSet = new Set<string>();
@@ -519,6 +573,14 @@ export async function scanP2PArbitrage(params: {
       merchantsFilteredOut,
       merchantsBeforeFilter,
       merchantsAfterFilter,
+      marketPrice,
+      priceBand: {
+        low: marketPrice * PRICE_BAND_LOW,
+        high: marketPrice * PRICE_BAND_HIGH,
+      },
+      filteredByOrders: filteredByOrdersCount,
+      filteredByReputation: filteredByReputationCount,
+      filteredByPriceBand: filteredByPriceBandCount,
     },
     asset,
     fiat,

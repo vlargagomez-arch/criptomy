@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
   const rows = Math.min(parseInt(searchParams.get("rows") || "15", 10), 30);
   const payment = searchParams.get("payment") || undefined;
   const exchanges = searchParams.get("exchanges") || "binance,okx,bybit,kraken";
-  const minReputation = parseInt(searchParams.get("minReputation") || "80", 10);
+  const minReputation = parseInt(searchParams.get("minReputation") || "90", 10);
   const minNetSpread = parseFloat(searchParams.get("minNetSpread") || "0.1");
 
   try {
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
     const rows = Math.min(parseInt(body.rows || "15", 10), 30);
     const payment = body.payment || undefined;
     const exchanges = body.exchanges || "binance,okx,bybit,kraken";
-    const minReputation = parseInt(body.minReputation || "80", 10);
+    const minReputation = parseInt(body.minReputation || "90", 10);
     const minNetSpread = parseFloat(body.minNetSpread || "0.1");
 
     const result = await scanP2PArbitrage({
