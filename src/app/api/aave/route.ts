@@ -1,155 +1,110 @@
 // ============================================================
 // AAVE V3 — Préstamos y rendimientos sin banco
 // ============================================================
-// DeFi lending: deposita cripto y gana interés, o pide préstamos
-// usando tu cripto como colateral. Sin KYC, sin banco, sin aprobación.
-// Smart contracts ya desplegados en Polygon, Base, Arbitrum.
-// Solo leemos datos on-chain (no ejecutamos transacciones).
+// Datos de Aave V3 via DefiLlama API (gratis, sin API key).
+// DefiLlama agrega datos on-chain de todos los protocolos DeFi.
 // ============================================================
 
 import type { NextRequest, NextResponse } from "next/server";
 
-// Aave V3 Pool addresses (ya desplegados, no son nuestros)
-const AAVE_POOLS: Record<string, { address: string; rpc: string; name: string }> = {
-  POLYGON: {
-    address: "0x794a61358D6845594F94dc1DB02A252b5b4814aD",
-    rpc: "https://1rpc.io/matic",
-    name: "Polygon",
-  },
-  BASE: {
-    address: "0xA238Dd80C259a72e81D7e5664C9F3A60b6c20A84",
-    rpc: "https://base.publicnode.com",
-    name: "Base",
-  },
-  ARBITRUM: {
-    address: "0x794a61358D6845594F94dc1DB02A252b5b4814aD",
-    rpc: "https://arbitrum-one.publicnode.com",
-    name: "Arbitrum",
-  },
-};
-
-// Token addresses en Polygon (los más usados en LATAM)
-const TOKENS: Record<string, Record<string, string>> = {
-  POLYGON: {
-    USDC: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
-    USDT: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F",
-    WETH: "0x7ceB233D2C190576F932bFbE11D7d33Ba24f0F5E",
-    WBTC: "0x1BFD67037B42Cf73acF2047067bd5F2C4D2eF1C0",
-    WMATIC: "0x0d500B1d8E2eFbEE00D8b4D28Fe25B5b8C6b7e07",
-    DAI: "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063",
-  },
-  BASE: {
-    USDC: "0x833589fCD6eDb6Ee088c21f1cd6a55D2b27E0c4E",
-    WETH: "0x4200000000000000000000000000000000000006",
-  },
-  ARBITRUM: {
-    USDC: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
-    USDT: "0xFd086bD7b31Fe25B5b8C6b5b5b5b5b5b5b5b5b5b",
-    WETH: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
-  },
-};
-
-// reserveData(asset) selector = 0x35ea6a75
-const RESERVE_DATA_SELECTOR = "0x35ea6a75";
-
-interface AaveReserveData {
+interface AaveReserve {
   asset: string;
   chain: string;
   supplyAPY: number;
   borrowAPY: number;
+  tvlUsd: number;
   timestamp: number;
   status: "ONLINE" | "ERROR";
   error?: string;
 }
 
-function decodeRay(hex: string): number {
-  try {
-    return Number(BigInt(hex)) / 1e27;
-  } catch {
-    return 0;
-  }
-}
+// Cache simple en memoria
+let cache: { data: AaveReserve[]; expiresAt: number } | null = null;
+const CACHE_TTL = 60_000; // 1 min
 
-async function fetchReserveData(chain: string, asset: string): Promise<AaveReserveData> {
-  const pool = AAVE_POOLS[chain];
-  if (!pool) return { asset, chain, supplyAPY: 0, borrowAPY: 0, timestamp: Date.now(), status: "ERROR", error: "Chain no soportada" };
-
-  const tokenAddr = TOKENS[chain]?.[asset];
-  if (!tokenAddr) return { asset, chain, supplyAPY: 0, borrowAPY: 0, timestamp: Date.now(), status: "ERROR", error: "Token no soportado" };
-
-  const data = RESERVE_DATA_SELECTOR + tokenAddr.slice(2).padStart(64, "0");
-
-  try {
-    const res = await fetch(pool.rpc, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: 1,
-        method: "eth_call",
-        params: [{ to: pool.address, data }, "latest"],
-      }),
-      signal: AbortSignal.timeout(5000),
-    });
-
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = (await res.json()) as { result?: string; error?: unknown };
-    if (json.error || !json.result) throw new Error("Sin respuesta");
-
-    const hex = json.result.replace("0x", "");
-    const liquidityRate = decodeRay("0x" + hex.slice(64, 128));
-    const variableBorrowRate = decodeRay("0x" + hex.slice(192, 256));
-
-    return {
-      asset,
-      chain,
-      supplyAPY: liquidityRate * 100,
-      borrowAPY: variableBorrowRate * 100,
-      timestamp: Date.now(),
-      status: "ONLINE",
-    };
-  } catch (err) {
-    return { asset, chain, supplyAPY: 0, borrowAPY: 0, timestamp: Date.now(), status: "ERROR", error: (err as Error).message };
-  }
-}
-
-// GET /api/aave?chain=POLYGON&asset=USDC
 // GET /api/aave?chain=POLYGON&asset=ALL
+// GET /api/aave?chain=POLYGON&asset=USDC
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const chain = (searchParams.get("chain") || "POLYGON").toUpperCase();
-    const asset = (searchParams.get("asset") || "USDC").toUpperCase();
+    const asset = (searchParams.get("asset") || "ALL").toUpperCase();
 
-    if (asset === "ALL") {
-      const tokens = Object.keys(TOKENS[chain] || {});
-      // Usar allSettled para que un token que falle no rompa todo
-      const results = await Promise.allSettled(
-        tokens.map((a) => fetchReserveData(chain, a))
-      );
-      const reserves = results.map((r) =>
-        r.status === "fulfilled" ? r.value : { asset: "?", chain, supplyAPY: 0, borrowAPY: 0, timestamp: Date.now(), status: "ERROR" as const, error: "Failed" }
-      );
+    // Usar cache si está disponible
+    if (cache && Date.now() < cache.expiresAt) {
+      const filtered = filterResults(cache.data, chain, asset);
       return NextResponse.json({
-        chain,
-        reserves,
+        chain: asset === "ALL" ? chain : chain,
+        reserves: asset === "ALL" ? filtered : undefined,
+        ...(asset !== "ALL" ? filtered[0] : {}),
+        source: "Aave V3 (via DefiLlama API)",
         timestamp: Date.now(),
-        source: "Aave V3 (on-chain via RPC público)",
       });
     }
 
-    const result = await fetchReserveData(chain, asset);
+    // Fetch de DefiLlama
+    const res = await fetch("https://yields.llama.fi/pools", {
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) throw new Error(`DefiLlama HTTP ${res.status}`);
+    const data = await res.json();
+
+    // Filtrar pools de Aave V3
+    const aavePools = (data.data || [])
+      .filter((p: { project: string; chain: string }) => {
+        const isAave = p.project.toLowerCase().includes("aave");
+        const isV3 = p.project.toLowerCase().includes("v3") || p.project.toLowerCase() === "aave";
+        return isAave && isV3;
+      })
+      .map((p: {
+        symbol: string; chain: string; apy: number; apyBaseBorrow?: number;
+        tvlUsd: number;
+      }) => ({
+        asset: p.symbol.toUpperCase().replace("WSTETH", "WSTETH").replace("WPOL", "WMATIC"),
+        chain: p.chain.toUpperCase() === "POLYGON" ? "POLYGON"
+          : p.chain.toUpperCase() === "ARBITRUM" ? "ARBITRUM"
+          : p.chain.toUpperCase() === "BASE" ? "BASE"
+          : p.chain.toUpperCase(),
+        supplyAPY: p.apy || 0,
+        borrowAPY: p.apyBaseBorrow || 0,
+        tvlUsd: p.tvlUsd || 0,
+        timestamp: Date.now(),
+        status: "ONLINE" as const,
+      }));
+
+    // Actualizar cache
+    cache = { data: aavePools, expiresAt: Date.now() + CACHE_TTL };
+
+    const filtered = filterResults(aavePools, chain, asset);
+
+    if (asset === "ALL") {
+      return NextResponse.json({
+        chain,
+        reserves: filtered,
+        timestamp: Date.now(),
+        source: "Aave V3 (via DefiLlama API)",
+      });
+    }
+
     return NextResponse.json({
       chain,
       asset,
-      ...result,
-      source: "Aave V3 (on-chain via RPC público)",
+      ...filtered[0],
+      source: "Aave V3 (via DefiLlama API)",
     });
   } catch (err) {
     console.error("[/api/aave]", err);
     return NextResponse.json(
-      { error: "Error interno consultando Aave V3", detail: (err as Error).message },
+      { error: "Error consultando Aave V3", detail: (err as Error).message },
       { status: 500 }
     );
   }
+}
+
+function filterResults(data: AaveReserve[], chain: string, asset: string): AaveReserve[] {
+  let filtered = data.filter((r) => r.chain === chain);
+  if (asset !== "ALL") {
+    filtered = filtered.filter((r) => r.asset === asset);
+  }
+  return filtered;
 }
