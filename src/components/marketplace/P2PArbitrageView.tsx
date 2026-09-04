@@ -4,8 +4,9 @@ import { useState, useEffect, useCallback } from "react";
 import {
   TrendingUp, Loader2, ArrowRight, AlertTriangle, Check, X,
   RefreshCw, Globe2, Shield, Activity, ExternalLink, Info,
-  Wallet, Coins, Award, Eye, AlertCircle, Sparkles,
+  Wallet, Coins, Award, Eye, AlertCircle, Sparkles, Zap, UserCog,
 } from "lucide-react";
+import { scanAllP2PFromBrowser, type P2PProviderResult as ClientP2PResult } from "@/lib/p2p-arbitrage/client-p2p";
 
 // ============================================================
 // P2PArbitrageView — Sección Arbitraje P2P dentro de Earn
@@ -120,6 +121,11 @@ export default function P2PArbitrageView() {
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<number | null>(null);
 
+  // Client-side fetch state — para exchanges bloqueados desde server
+  const [clientLoading, setClientLoading] = useState(false);
+  const [clientResults, setClientResults] = useState<ClientP2PResult[]>([]);
+  const [clientError, setClientError] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -148,12 +154,58 @@ export default function P2PArbitrageView() {
     return () => clearInterval(interval);
   }, [load]);
 
+  // ============================================================
+  // CLIENT-SIDE FETCH — para exchanges bloqueados desde server
+  // (OKX, HTX, KuCoin, Bitget) que el navegador del usuario SÍ
+  // puede acceder.
+  // ============================================================
+  const loadClientSide = useCallback(async (tradeType: "BUY" | "SELL") => {
+    setClientLoading(true);
+    setClientError(null);
+    try {
+      const results = await scanAllP2PFromBrowser({ asset, fiat, tradeType });
+      setClientResults((prev) => {
+        // Merge: actualizar solo los que vienen del fetch actual
+        const others = prev.filter((p) => {
+          const tradeTypeOfNew = results.find((r) => r.providerId === p.providerId);
+          return !tradeTypeOfNew || results.find((r) => r.providerId === p.providerId)?.offers.length === 0 && p.offers.length > 0;
+        });
+        // Remove providers that match current results
+        const newIds = results.map((r) => r.providerId);
+        const keptOthers = prev.filter((p) => !newIds.includes(p.providerId));
+        return [...keptOthers, ...results];
+      });
+    } catch (e) {
+      setClientError((e as Error).message);
+    } finally {
+      setClientLoading(false);
+    }
+  }, [asset, fiat]);
+
+  // Extraer ofertas combinadas (server + client)
+  const serverBuyOffers = data?.buyOffers || [];
+  const serverSellOffers = data?.sellOffers || [];
+  const clientBuyOffers = clientResults
+    .filter((p) => p.offers.length > 0)
+    .flatMap((p) => p.offers);
+  const allBuyOffers = [...serverBuyOffers, ...clientBuyOffers];
+  const allSellOffers = clientResults.length > 0
+    ? [...serverSellOffers, ...clientResults.filter((p) => p.offers.length > 0).flatMap((p) => p.offers)]
+    : serverSellOffers;
+
   const opps = data?.opportunities || [];
-  const buyOffers = data?.buyOffers || [];
-  const sellOffers = data?.sellOffers || [];
+  const buyOffers = allBuyOffers;
+  const sellOffers = allSellOffers;
   const p2pProviders = data?.p2pProviders || [];
   const onlineProviders = p2pProviders.filter((p) => p.status === "ONLINE");
   const disabledProviders = p2pProviders.filter((p) => p.status !== "ONLINE");
+
+  // Para exchanges bloqueados en server, mostrar estado del client fetch
+  const clientProviderStatus = (providerId: string): { status?: string; offers?: number; error?: string } => {
+    const c = clientResults.find((p) => p.providerId === providerId);
+    if (c) return { status: c.status, offers: c.offers.length, error: c.error };
+    return {};
+  };
 
   return (
     <div>
@@ -243,16 +295,21 @@ export default function P2PArbitrageView() {
         <div className="mb-6">
           <h3 className="text-xs uppercase tracking-wide text-slate-500 mb-2 flex items-center gap-2">
             <Activity className="w-3.5 h-3.5 text-purple-400" />
-            Exchanges P2P escaneados · {onlineProviders.length} online + {disabledProviders.length} bloqueados
+            Exchanges P2P escaneados · {onlineProviders.length} online + {disabledProviders.length} bloqueados server-side
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
             {p2pProviders.map((p) => {
               const online = p.status === "ONLINE";
+              const cs = clientProviderStatus(p.providerId);
+              const clientOnline = cs.status === "ONLINE";
+              const clientOffers = cs.offers || 0;
+              // Show as "online" if either server OR client succeeded
+              const effectivelyOnline = online || clientOnline;
               return (
                 <div
                   key={p.providerId}
                   className={`p-3 rounded-lg border text-xs ${
-                    online
+                    effectivelyOnline
                       ? "bg-emerald-950/30 border-emerald-800/50"
                       : "bg-amber-950/20 border-amber-800/30"
                   }`}
@@ -260,17 +317,20 @@ export default function P2PArbitrageView() {
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-medium text-slate-200">{p.providerName}</span>
                     <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${
-                      online
+                      effectivelyOnline
                         ? "bg-emerald-600/30 text-emerald-300"
                         : "bg-amber-600/30 text-amber-300"
                     }`}>
-                      {online ? "🟢 ONLINE" : "🔴 BLOQUEADO"}
+                      {effectivelyOnline ? "🟢 ONLINE" : "🔴 BLOQUEADO"}
                     </span>
                   </div>
-                  {online ? (
+                  {effectivelyOnline ? (
                     <div className="text-[10px] text-slate-400">
-                      <div>{p.offers.length} ofertas encontradas</div>
-                      <div className="text-slate-500">Latencia: {p.latencyMs || 0}ms</div>
+                      <div>{(p.offers?.length || 0) + clientOffers} ofertas encontradas</div>
+                      {online
+                        ? <div className="text-slate-500">Vía server · Latencia: {p.latencyMs || 0}ms</div>
+                        : <div className="text-emerald-500/80">Vía tu navegador · {clientOffers} ofertas</div>
+                      }
                     </div>
                   ) : (
                     <div className="text-[10px] text-amber-400/80 italic">
@@ -281,14 +341,78 @@ export default function P2PArbitrageView() {
               );
             })}
           </div>
+
+          {/* Botón: Escanear desde el navegador para exchanges bloqueados */}
+          {disabledProviders.length > 0 && (
+            <div className="mt-3 p-3 bg-slate-900/70 border border-purple-700/30 rounded-lg">
+              <div className="flex items-start gap-2 flex-wrap">
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs text-slate-200 font-medium flex items-center gap-1.5 mb-1">
+                    <UserCog className="w-3.5 h-3.5 text-purple-400" />
+                    Activar exchanges bloqueados (OKX, HTX, KuCoin, Bitget)
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    Tu navegador SÍ puede acceder a esos exchanges (tu IP no está bloqueada).
+                    Click en los botones abajo y tu navegador hará el fetch directo.
+                    Primero visita el sitio del exchange en otra pestaña para que se seteen las cookies.
+                  </div>
+                </div>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  onClick={() => loadClientSide("BUY")}
+                  disabled={clientLoading}
+                  className="text-xs px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg transition flex items-center gap-1.5"
+                >
+                  {clientLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+                  Escanear BUY desde mi navegador
+                </button>
+                <button
+                  onClick={() => loadClientSide("SELL")}
+                  disabled={clientLoading}
+                  className="text-xs px-3 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white rounded-lg transition flex items-center gap-1.5"
+                >
+                  {clientLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+                  Escanear SELL desde mi navegador
+                </button>
+              </div>
+              {clientError && (
+                <div className="mt-2 text-[10px] text-red-400 bg-red-950/30 p-2 rounded">
+                  Error: {clientError}
+                </div>
+              )}
+              <div className="mt-2 text-[10px] text-slate-500 flex items-center gap-1 flex-wrap">
+                <span>Visita antes para setear cookies:</span>
+                {disabledProviders.map((p) => {
+                  const url = p.providerId === "okx-p2p" ? "https://www.okx.com/p2p"
+                    : p.providerId === "htx-p2p" ? "https://www.htx.com/p2p"
+                    : p.providerId === "kucoin-p2p" ? "https://www.kucoin.com/p2p"
+                    : p.providerId === "bitget-p2p" ? "https://www.bitget.com/p2p"
+                    : p.providerId === "gate-p2p" ? "https://www.gate.com/p2p"
+                    : "#";
+                  return (
+                    <a
+                      key={p.providerId}
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-emerald-400 hover:text-emerald-300 underline"
+                    >
+                      {p.providerName}
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Info explicativa */}
           <div className="mt-2 text-[10px] text-slate-500 bg-slate-900/50 border border-slate-800/50 rounded-lg p-2.5">
             <Info className="w-3 h-3 inline mr-1 text-purple-400" />
-            <b className="text-slate-400">¿Por qué algunos exchanges están bloqueados?</b> La mayoría de los exchanges P2P
-            (Bybit, OKX, KuCoin, Gate.io, MEXC) usan APIs internas no documentadas que bloquean llamadas
-            desde servidores cloud (Vercel) mediante Cloudflare/Akamai. <b className="text-slate-400">Binance P2P</b> es el
-            único con endpoint público confiable. Los exchanges bloqueados se muestran aquí para que veas el estado real
-            y sepas por qué no aparecen ofertas suyas.
+            <b className="text-slate-400">¿Por qué algunos exchanges están bloqueados desde server?</b> La mayoría de los exchanges P2P
+            (OKX, HTX, KuCoin, Bitget, Gate.io) usan APIs internas no documentadas que bloquean llamadas
+            desde servidores cloud (Vercel) mediante Cloudflare/Akamai. <b className="text-slate-400">Binance P2P</b> y <b className="text-slate-400">Bybit P2P</b> SÍ funcionan desde server.
+            Para OKX, HTX, KuCoin y Bitget, usa el botón "Escanear desde mi navegador" arriba — tu IP no está bloqueada y podrás ver sus ofertas.
           </div>
         </div>
       )}
