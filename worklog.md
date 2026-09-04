@@ -610,3 +610,55 @@ Stage Summary:
 - Verificado en vivo: GILBALACRIPTO (bait) YA NO aparece
 - Top opportunities ahora son merchants legítimos con miles de órdenes
   y reputación 96-100%
+
+---
+Task ID: fix-bybit-kraken-quitar-sospechoso
+Agent: main
+Task: Verificar escaneo, hacer funcionar Bybit y Kraken, quitar 'sospechoso'
+
+Work Log:
+- Diagnóstico en vivo (server + curl a /api/arbitrage/p2p):
+  USDT/COP: solo Binance y OKX aparecían
+  BTC/COP: Kraken NO aparecía
+  ETH/COP: Kraken NO aparecía
+
+- BUG 1: Bybit devolvía 0 ads
+  Causa: client enviaba 'payment: ""' (string vacío) en el body
+  Bybit API interpreta payment vacío como filtro inválido → ret_code 912000004 → 0 ads
+  Fix: NO enviar el campo 'payment' si no hay filtro específico
+  Verificado: Bybit ahora devuelve 30 ads (69 sin filtro reputation)
+  Resultado: Bybit aparece en 13 opportunities (Bybit→OKX, OKX→Bybit)
+
+- BUG 2: Kraken devolvía null silenciosamente
+  Causa: Kraken NO devuelve el campo 'q' (volume quote) para XBTUSDT
+  Código intentaba leer 't.q[1]' → 'undefined[1]' → TypeError → catch → null
+  Fix: 't.q ? parseFloat(t.q[1]) : 0' para manejar undefined
+  Verificado: Kraken ahora devuelve quote válido (BTC @ 79,658 USD)
+  Resultado: Kraken aparece en 3 opportunities (Spot-P2P y P2P-Spot)
+
+- Después de los fixes, todos los 4 exchanges funcionan:
+  USDT/COP: 5 rutas (OKX↔OKX, Bybit↔OKX, Binance↔OKX) — 30 opportunities
+    Kraken se omite: krakenCanTrade(USDT) = false (no hay par USDT/USDT)
+  BTC/COP: 5 rutas (OKX↔OKX, Kraken↔OKX, Binance↔OKX) — 30 opportunities
+    Bybit no tiene ads BTC/COP en este momento
+  ETH/COP: 2 rutas (OKX→Kraken, OKX→Binance) — 30 opportunities
+
+- UI: quité la palabra 'sospechoso' completamente:
+  - Stats bar: ya no muestra 'X sospechosas'
+  - Cards: ya no muestra badge SOSPECHOSO
+  - Detalle expandible: ya no muestra warning de bait ad
+  - Filtros anti-estafa siguen activos (reputation ≥90%, órdenes ≥50,
+    banda de precio) pero sin etiquetar oportunidades individuales
+
+- Cross-exchange y Kraken Spot funcionan correctamente:
+  - P2P-P2P: comprar en un P2P, vender en otro P2P (entre exchanges)
+  - Spot-P2P: comprar en Kraken Spot, vender en P2P (BTC/ETH)
+  - P2P-Spot: comprar en P2P, vender en Kraken Spot (BTC/ETH)
+
+Stage Summary:
+- Commit ab39806 → origin/main
+- 4 archivos cambiados, +21 / -32 lineas
+- Build local: 0 errores
+- Verificado en vivo con 3 assets (USDT, BTC, ETH) — todos los 4 exchanges
+  aparecen cuando tienen ads disponibles
+- 'sospechoso' quitado del UI completamente
