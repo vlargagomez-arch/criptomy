@@ -18,38 +18,60 @@ interface YieldPool {
   type: string; // "lending" | "staking" | "stable-pool"
   url: string;
   description: string;
-  risk: "BAJO" | "MEDIO" | "MEDIO-ALTO";
+  risk: "BAJO" | "MEDIO" | "ALTO";
 }
 
 const ALL_POOLS: YieldPool[] = [
-  // ===== AAVE V3 — Polygon =====
+  // ============================================================
+  // RIESGO BAJO — Protocolos auditados, stablecoins, TVL alto
+  // APY: 0.01% - 6.5% | Riesgo: smart contract bug (auditado, raro)
+  // ============================================================
+
+  // AAVE V3 — Polygon
   { protocol: "Aave V3", protocolIcon: "👻", asset: "USDC", chain: "Polygon", supplyAPY: 2.96, borrowAPY: 4.95, tvlUsd: 11_500_000, type: "lending", url: "https://app.aave.com/?marketName=proto_polygon_v3", description: "Deposita USDC y gana interés. Préstamos contra colateral.", risk: "BAJO" },
   { protocol: "Aave V3", protocolIcon: "👻", asset: "USDT", chain: "Polygon", supplyAPY: 3.31, borrowAPY: 5.12, tvlUsd: 10_900_000, type: "lending", url: "https://app.aave.com/?marketName=proto_polygon_v3", description: "Deposita USDT y gana interés. Préstamos contra colateral.", risk: "BAJO" },
   { protocol: "Aave V3", protocolIcon: "👻", asset: "DAI", chain: "Polygon", supplyAPY: 3.60, borrowAPY: 4.81, tvlUsd: 1_200_000, type: "lending", url: "https://app.aave.com/?marketName=proto_polygon_v3", description: "Deposita DAI y gana interés. Préstamos contra colateral.", risk: "BAJO" },
   { protocol: "Aave V3", protocolIcon: "👻", asset: "WETH", chain: "Polygon", supplyAPY: 0.28, borrowAPY: 1.87, tvlUsd: 24_300_000, type: "lending", url: "https://app.aave.com/?marketName=proto_polygon_v3", description: "Deposita ETH y gana interés. Préstamos contra colateral.", risk: "BAJO" },
   { protocol: "Aave V3", protocolIcon: "👻", asset: "WBTC", chain: "Polygon", supplyAPY: 0.01, borrowAPY: 0.52, tvlUsd: 65_800_000, type: "lending", url: "https://app.aave.com/?marketName=proto_polygon_v3", description: "Deposita BTC y gana interés. Préstamos contra colateral.", risk: "BAJO" },
 
-  // ===== AAVE V3 — Base =====
+  // AAVE V3 — Base
   { protocol: "Aave V3", protocolIcon: "👻", asset: "USDC", chain: "Base", supplyAPY: 4.12, borrowAPY: 5.45, tvlUsd: 520_000_000, type: "lending", url: "https://app.aave.com/?marketName=proto_base_v3", description: "Deposita USDC en Base (L2 de Coinbase). Gas barato.", risk: "BAJO" },
-  { protocol: "Aave V3", protocolIcon: "👻", asset: "WETH", chain: "Base", supplyAPY: 0.15, borrowAPY: 1.52, tvlUsd: 0, type: "lending", url: "https://app.aave.com/?marketName=proto_base_v3", description: "Deposita ETH en Base (L2 de Coinbase). Gas barato.", risk: "BAJO" },
 
-  // ===== AAVE V3 — Arbitrum =====
+  // AAVE V3 — Arbitrum
   { protocol: "Aave V3", protocolIcon: "👻", asset: "USDC", chain: "Arbitrum", supplyAPY: 3.85, borrowAPY: 5.22, tvlUsd: 0, type: "lending", url: "https://app.aave.com/?marketName=proto_arbitrum_v3", description: "Deposita USDC en Arbitrum (L2). Gas barato.", risk: "BAJO" },
 
-  // ===== COMPOUND V3 — Ethereum =====
-  { protocol: "Compound V3", protocolIcon: "🟢", asset: "USDC", chain: "Ethereum", supplyAPY: 3.34, borrowAPY: 4.50, tvlUsd: 38_400_000, type: "lending", url: "https://app.compound.finance/", description: "Segundo mayor protocolo DeFi. Depósitos y préstamos. Auditado.", risk: "BAJO" },
+  // COMPOUND V3 — Ethereum
+  { protocol: "Compound V3", protocolIcon: "🟢", asset: "USDC", chain: "Ethereum", supplyAPY: 3.34, borrowAPY: 4.50, tvlUsd: 38_400_000, type: "lending", url: "https://app.compound.finance/", description: "Segundo mayor protocolo DeFi. Auditado.", risk: "BAJO" },
   { protocol: "Compound V3", protocolIcon: "🟢", asset: "USDT", chain: "Ethereum", supplyAPY: 3.09, borrowAPY: 4.20, tvlUsd: 32_400_000, type: "lending", url: "https://app.compound.finance/", description: "Deposita USDT en Compound. Interés variable.", risk: "BAJO" },
 
-  // ===== COMPOUND V3 — Arbitrum =====
-  { protocol: "Compound V3", protocolIcon: "🟢", asset: "USDC", chain: "Arbitrum", supplyAPY: 2.81, borrowAPY: 3.90, tvlUsd: 3_200_000, type: "lending", url: "https://app.compound.finance/", description: "USDC en Arbitrum. Gas $0.01.", risk: "BAJO" },
+  // COMPOUND V3 — Base (APY más alto, TVL bajo = más volátil)
+  { protocol: "Compound V3", protocolIcon: "🟢", asset: "USDC", chain: "Base", supplyAPY: 6.44, borrowAPY: 7.80, tvlUsd: 800_000, type: "lending", url: "https://app.compound.finance/", description: "USDC en Base. APY más alto pero TVL bajo (puede cambiar rápido).", risk: "MEDIO" },
 
-  // ===== COMPOUND V3 — Base =====
-  { protocol: "Compound V3", protocolIcon: "🟢", asset: "USDC", chain: "Base", supplyAPY: 6.44, borrowAPY: 7.80, tvlUsd: 800_000, type: "lending", url: "https://app.compound.finance/", description: "USDC en Base. APY más alto pero TVL bajo (más volátil).", risk: "MEDIO" },
-
-  // ===== LIDO — Ethereum Staking =====
+  // LIDO — Staking ETH
   { protocol: "Lido", protocolIcon: "🌊", asset: "stETH", chain: "Ethereum", supplyAPY: 2.25, tvlUsd: 23_700_000_000, type: "staking", url: "https://lido.fi/", description: "Staking líquido de ETH. Recibes stETH que sube de valor cada día. El mayor pool DeFi del mundo ($23.7B).", risk: "BAJO" },
   { protocol: "Lido", protocolIcon: "🌊", asset: "wstETH", chain: "Arbitrum", supplyAPY: 2.25, tvlUsd: 8_400_000, type: "staking", url: "https://lido.fi/", description: "wstETH en Arbitrum. Staking de ETH con gas barato.", risk: "BAJO" },
-  { protocol: "Lido", protocolIcon: "🌊", asset: "wstETH", chain: "Base", supplyAPY: 2.25, tvlUsd: 0, type: "staking", url: "https://lido.fi/", description: "wstETH en Base. Staking de ETH en L2 de Coinbase.", risk: "BAJO" },
+
+  // ============================================================
+  // RIESGO MEDIO — LP pools (impermanent loss), APY 10-50%
+  // Riesgo: impermanent loss, volatilidad del par, APY variable
+  // ============================================================
+  { protocol: "Uniswap V3", protocolIcon: "🦄", asset: "USDC/WETH", chain: "Ethereum", supplyAPY: 42.9, tvlUsd: 30_500_000, type: "lp", url: "https://app.uniswap.org/#/pools", description: "Provee liquidez al par USDC/WETH. Ganas fees de trading. RIESGO: impermanent loss si ETH sube/baja mucho.", risk: "MEDIO" },
+  { protocol: "Uniswap V3", protocolIcon: "🦄", asset: "WETH/USDC", chain: "Arbitrum", supplyAPY: 40.3, tvlUsd: 35_800_000, type: "lp", url: "https://app.uniswap.org/#/pools", description: "Par WETH/USDC en Arbitrum. Gas barato. APY alto pero variable.", risk: "MEDIO" },
+  { protocol: "Uniswap V3", protocolIcon: "🦄", asset: "WBTC/USDT", chain: "Ethereum", supplyAPY: 35.9, tvlUsd: 19_600_000, type: "lp", url: "https://app.uniswap.org/#/pools", description: "Par WBTC/USDT. Ganas fees de trading BTC. RIESGO: impermanent loss.", risk: "MEDIO" },
+  { protocol: "Uniswap V3", protocolIcon: "🦄", asset: "WBTC/USDC", chain: "Arbitrum", supplyAPY: 34.3, tvlUsd: 8_900_000, type: "lp", url: "https://app.uniswap.org/#/pools", description: "Par WBTC/USDC en Arbitrum. Gas barato.", risk: "MEDIO" },
+  { protocol: "Aerodrome", protocolIcon: "✈️", asset: "USDC/CBBTC", chain: "Base", supplyAPY: 43.3, tvlUsd: 7_500_000, type: "lp", url: "https://aerodrome.finance/", description: "DEX de Base. Provee liquidez USDC/BTC. APY alto, Base gas barato.", risk: "MEDIO" },
+  { protocol: "Moonwell", protocolIcon: "🌙", asset: "CBBTC", chain: "Base", supplyAPY: 33.6, tvlUsd: 2_400_000, type: "lending", url: "https://moonwell.fi/", description: "Protocolo de préstamos en Base. APY alto en BTC tokenizado. TVL bajo.", risk: "MEDIO" },
+
+  // ============================================================
+  // RIESGO ALTO — LP pools con APY extremo (100%+), TVL bajo
+  // Riesgo: impermanent loss severo, APY puede caer a 0, rug pull
+  // ============================================================
+  { protocol: "Aerodrome", protocolIcon: "✈️", asset: "WETH/USDC", chain: "Base", supplyAPY: 142.9, tvlUsd: 8_200_000, type: "lp", url: "https://aerodrome.finance/", description: "LP WETH/USDC en Base. APY extremo 142%. RIESGO: impermanent loss severo, APY puede caer a 0% en horas.", risk: "ALTO" },
+  { protocol: "Uniswap V3", protocolIcon: "🦄", asset: "WETH/ARB", chain: "Arbitrum", supplyAPY: 298.2, tvlUsd: 1_500_000, type: "lp", url: "https://app.uniswap.org/#/pools", description: "LP WETH/ARB. APY 298%. RIESGO ALTO: TVL bajo, ARB volátil, impermanent loss severo.", risk: "ALTO" },
+  { protocol: "Uniswap V3", protocolIcon: "🦄", asset: "WBTC/ARB", chain: "Arbitrum", supplyAPY: 211.9, tvlUsd: 2_600_000, type: "lp", url: "https://app.uniswap.org/#/pools", description: "LP WBTC/ARB. APY 212%. RIESGO: par volátil, impermanent loss, APY inestable.", risk: "ALTO" },
+  { protocol: "Aerodrome", protocolIcon: "✈️", asset: "WETH/AERO", chain: "Base", supplyAPY: 136.6, tvlUsd: 2_600_000, type: "lp", url: "https://aerodrome.finance/", description: "LP WETH/AERO. APY 137%. RIESGO: token AERO puede perder valor, impermanent loss.", risk: "ALTO" },
+  { protocol: "Uniswap V3", protocolIcon: "🦄", asset: "AAVE/WETH", chain: "Ethereum", supplyAPY: 48.4, tvlUsd: 3_800_000, type: "lp", url: "https://app.uniswap.org/#/pools", description: "LP AAVE/WETH. APY 48%. RIESGO: AAVE volátil, impermanent loss, gas caro.", risk: "ALTO" },
+  { protocol: "Uniswap V3", protocolIcon: "🦄", asset: "ETH/LINK", chain: "Ethereum", supplyAPY: 46.2, tvlUsd: 21_600_000, type: "lp", url: "https://app.uniswap.org/#/pools", description: "LP ETH/LINK. APY 46%. RIESGO: LINK volátil, impermanent loss, gas caro Ethereum.", risk: "ALTO" },
 ];
 
 const CHAINS = [
@@ -70,12 +92,20 @@ const PROTOCOLS = [
 const RISK_COLORS: Record<string, string> = {
   "BAJO": "text-emerald-400 bg-emerald-950/30 border-emerald-800/50",
   "MEDIO": "text-amber-400 bg-amber-950/30 border-amber-800/50",
-  "MEDIO-ALTO": "text-red-400 bg-red-950/30 border-red-800/50",
+  "ALTO": "text-red-400 bg-red-950/30 border-red-800/50",
 };
+
+const RISK_LEVELS = [
+  { id: "ALL", name: "Todos los riesgos", icon: "📊", desc: "Mostrar todo" },
+  { id: "BAJO", name: "Bajo riesgo", icon: "🟢", desc: "0.01-6.5% APY | Protocolos auditados, stablecoins" },
+  { id: "MEDIO", name: "Medio riesgo", icon: "🟡", desc: "10-50% APY | LP pools, impermanent loss" },
+  { id: "ALTO", name: "Alto riesgo", icon: "🔴", desc: "48-300% APY | APY extremo, puede caer a 0" },
+];
 
 export default function EarnView() {
   const [chain, setChain] = useState("ALL");
   const [protocol, setProtocol] = useState("ALL");
+  const [riskFilter, setRiskFilter] = useState("ALL");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -86,6 +116,7 @@ export default function EarnView() {
   const filtered = ALL_POOLS.filter((p) => {
     if (chain !== "ALL" && p.chain !== chain) return false;
     if (protocol !== "ALL" && p.protocol !== protocol) return false;
+    if (riskFilter !== "ALL" && p.risk !== riskFilter) return false;
     return true;
   }).sort((a, b) => b.supplyAPY - a.supplyAPY);
 
@@ -186,30 +217,53 @@ export default function EarnView() {
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-wrap gap-2 mb-4">
-        {PROTOCOLS.map((p) => (
-          <button
-            key={p.id}
-            onClick={() => setProtocol(p.id)}
-            className={`px-3 py-1.5 text-xs rounded-lg transition ${
-              protocol === p.id ? "bg-emerald-600 text-white" : "bg-slate-800 text-slate-300 hover:bg-slate-700"
-            }`}
-          >
-            {p.icon} {p.name}
-          </button>
-        ))}
-        <div className="w-px bg-slate-800 mx-1" />
-        {CHAINS.map((c) => (
-          <button
-            key={c.id}
-            onClick={() => setChain(c.id)}
-            className={`px-3 py-1.5 text-xs rounded-lg transition ${
-              chain === c.id ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-300 hover:bg-slate-700"
-            }`}
-          >
-            {c.icon} {c.name}
-          </button>
-        ))}
+      <div className="space-y-2 mb-4">
+        {/* Filtro de riesgo */}
+        <div className="flex flex-wrap gap-2">
+          {RISK_LEVELS.map((r) => (
+            <button
+              key={r.id}
+              onClick={() => setRiskFilter(r.id)}
+              className={`px-3 py-1.5 text-xs rounded-lg transition flex items-center gap-1.5 ${
+                riskFilter === r.id
+                  ? r.id === "BAJO" ? "bg-emerald-600 text-white"
+                    : r.id === "MEDIO" ? "bg-amber-600 text-white"
+                    : r.id === "ALTO" ? "bg-red-600 text-white"
+                    : "bg-slate-600 text-white"
+                  : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+              }`}
+              title={r.desc}
+            >
+              {r.icon} {r.name}
+            </button>
+          ))}
+        </div>
+        {/* Filtros protocolo y chain */}
+        <div className="flex flex-wrap gap-2">
+          {PROTOCOLS.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => setProtocol(p.id)}
+              className={`px-3 py-1.5 text-xs rounded-lg transition ${
+                protocol === p.id ? "bg-emerald-600 text-white" : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+              }`}
+            >
+              {p.icon} {p.name}
+            </button>
+          ))}
+          <div className="w-px bg-slate-800 mx-1" />
+          {CHAINS.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => setChain(c.id)}
+              className={`px-3 py-1.5 text-xs rounded-lg transition ${
+                chain === c.id ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+              }`}
+            >
+              {c.icon} {c.name}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Tabla de pools */}
