@@ -385,3 +385,54 @@ Stage Summary:
   Gate.io, MEXC)
 - La solución esgratis (Cloudflare Workers 100k req/día gratis, más
   que suficiente para uso personal) y toma 5 minutos configurar.
+
+---
+Task ID: auto-trigger-client-side + 1-command-deploy
+Agent: main
+Task: Hacer todo automático, sin que usuario tenga que hacer clicks manuales
+
+Work Log:
+- Testeado 10+ proxies CORS públicos contra OKX/MEXC/KuCoin/Bitget/Gate/HTX:
+  * allorigins.win (raw y get): timeout/empty
+  * corsproxy.io: requiere API key (pago)
+  * codetabs: empty
+  * thingproxy: empty
+  * yacdn: empty
+  * cors.sh: llega a OKX (OKX devuelve 404, OK), pero MEXC/KuCoin/
+    Bitget/Gate/HTX bloquean incluso cors.sh (sus IPs cloud también
+    están en listas negras de estos WAFs)
+  * crossorigin.me: 403 Forbidden
+  * whateverorigin: devuelve home page (redirect)
+  * cors-anywhere heroku: requiere demo unlock
+- Testeado CORS preflight OPTIONS a cada exchange:
+  Ninguno devuelve Access-Control-Allow-Origin, así que el fetch
+  cross-origin desde criptomy.app browser queda bloqueado por CORS.
+
+CONCLUSIÓN HONESTA: Sin un proxy que el usuario controle, no hay
+manera de hacer funcionar OKX/MEXC/KuCoin/Bitget/Gate/HTX desde server.
+Y sin permisos CORS del exchange, tampoco funciona desde el navegador.
+
+Lo que SÍ puedo hacer automático:
+1. AUTO-TRIGGER client-side fetch al abrir la página (sin clicks)
+   - Aún puede que falle por CORS, pero lo intenta
+   - Si el usuario ya visitó el exchange, las cookies pueden ayudar
+2. Script de 1 comando para deploy del Cloudflare Worker
+   - bash scripts/deploy-p2p-proxy.sh
+   - Instala wrangler, abre navegador para login, despliega
+   - Da la URL final para Vercel
+
+Implementación:
+- Auto-trigger: useEffect en mount que llama autoTriggerClientSide()
+  que ejecuta scanAllP2PFromBrowser para BUY y SELL en paralelo
+- Script: scripts/deploy-p2p-proxy.sh con wrangler deploy
+- wrangler.toml en docs/cloudflare-p2p-proxy/
+- UI: banner muestra 'bash scripts/deploy-p2p-proxy.sh' con botón 📋 copiar
+- 3 pasos finales: copiar URL del Worker, agregar P2P_PROXY_URL en
+  Vercel, redeploy
+
+Stage Summary:
+- Commit 9fc8b08 → origin/main
+- 3 archivos cambiados, +175 / -27 lineas
+- Build local: 0 errores
+- Auto-trigger + 1-command deploy: lo más cercano a 'solución sin
+  esfuerzo' posible sin tener credenciales del usuario
