@@ -7,7 +7,7 @@ import {
   Building2, Coins, BarChart3, ArrowRight, CheckCircle2, AlertCircle,
   Award,
 } from "lucide-react";
-import P2PArbitrageView from "./P2PArbitrageView";
+import P2PArbitragePanel from "../panels/p2p-arbitrage-panel";
 
 interface YieldPool {
   protocol: string;
@@ -171,7 +171,7 @@ export default function EarnView() {
       {/* ============================================================ */}
       {/* SUB-TAB: Arbitraje P2P — Binance + Kraken + Bitvavo + más */}
       {/* ============================================================ */}
-      {subTab === "p2p-arbitrage" && <P2PArbitrageView />}
+      {subTab === "p2p-arbitrage" && <P2PArbitragePanel />}
 
       {/* ============================================================ */}
       {/* SUB-TAB: DeFi Pools — Aave / Compound / Lido / Uniswap */}
