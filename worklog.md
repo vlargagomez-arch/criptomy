@@ -268,3 +268,62 @@ Stage Summary:
   (por eso pueden ver okx.com, kucoin.com, etc.). El fetch desde su
   navegador hacia esos exchanges funcionará. Ahora la app lo permite
   con un click en 'Escanear desde mi navegador'.
+
+---
+Task ID: algoritmo-p2p-v2-mexc
+Agent: main
+Task: Implementar algoritmo v2 de arbitraje P2P con 4 exchanges + MEXC
+
+Work Log:
+- Testeado MEXC P2P desde server: bloqueado por Akamai (403 Access Denied)
+  igual que KuCoin/Bitget/OKX. Lo añadí al client-side fetcher.
+- Creado src/lib/p2p-arbitrage/engine-v2.ts con algoritmo exacto pedido:
+  1. Fetch paralelo 8 requests (4 BUY + 4 SELL) en Promise.all
+  2. Filtro reputación: completionRate >= 0.80 (REPUTATION_THRESHOLD)
+  3. Sort: BUY asc por precio, SELL desc por precio
+  4. Top 12 BUY × top 12 SELL = 144 combinaciones max (TOP_N_PER_SIDE = 12)
+  5. Cálculo por combinación:
+     - grossSpread = sellPrice - buyPrice
+     - grossSpreadPercent = (grossSpread/buyPrice)*100
+     - withdrawalFee (USDT TRC20 = 1, ERC20 = 10, BSC = 0.5, BTC = 0.0001)
+     - withdrawalFeeFiat = withdrawalFee * buyPrice (solo cross-exchange)
+     - operationSize = min(buyMax, sellMax) (intersección)
+     - unitsBought = operationSize / buyPrice
+     - grossRevenue = unitsBought * sellPrice
+     - grossProfit = grossRevenue - operationSize
+     - netProfit = grossProfit - withdrawalFeeFiat
+     - netSpreadPercent = (netProfit / operationSize) * 100
+  6. Filtro: netSpreadPercent >= 0.1 (MIN_NET_SPREAD_PERCENT) y netProfit > 0
+  7. Sort por netSpreadPercent desc
+  8. Top 30 (MAX_OPPORTUNITIES)
+
+- API endpoint actualizado:
+  GET  /api/scanner/p2p-arbitrage?asset=USDT&fiat=COP (solo server-side)
+  POST /api/scanner/p2p-arbitrage con body {clientBuyOffers, clientSellOffers}
+       para integrar offers del navegador (OKX, HTX, KuCoin, Bitget, MEXC)
+
+- UI actualizado en P2PArbitrageView:
+  * KPIs con números del pipeline (offers totales vs filtradas)
+  * NUEVO: visualización 'Pipeline del algoritmo v2' horizontal:
+    Fetch → Filtro ≥80% → Top 12×12 → NetSpread ≥0.1% → Top 30
+    muestra número de elementos en cada etapa
+  * OpportunityCard rediseñada con 'Cálculo del profit neto' desglosado:
+    - Tamaño op. (operationSize = min(buyMax, sellMax))
+    - Unidades compradas (operationSize / buyPrice)
+    - Revenue bruto (unitsBought * sellPrice)
+    - Profit bruto (revenue - operationSize)
+    - Fee retiro (1 USDT TRC20 si cross-exchange, 0 si intra)
+    - Profit NETO final
+
+- MEXC P2P agregado:
+  - scanMexcP2P en p2p-providers.ts (server DISABLED, blocked Akamai)
+  - scanMexcP2PFromBrowser en client-p2p.ts (3 endpoints probados)
+  - Total: 8 providers en el grid (Binance, Bybit, OKX, HTX, KuCoin,
+    Bitget, Gate.io, MEXC)
+
+Stage Summary:
+- Commit d5763ab → origin/main
+- 5 archivos cambiados, +736 / -31 lineas
+- Build local: 0 errores
+- Ahora hay 8 providers P2P en el grid del UI
+- Algoritmo implementado según especificación exacta del usuario
