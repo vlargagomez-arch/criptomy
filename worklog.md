@@ -554,3 +554,59 @@ Stage Summary:
 - 2 archivos cambiados, +185 / -11 lineas
 - Build local: 0 errores
 - Cross-exchange REAL funcionando: Binance↔OKX con profit verificado
+
+---
+Task ID: filtros-anti-estafa-robustos
+Agent: main
+Task: Hacer un buen escaneo con merchants legítimos (buena reputación + órdenes)
+
+Work Log:
+- Verificado en vivo: el filtro anterior aceptaba GILBALACRIPTO (99.65%
+  reputación, 1149 órdenes, precio 1719 COP — 45% bajo mercado)
+  Era un BAIT AD típico: merchant con buena pinta pero precio imposible
+  para atraer compradores y robarles el pago.
+
+- Implementados 3 filtros anti-estafa en engine-v3.ts:
+  1. Reputación ≥ 90% (antes 80%)
+     - Default cambiado en API endpoint y en el panel UI
+  2. Mínimo 50 órdenes completadas
+     - Filtra cuentas nuevas creadas para estafar
+     - Kraken se excluye (no aplica)
+  3. Banda de precio de mercado (±15% / +25%)
+     - Calcula precio mercado = MEDIANA (robusto a outliers como 1719)
+     - Rechaza ads < 85% del mercado (bait ads)
+     - Rechaza ads > 125% del mercado (nunca se ejecutan)
+
+- Verificación post-fix:
+  * Precio mercado (mediana): 3099 COP
+  * Banda aceptable: 2634-3874 COP
+  * 10 bait ads filtrados (incluye GILBALACRIPTO @ 1719)
+  * 27 merchants filtrados por reputación < 90%
+  * 8 cuentas nuevas filtradas (< 50 órdenes)
+  * GILBALACRIPTO @ 1719 COP: ✓ FILTRADO
+  * Top opportunities ahora son merchants legítimos:
+    - Trust_Point (99.01%, 605 órdenes) @ 2670 COP
+    - Davidcrypto (97.62%, 782 órdenes) @ 2729 COP
+    - AlphaPay (100%, 612 órdenes) @ 2756 COP
+    - JHONSE (100%, 20618 órdenes!) @ 2800 COP
+    - BallenaAzul (96.03%, 1502 órdenes) @ 2800 COP
+  * Spread realista: +30-40% (no +172% fake)
+  * Cross-exchange sigue funcionando: 3 rutas únicas
+  * totalFound: 68 (antes 94 con bait ads)
+
+- UI nuevo banner 'Filtros anti-estafa aplicados':
+  * Grid 4 cards: reputación mínima, órdenes mínimas, banda precio,
+    precio mercado (mediana)
+  * Footer explicativo: 'Bait ads se descartan automáticamente'
+
+- API response incluye campos nuevos en reputation:
+  * marketPrice, priceBand {low, high}
+  * filteredByOrders, filteredByReputation, filteredByPriceBand
+
+Stage Summary:
+- Commit 2fbeb1a → origin/main
+- 4 archivos cambiados
+- Build local: 0 errores
+- Verificado en vivo: GILBALACRIPTO (bait) YA NO aparece
+- Top opportunities ahora son merchants legítimos con miles de órdenes
+  y reputación 96-100%
