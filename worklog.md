@@ -48,3 +48,34 @@ Stage Summary:
 - Vercel webhook sigue sin disparar (mismo problema de antes)
 - Pendiente: que el usuario verifique Vercel Dashboard y haga Redeploy manual
   o reconecte el webhook GitHub → Vercel
+
+---
+Task ID: unificar-enviar-recibir-btc-search-arbitraje-p2p
+Agent: main
+Task: 4 cambios solicitados por usuario (wallet, menu unificado, buscador BTC, arbitraje P2P en Earn)
+
+Work Log:
+- Nuevo tab 'enviar-recibir' unificado con sub-tabs internos (Enviar | Recibir)
+- Migracion v22 del store: redirige tabs viejos (enviar, recibir) al nuevo
+- Header + HomeView + page.tsx + DonacionesView actualizados
+- Fallback USD→USDT en Bitget, KuCoin, HTX, Bingx (antes no respondian a USD)
+- API /api/search ahora devuelve TODOS los providers (online + offline + error)
+- SmartSearchView: nueva FullProviderTable con metadata de cada exchange
+  (logo, rank, KYC, liquidez, estado visual ONLINE/ERROR/DISABLED)
+- Engine de Arbitraje P2P en src/lib/p2p-arbitrage/engine.ts:
+  * Combina Binance P2P (BUY + SELL) + Kraken + Bitvavo + Coinbase spot
+  * Matching de cantidades: solo muestra pares donde min-max se cruzan
+  * Estima ganancia operando el monto maximo del rango matched
+- API: GET /api/scanner/p2p-arbitrage?asset=USDT&fiat=COP
+- Componente P2PArbitrageView (selector asset/fiat, KPIs, opportunity cards,
+  tablas BUY/SELL, auto-refresh 30s)
+- Sub-tab 'Arbitraje P2P' dentro de EarnView (junto a DeFi Pools)
+- Provider Bitvavo nuevo (exchange holandes, API publica)
+
+Stage Summary:
+- Commit fd56cb8 → origin/main
+- 18 archivos cambiados, +1387 / -125 lineas
+- Build local: 0 errores
+- 4 rutas API nuevas visibles en el build: /api/scanner/p2p-arbitrage
+- El usuario debe hacer Redeploy manual en Vercel o esperar al webhook
+- Wallet del usuario: 0xcbd7e2e271b78e7e7491162aec21b3d38b72e182
