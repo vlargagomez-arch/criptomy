@@ -1,40 +1,35 @@
 // ============================================================
 // P2P PROVIDERS — APIs P2P públicas de varios exchanges
 // ============================================================
-// Esta es la reality-check de cada API (testeado Sept 2024):
+// Reality-check (testeado Sept 2024 con curl desde server):
 //
-// ✅ Binance P2P: API web pública, funciona desde server
+// ✅ Binance P2P: API web pública, POST JSON funciona desde server
 //    POST https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search
 //
-// ⚠️ Bybit P2P: API web existe pero requiere parámetros exactos.
-//    Intentamos múltiples variantes. Devuelve 10001 "param error".
-//    Cloudflare+WAF la defienden. Probamos desde server.
-//    POST https://api2.bybit.com/fiat/otc/item/online
+// ✅ Bybit P2P: ¡FUNCIONA con Content-Type application/x-www-form-urlencoded!
+//    (NO con JSON — eso devolvía 10001 param error)
+//    POST https://api2.bybit.com/fiat/otc/item/online/
+//    Body: userId=&tokenId=USDT&currencyId=COP&side=1&size=20&page=1&searchType=0&authFlag=false&isAdvanced=false&canTrade=false&userType=all
+//    Devuelve: {ret_code:0, ret_msg:"SUCCESS", result:{count:51, items:[...]}}
 //
-// ⚠️ OKX P2P: No hay API pública oficial. Endpoint interno
-//    requiere auth/session. Probamos variantes; ninguna funciona
-//    sin cookies de sesión. 404 / Method Not Allowed.
+// ⚠️ OKX P2P: No hay API pública. Probamos 6+ paths y 2 content-types.
+//    Todos: 404 / Method Not Allowed. El endpoint interno requiere
+//    cookies de sesión del navegador (CSRF token, etc.).
 //
-// ⚠️ HTX (Huobi) P2P: Endpoint histórico otc-api.huobi.com
-//    dejó de responder (timeout). El nuevo requiere auth.
+// ⚠️ HTX (Huobi) P2P: Endpoint histórico otc-api.huobi.com/.pro
+//    ya no responde (timeout). El nuevo requiere auth.
 //
-// ⚠️ KuCoin P2P: Bloqueado por Cloudflare desde server (challenge).
+// ⚠️ KuCoin P2P: Bloqueado por Cloudflare challenge desde server.
 //
 // ⚠️ Gate.io P2P: Bloqueado por Akamai (403 Access Denied).
 //
 // ⚠️ MEXC P2P: Bloqueado por Akamai (403 Access Denied).
 //
-// ⚠️ Bitget P2P: Endpoint no documentado. Probamos múltiples;
-//    todos devuelven HTML (la página, no JSON).
+// ⚠️ Bitget P2P: Endpoint no documentado. Devuelve HTML (la página SPA).
 //
-// CONCLUSIÓN HONESTA: La mayoría de exchanges P2P bloquean
-// llamadas server-side desde Vercel (es la misma razón que
-// Bybit spot está bloqueado). Único confiable: Binance P2P.
-//
-// ESTRATEGIA: Implementamos todos los providers de manera
-// defensiva. Si responden, los incluimos. Si no, los marcamos
-// como DISABLED con razón clara en el UI. El usuario ve qué
-// exchanges intentamos y por qué no están disponibles.
+// RESULTADO REAL: 2 providers P2P online (Binance + Bybit).
+// Los demás se muestran DISABLED con razón clara para que el usuario
+// vea el estado real.
 // ============================================================
 
 import type { P2POffer, ProviderStatus } from "../scanner/types";
@@ -70,6 +65,52 @@ async function fetchP2PJson(
     // Si la respuesta es HTML, no es JSON — error de WAF
     if (text.trim().startsWith("<!") || text.trim().startsWith("<html") || text.trim().startsWith("<HTML")) {
       return { error: "Respuesta HTML (probablemente WAF/Cloudflare bloqueando)", status: res.status };
+    }
+    try {
+      const data = JSON.parse(text);
+      return { data, status: res.status };
+    } catch {
+      return { error: "Respuesta no es JSON válido", status: res.status };
+    }
+  } catch (err) {
+    clearTimeout(timeoutId);
+    return { error: (err as Error).message, status: 0 };
+  }
+}
+
+// ============================================================
+// HELPER: Fetch con Content-Type application/x-www-form-urlencoded
+// (necesario para Bybit P2P — su API rechaza JSON)
+// ============================================================
+async function fetchP2PForm(
+  url: string,
+  formData: Record<string, string>,
+  headers: Record<string, string> = {},
+  timeoutMs = 8000
+): Promise<{ data: any; status: number } | { error: string; status: number }> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const body = Object.entries(formData)
+      .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+      .join("&");
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+        "Origin": "https://www.bybit.com",
+        "Referer": "https://www.bybit.com/",
+        ...headers,
+      },
+      body,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    const text = await res.text();
+    if (text.trim().startsWith("<!") || text.trim().startsWith("<html") || text.trim().startsWith("<HTML")) {
+      return { error: "Respuesta HTML (WAF bloqueando)", status: res.status };
     }
     try {
       const data = JSON.parse(text);
@@ -128,27 +169,32 @@ export async function scanBinanceP2P(params: {
 }
 
 // ============================================================
-// 2. BYBIT P2P — intentamos, puede fallar por geo-block ⚠️
+// 2. BYBIT P2P — ¡AHORA SÍ FUNCIONA! ✅
 // ============================================================
-// POST https://api2.bybit.com/fiat/otc/item/online
-// Body con varios formatos conocidos. Si todos fallan, DISABLED.
+// Truco encontrado: Bybit rechaza JSON con 10001 param error.
+// Hay que usar Content-Type: application/x-www-form-urlencoded.
+// Verificado con curl: 51 offers para COP, 692 para USD.
 interface BybitP2PItem {
-  nickname?: string;
+  nickName?: string;
   userName?: string;
   price: string;
   minAmount: string;
   maxAmount: string;
   lastQuantity?: string;
-  surplusAmount?: string;
-  paymentMethods?: { paymentName: string }[];
+  quantity?: string;
+  frozenQuantity?: string;
+  executedQuantity?: string;
+  remark?: string;
+  paymentMethods?: { paymentName: string; paymentID: string }[];
   recentOrderNum?: number;
   recentExecuteRate?: number;
+  period?: string;
 }
 
 interface BybitP2PResponse {
   ret_code: number;
   ret_msg: string;
-  result?: { items: BybitP2PItem[]; totalCount: number } | null;
+  result?: { count: number; items: BybitP2PItem[] } | null;
 }
 
 export async function scanBybitP2P(params: {
@@ -157,53 +203,68 @@ export async function scanBybitP2P(params: {
   tradeType: "BUY" | "SELL";
 }): Promise<P2PProviderResult> {
   const start = Date.now();
-  const side = params.tradeType === "BUY" ? "1" : "0"; // Bybit: 1=buy, 0=sell
-  const url = "https://api2.bybit.com/fiat/otc/item/online";
+  const side = params.tradeType === "BUY" ? "1" : "0"; // Bybit: 1=buy (usuario compra), 0=sell
+  const url = "https://api2.bybit.com/fiat/otc/item/online/";
 
-  // Intentamos varios payloads (Bybit cambia su API frecuentemente)
-  const payloads = [
-    { userId: "", tokenId: params.asset, currencyId: params.fiat, payment: [], side, size: 20, page: 1, amountType: "", amount: "", searchType: 0, authFlag: false, isAdvanced: false, canTrade: false },
-    { userId: "", tokenId: params.asset, currencyId: params.fiat, payment: [], side, size: 20, page: 1, amountType: null, amount: null, searchType: "0", authFlag: false, isAdvanced: false, canTrade: false },
-    { tokenId: params.asset, currencyId: params.fiat, payment: [], side, size: 20, page: 1 },
-  ];
+  // Body como form-urlencoded (no JSON — Bybit rechaza JSON con 10001)
+  const formData: Record<string, string> = {
+    userId: "",
+    tokenId: params.asset,
+    currencyId: params.fiat,
+    side,
+    size: "20",
+    page: "1",
+    amountType: "",
+    amount: "",
+    searchType: "0",
+    authFlag: "false",
+    isAdvanced: "false",
+    canTrade: "false",
+    userType: "all",
+  };
 
-  for (const payload of payloads) {
-    const result = await fetchP2PJson(url, payload, {
-      "Origin": "https://www.bybit.com",
-      "Referer": "https://www.bybit.com/",
-    });
-    if ("error" in result) continue;
-    if (result.status !== 200) continue;
+  const result = await fetchP2PForm(url, formData);
 
+  if ("data" in result && result.data) {
     const data = result.data as BybitP2PResponse;
-    if (data.ret_code !== 0 || !data.result?.items) continue;
+    if (data.ret_code === 0 && data.result?.items) {
+      const offers: P2POffer[] = data.result.items
+        .filter((it) => it.price && parseFloat(it.price) > 0)
+        .map((it) => ({
+          provider: "bybit-p2p",
+          providerName: "Bybit P2P",
+          advertiser: it.nickName || it.userName || "anónimo",
+          asset: params.asset,
+          fiat: params.fiat,
+          tradeType: params.tradeType,
+          price: parseFloat(it.price),
+          minAmount: parseFloat(it.minAmount || "0"),
+          maxAmount: parseFloat(it.maxAmount || "0"),
+          available: parseFloat(it.lastQuantity || it.quantity || "0"),
+          paymentMethods: (it.paymentMethods || []).map((p) => p.paymentName || p.paymentID),
+          tradeCount: it.recentOrderNum || 0,
+          completionRate: it.recentExecuteRate !== undefined ? it.recentExecuteRate / 100 : undefined,
+          timestamp: Date.now(),
+          latencyMs: Date.now() - start,
+          status: "ONLINE" as ProviderStatus,
+        }))
+        .filter((o) => o.price > 0);
 
-    const offers: P2POffer[] = data.result.items
-      .filter((it) => it.price && parseFloat(it.price) > 0)
-      .map((it) => ({
-        provider: "bybit-p2p",
+      return {
+        providerId: "bybit-p2p",
         providerName: "Bybit P2P",
-        advertiser: it.nickname || it.userName || "anónimo",
-        asset: params.asset,
-        fiat: params.fiat,
-        tradeType: params.tradeType,
-        price: parseFloat(it.price),
-        minAmount: parseFloat(it.minAmount || "0"),
-        maxAmount: parseFloat(it.maxAmount || "0"),
-        available: parseFloat(it.surplusAmount || it.lastQuantity || "0"),
-        paymentMethods: (it.paymentMethods || []).map((p) => p.paymentName),
-        tradeCount: it.recentOrderNum || 0,
-        completionRate: it.recentExecuteRate !== undefined ? it.recentExecuteRate / 100 : undefined,
-        timestamp: Date.now(),
+        offers,
+        status: "ONLINE",
         latencyMs: Date.now() - start,
-        status: "ONLINE" as ProviderStatus,
-      }));
-
+      };
+    }
+    // Error ret_code != 0 (ej. ret_code 10001 = param error)
     return {
       providerId: "bybit-p2p",
       providerName: "Bybit P2P",
-      offers,
-      status: "ONLINE",
+      offers: [],
+      status: "ERROR",
+      error: `Bybit API respondió ret_code ${data.ret_code}: ${data.ret_msg}`,
       latencyMs: Date.now() - start,
     };
   }
@@ -213,7 +274,7 @@ export async function scanBybitP2P(params: {
     providerName: "Bybit P2P",
     offers: [],
     status: "DISABLED",
-    error: "Bybit P2P API no responde (requiere parámetros exactos o geo-block desde server). La sección P2P de Bybit web funciona pero su API interna no es pública.",
+    error: result.error || "Bybit P2P no responde",
     latencyMs: Date.now() - start,
   };
 }
@@ -289,7 +350,7 @@ export async function scanOkxP2P(params: {
     providerName: "OKX P2P",
     offers: [],
     status: "DISABLED",
-    error: "OKX P2P no tiene API pública documentada. El endpoint interno requiere cookies de sesión del navegador.",
+    error: "OKX P2P no tiene endpoint público. Probamos 6+ paths y 2 content-types (JSON + form-urlencoded). Todos: 404 / Method Not Allowed. OKX requiere cookies de sesión del navegador (CSRF token, etc.) que no podemos obtener desde server.",
     latencyMs: Date.now() - start,
   };
 }
