@@ -100,6 +100,7 @@ interface P2PProvider {
   status: string; // "ONLINE" | "ERROR" | "DISABLED"
   error?: string;
   latencyMs?: number;
+  viaProxy?: boolean; // true si la llamada fue vía Cloudflare Worker proxy
 }
 
 interface ApiStats {
@@ -343,7 +344,7 @@ export default function P2PArbitrageView() {
         <div className="mb-6">
           <h3 className="text-xs uppercase tracking-wide text-slate-500 mb-2 flex items-center gap-2">
             <Activity className="w-3.5 h-3.5 text-purple-400" />
-            Exchanges P2P escaneados · {onlineProviders.length} online + {disabledProviders.length} bloqueados server-side
+            Exchanges P2P escaneados · {onlineProviders.length} online + {disabledProviders.length} bloqueados
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
             {p2pProviders.map((p) => {
@@ -353,6 +354,7 @@ export default function P2PArbitrageView() {
               const clientOffers = cs.offers || 0;
               // Show as "online" if either server OR client succeeded
               const effectivelyOnline = online || clientOnline;
+              const viaProxy = p.viaProxy === true;
               return (
                 <div
                   key={p.providerId}
@@ -375,10 +377,13 @@ export default function P2PArbitrageView() {
                   {effectivelyOnline ? (
                     <div className="text-[10px] text-slate-400">
                       <div>{(p.offers?.length || 0) + clientOffers} ofertas encontradas</div>
-                      {online
-                        ? <div className="text-slate-500">Vía server · Latencia: {p.latencyMs || 0}ms</div>
-                        : <div className="text-emerald-500/80">Vía tu navegador · {clientOffers} ofertas</div>
-                      }
+                      {online ? (
+                        <div className="text-slate-500">
+                          {viaProxy ? "☁️ Vía Cloudflare Worker proxy" : "Vía server"} · Latencia: {p.latencyMs || 0}ms
+                        </div>
+                      ) : (
+                        <div className="text-emerald-500/80">Vía tu navegador · {clientOffers} ofertas</div>
+                      )}
                     </div>
                   ) : (
                     <div className="text-[10px] text-amber-400/80 italic">
@@ -390,6 +395,40 @@ export default function P2PArbitrageView() {
             })}
           </div>
 
+          {/* Banner: Configurar Cloudflare Worker proxy */}
+          {disabledProviders.length > 0 && (
+            <div className="mt-3 p-3 bg-purple-950/30 border border-purple-700/40 rounded-lg">
+              <div className="text-xs text-purple-200 font-medium flex items-center gap-1.5 mb-1">
+                <Zap className="w-3.5 h-3.5 text-purple-400" />
+                Solución: activar TODOS los exchanges bloqueados con Cloudflare Worker proxy (gratis, 5 min)
+              </div>
+              <div className="text-[10px] text-slate-400 mb-2">
+                Los exchanges P2P (OKX, MEXC, KuCoin, Bitget, Gate.io, HTX) bloquean llamadas desde servidores cloud (Vercel).
+                Cloudflare Workers corren en la red de Cloudflare cuyas IPs NO están bloqueadas — solución definitiva.
+                Una vez configurado, todos los providers pasan a ONLINE.
+              </div>
+              <div className="text-[10px] text-slate-400 mb-2">
+                <b className="text-slate-300">Paso 1:</b> Crea un Worker gratis en dash.cloudflare.com → Workers & Pages → Create Worker<br/>
+                <b className="text-slate-300">Paso 2:</b> Pega el código de <code className="text-emerald-400">docs/cloudflare-p2p-proxy/worker.js</code> y deploy<br/>
+                <b className="text-slate-300">Paso 3:</b> Copia la URL del Worker<br/>
+                <b className="text-slate-300">Paso 4:</b> En Vercel → Settings → Environment Variables, agrega <code className="text-emerald-400">P2P_PROXY_URL</code> con esa URL<br/>
+                <b className="text-slate-300">Paso 5:</b> Redeploy en Vercel — todos los exchanges se activan automáticamente
+              </div>
+              <a
+                href="https://dash.cloudflare.com/?to=/:account/workers"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition"
+              >
+                <ExternalLink className="w-3 h-3" />
+                Crear Worker en Cloudflare
+              </a>
+              <span className="ml-2 text-[10px] text-slate-500">
+                Ver docs/cloudflare-p2p-proxy/README.md para guía paso a paso
+              </span>
+            </div>
+          )}
+
           {/* Botón: Escanear desde el navegador para exchanges bloqueados */}
           {disabledProviders.length > 0 && (
             <div className="mt-3 p-3 bg-slate-900/70 border border-purple-700/30 rounded-lg">
@@ -397,10 +436,10 @@ export default function P2PArbitrageView() {
                 <div className="flex-1 min-w-0">
                   <div className="text-xs text-slate-200 font-medium flex items-center gap-1.5 mb-1">
                     <UserCog className="w-3.5 h-3.5 text-purple-400" />
-                    Activar exchanges bloqueados (OKX, HTX, KuCoin, Bitget)
+                    Alternativa: escanear desde el navegador (sin proxy)
                   </div>
                   <div className="text-[10px] text-slate-400">
-                    Tu navegador SÍ puede acceder a esos exchanges (tu IP no está bloqueada).
+                    Tu navegador SÍ puede acceder a esos exchanges (tu IP residencial no está bloqueada).
                     Click en los botones abajo y tu navegador hará el fetch directo.
                     Primero visita el sitio del exchange en otra pestaña para que se seteen las cookies.
                   </div>

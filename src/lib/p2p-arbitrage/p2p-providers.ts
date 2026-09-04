@@ -134,6 +134,30 @@ export interface P2PProviderResult {
   status: ProviderStatus;
   error?: string;
   latencyMs: number;
+  viaProxy?: boolean; // true si la llamada fue vía Cloudflare Worker proxy
+}
+
+// ============================================================
+// HELPER: Proxy Cloudflare Worker
+// ============================================================
+// Si la env var P2P_PROXY_URL está configurada, las llamadas a
+// exchanges bloqueados se enrutan a través del proxy.
+// Documentación: docs/cloudflare-p2p-proxy/README.md
+// ============================================================
+function getProxyUrl(): string | null {
+  const url = process.env.P2P_PROXY_URL;
+  if (!url) return null;
+  return url.replace(/\/$/, "");
+}
+
+// Construye la URL del proxy para un exchange y path dados
+// Ej: buildProxyUrl("mexc", "/api/p2p/online/list")
+//   -> https://user.workers.dev/mexc/api/p2p/online/list
+function buildProxyUrl(exchangePrefix: string, path: string): string {
+  const proxy = getProxyUrl();
+  if (!proxy) return "";
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  return `${proxy}/${exchangePrefix}${cleanPath}`;
 }
 
 // ============================================================
@@ -289,59 +313,73 @@ export async function scanOkxP2P(params: {
 }): Promise<P2PProviderResult> {
   const start = Date.now();
   const side = params.tradeType === "BUY" ? "buy" : "sell";
-  const url = "https://www.okx.com/v2/c2c/trading/adv/list";
+  const directUrl = "https://www.okx.com/v2/c2c/trading/adv/list";
+  // Si P2P_PROXY_URL está configurada, enrutar vía proxy
+  const proxyUrl = buildProxyUrl("okx", "/v2/c2c/trading/adv/list");
+  const url = proxyUrl || directUrl;
+  const viaProxy = !!proxyUrl;
 
   const payloads = [
     { side, quoteCurrency: params.fiat, baseCurrency: params.asset, quoteType: "price", page: 1, size: 20 },
     { side, quoteCurrency: params.fiat, baseCurrency: params.asset, page: 1, size: 20 },
+    // Endpoints alternativos que OKX usa internamente
+    { side, cryptoCurrency: params.asset, fiatCurrency: params.fiat, quoteType: "price", page: 1, size: 20 },
   ];
 
-  for (const payload of payloads) {
-    const result = await fetchP2PJson(url, payload, {});
-    if ("error" in result) continue;
-    if (result.status !== 200) continue;
+  // También intentar el endpoint v3 si v2 falla
+  const urls = [
+    url,
+    proxyUrl ? buildProxyUrl("okx", "/v3/c2c/otc-trade/advertisement/list") : "https://www.okx.com/v3/c2c/otc-trade/advertisement/list",
+  ];
 
-    const data = result.data;
-    // Estructura puede variar — ser defensivos
-    if (!data || (data.code && data.code !== "0" && data.code !== 0)) continue;
-    const items = data.data?.items || data.data?.advList || data.data || [];
-    if (!Array.isArray(items) || items.length === 0) continue;
+  for (const tryUrl of urls) {
+    for (const payload of payloads) {
+      const result = await fetchP2PJson(tryUrl, payload, {});
+      if ("error" in result) continue;
+      if (result.status !== 200) continue;
 
-    const offers: P2POffer[] = items
-      .filter((it: any) => it.price || it.adv?.price)
-      .slice(0, 20)
-      .map((it: any) => {
-        const adv = it.adv || it;
-        const advertiser = it.advertiser || it.userInfo || {};
+      const data = result.data;
+      if (!data || (data.code && data.code !== "0" && data.code !== 0 && data.code !== "200")) continue;
+      const items = data.data?.items || data.data?.advList || data.data?.advertisementList || (Array.isArray(data.data) ? data.data : []);
+      if (!Array.isArray(items) || items.length === 0) continue;
+
+      const offers: P2POffer[] = items
+        .filter((it: any) => it.price || it.adv?.price)
+        .slice(0, 20)
+        .map((it: any) => {
+          const adv = it.adv || it;
+          const advertiser = it.advertiser || it.userInfo || {};
+          return {
+            provider: "okx-p2p",
+            providerName: "OKX P2P",
+            advertiser: advertiser.nickName || advertiser.userName || "anónimo",
+            asset: params.asset,
+            fiat: params.fiat,
+            tradeType: params.tradeType,
+            price: parseFloat(adv.price || "0"),
+            minAmount: parseFloat(adv.minQuotePricePerOrder || adv.minAmount || "0"),
+            maxAmount: parseFloat(adv.maxQuotePricePerOrder || adv.maxAmount || "0"),
+            available: parseFloat(adv.availableAmount || adv.surplusAmount || "0"),
+            paymentMethods: (adv.paymentMethods || []).map((p: any) => p.name || p),
+            tradeCount: advertiser.completedOrderCount || advertiser.monthOrderCount || 0,
+            completionRate: advertiser.completedRate ? advertiser.completedRate / 100 : undefined,
+            timestamp: Date.now(),
+            latencyMs: Date.now() - start,
+            status: "ONLINE" as ProviderStatus,
+          } as P2POffer;
+        })
+        .filter((o: P2POffer) => o.price > 0);
+
+      if (offers.length > 0) {
         return {
-          provider: "okx-p2p",
+          providerId: "okx-p2p",
           providerName: "OKX P2P",
-          advertiser: advertiser.nickName || advertiser.userName || "anónimo",
-          asset: params.asset,
-          fiat: params.fiat,
-          tradeType: params.tradeType,
-          price: parseFloat(adv.price || "0"),
-          minAmount: parseFloat(adv.minQuotePricePerOrder || adv.minAmount || "0"),
-          maxAmount: parseFloat(adv.maxQuotePricePerOrder || adv.maxAmount || "0"),
-          available: parseFloat(adv.availableAmount || adv.surplusAmount || "0"),
-          paymentMethods: (adv.paymentMethods || []).map((p: any) => p.name || p),
-          tradeCount: advertiser.completedOrderCount || advertiser.monthOrderCount || 0,
-          completionRate: advertiser.completedRate ? advertiser.completedRate / 100 : undefined,
-          timestamp: Date.now(),
+          offers,
+          status: "ONLINE",
           latencyMs: Date.now() - start,
-          status: "ONLINE" as ProviderStatus,
-        } as P2POffer;
-      })
-      .filter((o: P2POffer) => o.price > 0);
-
-    if (offers.length > 0) {
-      return {
-        providerId: "okx-p2p",
-        providerName: "OKX P2P",
-        offers,
-        status: "ONLINE",
-        latencyMs: Date.now() - start,
-      };
+          viaProxy,
+        };
+      }
     }
   }
 
@@ -350,13 +388,15 @@ export async function scanOkxP2P(params: {
     providerName: "OKX P2P",
     offers: [],
     status: "DISABLED",
-    error: "OKX P2P no tiene endpoint público. Probamos 6+ paths y 2 content-types (JSON + form-urlencoded). Todos: 404 / Method Not Allowed. OKX requiere cookies de sesión del navegador (CSRF token, etc.) que no podemos obtener desde server.",
+    error: viaProxy
+      ? "OKX no respondió vía proxy. Revisa que el Worker esté bien configurado."
+      : "OKX bloqueado desde server. Configura P2P_PROXY_URL (Cloudflare Worker) para activar — ver docs/cloudflare-p2p-proxy/README.md",
     latencyMs: Date.now() - start,
   };
 }
 
 // ============================================================
-// 4. HTX (Huobi) P2P — endpoint histórico ⚠️
+// 4. HTX (Huobi) P2P — vía proxy ⚠️
 // ============================================================
 export async function scanHtxP2P(params: {
   asset: string;
@@ -365,44 +405,67 @@ export async function scanHtxP2P(params: {
 }): Promise<P2PProviderResult> {
   const start = Date.now();
   const tradeType = params.tradeType === "BUY" ? "BUY" : "SELL";
-  // Endpoint histórico (puede que ya no funcione)
-  const url = `https://otc-api.huobi.com/v1/data/trade-market?coinName=${params.asset}&currFiat=${params.fiat}&tradeType=${tradeType}&currPage=1&pageSize=20&paymentMethod=&onlyTradable=true&isThumbsUp=false&isOnline=true&sortBy=price`;
+  const viaProxy = !!getProxyUrl();
 
-  const result = await fetchP2PJson(url, null, { "Referer": "https://www.htx.com/" });
+  // Intentar varios endpoints HTX (proxy o directo)
+  const directUrls = [
+    `https://otc-api.huobi.com/v1/data/trade-market?coinName=${params.asset}&currFiat=${params.fiat}&tradeType=${tradeType}&currPage=1&pageSize=20&paymentMethod=&onlyTradable=true&isThumbsUp=false&isOnline=true&sortBy=price`,
+    `https://otc-api.huobi.pro/v1/data/trade-market?coinName=${params.asset}&currFiat=${params.fiat}&tradeType=${tradeType}&currPage=1&pageSize=20&onlyTradable=true&isOnline=true&sortBy=price`,
+    `https://c2c-api.htx.com/v1/data/trade-market?coinName=${params.asset}&currFiat=${params.fiat}&tradeType=${tradeType}&currPage=1&pageSize=20&onlyTradable=true&isOnline=true&sortBy=price`,
+    `https://api.huobi.pro/v1/otc/online/advertisement/list?coinId=2&currencyId=${params.fiat}&tradeType=${tradeType}&page=1&pageSize=20`,
+  ];
+  // Si hay proxy, agregar versiones proxy de cada URL
+  const proxyPaths = [
+    `/v1/data/trade-market?coinName=${params.asset}&currFiat=${params.fiat}&tradeType=${tradeType}&currPage=1&pageSize=20&onlyTradable=true&isOnline=true&sortBy=price`,
+  ];
+  const proxyUrls = viaProxy ? [
+    buildProxyUrl("htx", proxyPaths[0]),
+    buildProxyUrl("htx-pro", proxyPaths[0]),
+    buildProxyUrl("htx-c2c", proxyPaths[0]),
+    buildProxyUrl("huobi", `/v1/otc/online/advertisement/list?coinId=2&currencyId=${params.fiat}&tradeType=${tradeType}&page=1&pageSize=20`),
+  ] : [];
+  const urls = [...proxyUrls, ...directUrls];
 
-  if ("data" in result && result.data) {
-    const data = result.data;
-    if (data.code === 200 && Array.isArray(data.data)) {
-      const offers: P2POffer[] = data.data
-        .filter((it: any) => it.price && parseFloat(it.price) > 0)
-        .map((it: any) => ({
-          provider: "htx-p2p",
-          providerName: "HTX P2P",
-          advertiser: it.userName || it.nickname || "anónimo",
-          asset: params.asset,
-          fiat: params.fiat,
-          tradeType: params.tradeType,
-          price: parseFloat(it.price),
-          minAmount: parseFloat(it.minTradeAmount || it.minAmount || "0"),
-          maxAmount: parseFloat(it.maxTradeAmount || it.maxAmount || "0"),
-          available: parseFloat(it.tradeCount || it.availableAmount || "0"),
-          paymentMethods: (it.payments || []).map((p: any) => p.name || p),
-          tradeCount: it.orderCount || it.tradeMonthCount || 0,
-          completionRate: undefined,
-          timestamp: Date.now(),
-          latencyMs: Date.now() - start,
-          status: "ONLINE" as ProviderStatus,
-        }))
-        .filter((o: P2POffer) => o.price > 0);
+  for (const url of urls) {
+    const result = await fetchP2PJson(url, null, { "Referer": "https://www.htx.com/" });
 
-      if (offers.length > 0) {
-        return {
-          providerId: "htx-p2p",
-          providerName: "HTX P2P",
-          offers,
-          status: "ONLINE",
-          latencyMs: Date.now() - start,
-        };
+    if ("data" in result && result.data) {
+      const data = result.data;
+      // HTX responde con code 200 (otc-api) o status 'ok' (huobi.pro)
+      const items = data.data || data.result || [];
+      if ((data.code === 200 || data.status === "ok") && Array.isArray(items) && items.length > 0) {
+        const offers: P2POffer[] = items
+          .filter((it: any) => it.price && parseFloat(it.price) > 0)
+          .map((it: any) => ({
+            provider: "htx-p2p",
+            providerName: "HTX P2P",
+            advertiser: it.userName || it.nickname || "anónimo",
+            asset: params.asset,
+            fiat: params.fiat,
+            tradeType: params.tradeType,
+            price: parseFloat(it.price),
+            minAmount: parseFloat(it.minTradeAmount || it.minAmount || "0"),
+            maxAmount: parseFloat(it.maxTradeAmount || it.maxAmount || "0"),
+            available: parseFloat(it.tradeCount || it.availableAmount || "0"),
+            paymentMethods: (it.payments || []).map((p: any) => p.name || p),
+            tradeCount: it.orderCount || it.tradeMonthCount || 0,
+            completionRate: undefined,
+            timestamp: Date.now(),
+            latencyMs: Date.now() - start,
+            status: "ONLINE" as ProviderStatus,
+          }))
+          .filter((o: P2POffer) => o.price > 0);
+
+        if (offers.length > 0) {
+          return {
+            providerId: "htx-p2p",
+            providerName: "HTX P2P",
+            offers,
+            status: "ONLINE",
+            latencyMs: Date.now() - start,
+            viaProxy: url.includes(".workers.dev"),
+          };
+        }
       }
     }
   }
@@ -412,13 +475,15 @@ export async function scanHtxP2P(params: {
     providerName: "HTX P2P",
     offers: [],
     status: "DISABLED",
-    error: "HTX P2P endpoint histórico ya no responde. HTX migró su P2P a una API interna que requiere auth.",
+    error: viaProxy
+      ? "HTX no respondió vía proxy. HTX migró su P2P a API interna que requiere auth."
+      : "HTX bloqueado desde server. Configura P2P_PROXY_URL (Cloudflare Worker) — ver docs/cloudflare-p2p-proxy/README.md",
     latencyMs: Date.now() - start,
   };
 }
 
 // ============================================================
-// 5. KUCOIN P2P — bloqueado por Cloudflare ⚠️
+// 5. KUCOIN P2P — vía proxy ⚠️
 // ============================================================
 export async function scanKucoinP2P(params: {
   asset: string;
@@ -426,9 +491,8 @@ export async function scanKucoinP2P(params: {
   tradeType: "BUY" | "SELL";
 }): Promise<P2PProviderResult> {
   const start = Date.now();
-  // KuCoin P2P endpoint interno — probablemente bloqueado por Cloudflare
-  const url = "https://www.kucoin.com/_api/p2p/advertise/advertisement/list";
   const side = params.tradeType === "BUY" ? "BUY" : "SELL";
+  const viaProxy = !!getProxyUrl();
   const body = {
     currency: params.asset,
     side,
@@ -439,16 +503,32 @@ export async function scanKucoinP2P(params: {
     tradeType: 0,
   };
 
-  const result = await fetchP2PJson(url, body, {
-    "Origin": "https://www.kucoin.com",
-    "Referer": "https://www.kucoin.com/p2p",
-  });
+  const directUrls = [
+    "https://www.kucoin.com/_api/p2p/advertise/advertisement/list",
+    "https://www.kucoin.com/api/v1/p2p/adv/list",
+  ];
+  const proxyUrls = viaProxy ? [
+    buildProxyUrl("kucoin", "/_api/p2p/advertise/advertisement/list"),
+    buildProxyUrl("kucoin", "/api/v1/p2p/adv/list"),
+    buildProxyUrl("kucoin-api", "/api/v1/p2p/adv/list"),
+  ] : [];
+  const urls = [...proxyUrls, ...directUrls];
 
-  if ("data" in result && result.data) {
-    const data = result.data;
-    if (data.code === "200000" && Array.isArray(data.data?.items)) {
-      const offers: P2POffer[] = data.data.items
+  for (const url of urls) {
+    const result = await fetchP2PJson(url, body, {
+      "Origin": "https://www.kucoin.com",
+      "Referer": "https://www.kucoin.com/p2p",
+    });
+
+    if ("data" in result && result.data) {
+      const data = result.data;
+      if (!data || (data.code && data.code !== "200000")) continue;
+      const items = data.data?.items || data.data?.list || [];
+      if (!Array.isArray(items) || items.length === 0) continue;
+
+      const offers: P2POffer[] = items
         .filter((it: any) => it.price && parseFloat(it.price) > 0)
+        .slice(0, 20)
         .map((it: any) => ({
           provider: "kucoin-p2p",
           providerName: "KuCoin P2P",
@@ -476,6 +556,7 @@ export async function scanKucoinP2P(params: {
           offers,
           status: "ONLINE",
           latencyMs: Date.now() - start,
+          viaProxy: url.includes(".workers.dev"),
         };
       }
     }
@@ -486,13 +567,15 @@ export async function scanKucoinP2P(params: {
     providerName: "KuCoin P2P",
     offers: [],
     status: "DISABLED",
-    error: "KuCoin bloqueado por Cloudflare desde server (Akamai-like challenge).",
+    error: viaProxy
+      ? "KuCoin no respondió vía proxy."
+      : "KuCoin bloqueado por Cloudflare desde server. Configura P2P_PROXY_URL — ver docs/cloudflare-p2p-proxy/README.md",
     latencyMs: Date.now() - start,
   };
 }
 
 // ============================================================
-// 6. BITGET P2P — endpoint no documentado ⚠️
+// 6. BITGET P2P — vía proxy ⚠️
 // ============================================================
 export async function scanBitgetP2P(params: {
   asset: string;
@@ -501,11 +584,18 @@ export async function scanBitgetP2P(params: {
 }): Promise<P2PProviderResult> {
   const start = Date.now();
   const advertiseType = params.tradeType === "BUY" ? "BUY" : "SELL";
-  // Bitget P2P endpoint público — intentamos varias variantes
-  const urls = [
+  const viaProxy = !!getProxyUrl();
+
+  const directUrls = [
     `https://www.bitget.com/api/v2/p2p/merchant/advertise/list?advertiseType=${advertiseType}&asset=${params.asset}&legal=${params.fiat}&pageNo=1&pageSize=20`,
     `https://www.bitget.com/v2/p2p/online/advertise/list?asset=${params.asset}&fiat=${params.fiat}&side=${advertiseType}&pageNo=1&pageSize=20`,
   ];
+  const proxyUrls = viaProxy ? [
+    buildProxyUrl("bitget", `/api/v2/p2p/merchant/advertise/list?advertiseType=${advertiseType}&asset=${params.asset}&legal=${params.fiat}&pageNo=1&pageSize=20`),
+    buildProxyUrl("bitget", `/v2/p2p/online/advertise/list?asset=${params.asset}&fiat=${params.fiat}&side=${advertiseType}&pageNo=1&pageSize=20`),
+    buildProxyUrl("bitget-api", `/api/v2/p2p/merchant/advertise/list?advertiseType=${advertiseType}&asset=${params.asset}&legal=${params.fiat}&pageNo=1&pageSize=20`),
+  ] : [];
+  const urls = [...proxyUrls, ...directUrls];
 
   for (const url of urls) {
     const result = await fetchP2PJson(url, null, {});
@@ -547,6 +637,7 @@ export async function scanBitgetP2P(params: {
         offers,
         status: "ONLINE",
         latencyMs: Date.now() - start,
+        viaProxy: url.includes(".workers.dev"),
       };
     }
   }
@@ -556,13 +647,15 @@ export async function scanBitgetP2P(params: {
     providerName: "Bitget P2P",
     offers: [],
     status: "DISABLED",
-    error: "Bitget P2P endpoint no es público. Su página web usa API interna no documentada.",
+    error: viaProxy
+      ? "Bitget no respondió vía proxy."
+      : "Bitget bloqueado desde server. Configura P2P_PROXY_URL — ver docs/cloudflare-p2p-proxy/README.md",
     latencyMs: Date.now() - start,
   };
 }
 
 // ============================================================
-// 7. GATE.IO P2P — bloqueado por Akamai ⚠️
+// 7. GATE.IO P2P — vía proxy ⚠️
 // ============================================================
 export async function scanGateP2P(params: {
   asset: string;
@@ -571,47 +664,60 @@ export async function scanGateP2P(params: {
 }): Promise<P2PProviderResult> {
   const start = Date.now();
   const side = params.tradeType === "BUY" ? "buy" : "sell";
-  const url = "https://www.gate.io/p2p/api/v1/online_advert_items";
+  const viaProxy = !!getProxyUrl();
   const body = { currency: params.asset, fiat: params.fiat, side, page: 1, size: 20 };
 
-  const result = await fetchP2PJson(url, body, {
-    "Origin": "https://www.gate.io",
-    "Referer": "https://www.gate.io/p2p",
-  });
+  const directUrls = [
+    "https://www.gate.io/p2p/api/v1/online_advert_items",
+    "https://www.gate.io/p2p/ads/online_advert_items",
+  ];
+  const proxyUrls = viaProxy ? [
+    buildProxyUrl("gate", "/p2p/api/v1/online_advert_items"),
+    buildProxyUrl("gate", "/p2p/ads/online_advert_items"),
+  ] : [];
+  const urls = [...proxyUrls, ...directUrls];
 
-  if ("data" in result && result.data) {
-    const data = result.data;
-    if (Array.isArray(data.data)) {
-      const offers: P2POffer[] = data.data
-        .filter((it: any) => it.price && parseFloat(it.price) > 0)
-        .map((it: any) => ({
-          provider: "gate-p2p",
-          providerName: "Gate.io P2P",
-          advertiser: it.user?.username || it.nickname || "anónimo",
-          asset: params.asset,
-          fiat: params.fiat,
-          tradeType: params.tradeType,
-          price: parseFloat(it.price),
-          minAmount: parseFloat(it.min_amount || it.minAmount || "0"),
-          maxAmount: parseFloat(it.max_amount || it.maxAmount || "0"),
-          available: parseFloat(it.surplus_amount || "0"),
-          paymentMethods: (it.payment_methods || []).map((p: any) => p.name || p),
-          tradeCount: it.user?.trade_count || 0,
-          completionRate: undefined,
-          timestamp: Date.now(),
-          latencyMs: Date.now() - start,
-          status: "ONLINE" as ProviderStatus,
-        }))
-        .filter((o: P2POffer) => o.price > 0);
+  for (const url of urls) {
+    const result = await fetchP2PJson(url, body, {
+      "Origin": "https://www.gate.io",
+      "Referer": "https://www.gate.io/p2p",
+    });
 
-      if (offers.length > 0) {
-        return {
-          providerId: "gate-p2p",
-          providerName: "Gate.io P2P",
-          offers,
-          status: "ONLINE",
-          latencyMs: Date.now() - start,
-        };
+    if ("data" in result && result.data) {
+      const data = result.data;
+      if (Array.isArray(data.data)) {
+        const offers: P2POffer[] = data.data
+          .filter((it: any) => it.price && parseFloat(it.price) > 0)
+          .map((it: any) => ({
+            provider: "gate-p2p",
+            providerName: "Gate.io P2P",
+            advertiser: it.user?.username || it.nickname || "anónimo",
+            asset: params.asset,
+            fiat: params.fiat,
+            tradeType: params.tradeType,
+            price: parseFloat(it.price),
+            minAmount: parseFloat(it.min_amount || it.minAmount || "0"),
+            maxAmount: parseFloat(it.max_amount || it.maxAmount || "0"),
+            available: parseFloat(it.surplus_amount || "0"),
+            paymentMethods: (it.payment_methods || []).map((p: any) => p.name || p),
+            tradeCount: it.user?.trade_count || 0,
+            completionRate: undefined,
+            timestamp: Date.now(),
+            latencyMs: Date.now() - start,
+            status: "ONLINE" as ProviderStatus,
+          }))
+          .filter((o: P2POffer) => o.price > 0);
+
+        if (offers.length > 0) {
+          return {
+            providerId: "gate-p2p",
+            providerName: "Gate.io P2P",
+            offers,
+            status: "ONLINE",
+            latencyMs: Date.now() - start,
+            viaProxy: url.includes(".workers.dev"),
+          };
+        }
       }
     }
   }
@@ -621,13 +727,15 @@ export async function scanGateP2P(params: {
     providerName: "Gate.io P2P",
     offers: [],
     status: "DISABLED",
-    error: "Gate.io bloqueado por Akamai (403 Access Denied desde server).",
+    error: viaProxy
+      ? "Gate.io no respondió vía proxy."
+      : "Gate.io bloqueado por Akamai. Configura P2P_PROXY_URL — ver docs/cloudflare-p2p-proxy/README.md",
     latencyMs: Date.now() - start,
   };
 }
 
 // ============================================================
-// 8. MEXC P2P — bloqueado por Akamai desde server ⚠️
+// 8. MEXC P2P — vía proxy ⚠️
 // ============================================================
 export async function scanMexcP2P(params: {
   asset: string;
@@ -635,12 +743,79 @@ export async function scanMexcP2P(params: {
   tradeType: "BUY" | "SELL";
 }): Promise<P2PProviderResult> {
   const start = Date.now();
+  const side = params.tradeType === "BUY" ? "BUY" : "SELL";
+  const viaProxy = !!getProxyUrl();
+  const body = { asset: params.asset, fiat: params.fiat, side, page: 1, size: 20 };
+
+  const directUrls = [
+    "https://www.mexc.com/api/p2p/online/list",
+    "https://www.mexc.com/api/p2p/adv/list",
+    "https://www.mexc.com/api/p2p/ads/online",
+  ];
+  const proxyUrls = viaProxy ? [
+    buildProxyUrl("mexc", "/api/p2p/online/list"),
+    buildProxyUrl("mexc", "/api/p2p/adv/list"),
+    buildProxyUrl("mexc", "/api/p2p/ads/online"),
+  ] : [];
+  const urls = [...proxyUrls, ...directUrls];
+
+  for (const url of urls) {
+    const result = await fetchP2PJson(url, body, {
+      "Origin": "https://www.mexc.com",
+      "Referer": "https://www.mexc.com/p2p",
+    });
+
+    if ("error" in result || !result.data) continue;
+    if (result.status !== 200) continue;
+
+    const data = result.data;
+    if (!data || (data.code && data.code !== 0 && data.code !== "200" && data.code !== "200000")) continue;
+    const items = data.data?.list || data.data?.items || data.data?.advertisements || (Array.isArray(data.data) ? data.data : []);
+    if (!Array.isArray(items) || items.length === 0) continue;
+
+    const offers: P2POffer[] = items
+      .filter((it: any) => it.price && parseFloat(it.price) > 0)
+      .slice(0, 20)
+      .map((it: any) => ({
+        provider: "mexc-p2p",
+        providerName: "MEXC P2P",
+        advertiser: it.nickName || it.userName || it.user?.nickname || "anónimo",
+        asset: params.asset,
+        fiat: params.fiat,
+        tradeType: params.tradeType,
+        price: parseFloat(it.price),
+        minAmount: parseFloat(it.minAmount || it.min_limit || "0"),
+        maxAmount: parseFloat(it.maxAmount || it.max_limit || "0"),
+        available: parseFloat(it.surplusAmount || it.available_amount || "0"),
+        paymentMethods: (it.payments || it.payment_methods || []).map((p: any) => p.name || p.payName || p),
+        tradeCount: it.recentOrderNum || it.user?.tradeCount || 0,
+        completionRate: it.user?.completionRate !== undefined ? it.user.completionRate / 100 : undefined,
+        timestamp: Date.now(),
+        latencyMs: Date.now() - start,
+        status: "ONLINE" as ProviderStatus,
+      }))
+      .filter((o: P2POffer) => o.price > 0);
+
+    if (offers.length > 0) {
+      return {
+        providerId: "mexc-p2p",
+        providerName: "MEXC P2P",
+        offers,
+        status: "ONLINE",
+        latencyMs: Date.now() - start,
+        viaProxy: url.includes(".workers.dev"),
+      };
+    }
+  }
+
   return {
     providerId: "mexc-p2p",
     providerName: "MEXC P2P",
     offers: [],
     status: "DISABLED",
-    error: "MEXC bloqueado por Akamai (403 Access Denied desde server). Disponible vía 'Escanear desde mi navegador'.",
+    error: viaProxy
+      ? "MEXC no respondió vía proxy."
+      : "MEXC bloqueado por Akamai. Configura P2P_PROXY_URL — ver docs/cloudflare-p2p-proxy/README.md",
     latencyMs: Date.now() - start,
   };
 }
