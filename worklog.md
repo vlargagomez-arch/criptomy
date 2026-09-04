@@ -327,3 +327,61 @@ Stage Summary:
 - Build local: 0 errores
 - Ahora hay 8 providers P2P en el grid del UI
 - Algoritmo implementado según especificación exacta del usuario
+
+---
+Task ID: cloudflare-worker-proxy-p2p
+Agent: main
+Task: Desbloquear TODOS los exchanges P2P con Cloudflare Worker proxy
+
+Work Log:
+- Diagnosticado: los exchanges P2P bloquean IPs de servidores cloud (Vercel/AWS/GCP)
+  con WAF/Akamai/Cloudflare. Esto afecta a OKX, MEXC, KuCoin, Bitget, Gate.io, HTX.
+  Binance y Bybit funcionan directo (no bloquean).
+
+- SOLUCIÓN: Cloudflare Worker proxy (gratis, 5 min configuración).
+  Cloudflare Workers corren en la red de Cloudflare cuyas IPs NO están
+  bloqueadas por los WAF. Enrutar las llamadas vía un Worker permite
+  saltarse el bloqueo. Sigue el mismo patrón que ya usamos para
+  BYBIT_PROXY_URL (env var existente).
+
+- Creados nuevos archivos:
+  * docs/cloudflare-p2p-proxy/worker.js (código del Worker, 150 lineas)
+    - Mapeo de prefijos a hosts:
+      /bybit/, /okx/, /kucoin/, /kucoin-api/, /mexc/, /mexc-api/,
+      /bitget/, /bitget-api/, /gate/, /gate-api/, /htx/, /htx-pro/,
+      /htx-c2c/, /huobi/
+    - Elimina headers de Cloudflare que delatan el proxy
+    - Reescribe User-Agent a Chrome 120 real
+    - CORS headers completos
+    - Health endpoint en /health
+  * docs/cloudflare-p2p-proxy/README.md (guía paso a paso)
+
+- Integración en p2p-providers.ts:
+  * Helpers getProxyUrl() y buildProxyUrl(prefix, path)
+  * P2PProviderResult.viaProxy?: boolean (nuevo campo)
+  * scanOkxP2P, scanHtxP2P, scanKucoinP2P, scanBitgetP2P, scanGateP2P,
+    scanMexcP2P: todos intentan proxy URLs primero, luego direct URLs
+  * Mensajes DISABLED actualizados: referencian docs/cloudflare-p2p-proxy/README.md
+  * scanMexcP2P ahora tiene parsing completo (antes era solo DISABLED hardcodeado)
+
+- UI P2PArbitrageView actualizado:
+  * Grid de providers ahora muestra badge '☁️ Vía Cloudflare Worker proxy'
+    cuando viaProxy=true
+  * Banner morado prominente cuando hay providers bloqueados:
+    - Título: 'Solución: activar TODOS los exchanges bloqueados'
+    - Pasos 1-5 inline (crear Worker, pegar código, copiar URL,
+      agregar P2P_PROXY_URL en Vercel, redeploy)
+    - Botón 'Crear Worker en Cloudflare' (link directo a dash.cloudflare.com)
+    - Referencia a docs/cloudflare-p2p-proxy/README.md
+  * Sección 'Escanear desde el navegador' re-etiquetada como
+    'Alternativa' (proxy es la solución principal)
+
+Stage Summary:
+- Commit 78499c9 → origin/main
+- 4 archivos cambiados, +642 / -146 lineas
+- Build local: 0 errores
+- Resultado esperado después de configurar P2P_PROXY_URL en Vercel:
+  8/8 providers P2P ONLINE (Binance, Bybit, OKX, HTX, KuCoin, Bitget,
+  Gate.io, MEXC)
+- La solución esgratis (Cloudflare Workers 100k req/día gratis, más
+  que suficiente para uso personal) y toma 5 minutos configurar.
