@@ -165,3 +165,50 @@ Stage Summary:
   exchange para que el usuario sepa por que algunos no responden.
 - Si en el futuro Bybit/OKX/etc. abren su API publica, ya tenemos
   la integracion lista (solo habra que ajustar el payload).
+
+---
+Task ID: bybit-p2p-funciona-form-urlencoded
+Agent: main
+Task: Hacer funcionar Bybit P2P (y OKX si es posible) — busque alternativas
+
+Work Log:
+- Diagnosticado el problema: Bybit devolvía ret_code 10001 'param error'
+  con JSON. Probé 6+ variantes de payload — todas fallaban.
+- TRUCO ENCONTRADO: Bybit rechaza application/json. Hay que usar
+  application/x-www-form-urlencoded;charset=UTF-8.
+- Verificado con curl desde server: 51 offers para USDT/COP.
+- Verificado con script Node: ret_code 0, count 51, primer item real
+  (sebastiancarv54, COP 3127.00, min 30000, max 3000000).
+- Cambios en src/lib/p2p-arbitrage/p2p-providers.ts:
+  * Nuevo helper fetchP2PForm() con browser-like headers
+    (User-Agent Chrome 120, Origin bybit.com, Referer bybit.com)
+  * scanBybitP2P ahora usa fetchP2PForm (NO JSON)
+  * Mapeo corregido: nickName (no nickname), lastQuantity,
+    paymentName+paymentID, recentOrderNum, recentExecuteRate
+  * Mensajes DISABLED actualizados con pruebas reales (OKX: 6+ paths
+    probados, todos 404/Method Not Allowed. Requiere CSRF cookie.)
+
+- Para OKX: probé exhaustivamente 6+ paths y 2 content-types
+  (JSON + form-urlencoded). Todos: 404 / Method Not Allowed.
+  La web de OKX usa sesión+CSRF que solo se obtiene del navegador,
+  no desde server. Realmente no hay API pública.
+
+- Para HTX (Huobi): endpoint histórico ya no responde (timeout).
+  El nuevo requiere auth.
+
+- Para KuCoin/Bitget/Gate: bloqueados por WAF/Akamai desde server.
+
+ESTADO FINAL DE PROVIDERS P2P:
+- ✅ Binance P2P: 20+ offers (USDT/COP)
+- ✅ Bybit P2P: 51 offers (USDT/COP) — ¡NUEVO! Funciona.
+- ⚠️ OKX, HTX, KuCoin, Bitget, Gate: bloqueados desde server
+  (todos probados con varios paths y content-types)
+
+El arbitraje cross-exchange entre Binance y Bybit ahora será posible.
+Estos son los 2 exchanges P2P más grandes del mundo en conjunto.
+
+Stage Summary:
+- Commit 7020f36 → origin/main
+- 2 archivos cambiados, +166 / -69 lineas
+- Script test-bybit-p2p.mjs persistido para futuras pruebas
+- Build local: 0 errores
