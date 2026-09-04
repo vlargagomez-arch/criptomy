@@ -15,7 +15,7 @@ import {
   Image as ImageIcon, CalendarClock, Bell, LogOut, Copy,
   ShoppingBag, TrendingDown, Send, Download, Sparkles, Grid3x3,
   Globe2, CreditCard, ShieldAlert, Settings, Menu, X, ChevronRight, Search, Activity,
-  Heart, BookOpen,
+  Heart, BookOpen, TrendingUp,
 } from "lucide-react";
 import { reputationLabel, avatarGradient } from "@/lib/format";
 import Onboarding from "./Onboarding";
@@ -31,6 +31,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { key: "dashboard", label: "Inicio", icon: Home, desc: "Dashboard principal" },
       { key: "buscador", label: "Buscador Web3", icon: Search, desc: "Busca, escanea y compara en todos los proveedores" },
       { key: "conversor", label: "Conversor", icon: ArrowLeftRight, desc: "Convierte cripto a tu moneda local en tiempo real" },
+      { key: "earn", label: "Earn", icon: TrendingUp, desc: "Gana interés con Aave V3 — banca sin banco" },
     ],
   },
   {
@@ -51,8 +52,6 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     title: "Servicios",
     items: [
       { key: "educacion", label: "Educación", icon: BookOpen, desc: "Aprende cripto gratis en español" },
-      { key: "remesas", label: "Remesas", icon: Globe2, desc: "Transferencias internacionales" },
-      { key: "tarjeta", label: "Tarjeta cripto", icon: CreditCard, desc: "Solicitar tarjeta de proveedores" },
       { key: "oportunidades", label: "Oportunidades", icon: Sparkles, desc: "Learn&Earn, airdrops, staking" },
       { key: "comparador", label: "Comparador", icon: ShoppingBag, desc: "Compara fees entre providers" },
     ],
@@ -64,6 +63,7 @@ const COMPACT_NAV: TabKey[] = [
   "buscador",
   "dashboard",
   "conversor",
+  "earn",
   "enviar",
   "recibir",
   "mercado-p2p",
