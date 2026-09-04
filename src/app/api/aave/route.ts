@@ -42,29 +42,32 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Fetch de DefiLlama
+    // Fetch de DefiLlama — solo necesitamos pools de Aave
     const res = await fetch("https://yields.llama.fi/pools", {
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(30000),
+      headers: { Accept: "application/json" },
     });
     if (!res.ok) throw new Error(`DefiLlama HTTP ${res.status}`);
+
+    // Parse response — filtrar solo pools de Aave V3 en Polygon/Base/Arbitrum
     const data = await res.json();
 
-    // Filtrar pools de Aave V3
     const aavePools = (data.data || [])
       .filter((p: { project: string; chain: string }) => {
-        const isAave = p.project.toLowerCase().includes("aave");
-        const isV3 = p.project.toLowerCase().includes("v3") || p.project.toLowerCase() === "aave";
-        return isAave && isV3;
+        const project = (p.project || "").toLowerCase();
+        const chain = (p.chain || "").toLowerCase();
+        return (
+          project.includes("aave") &&
+          (chain === "polygon" || chain === "base" || chain === "arbitrum")
+        );
       })
+      .slice(0, 30) // limitar para no saturar
       .map((p: {
         symbol: string; chain: string; apy: number; apyBaseBorrow?: number;
         tvlUsd: number;
       }) => ({
-        asset: p.symbol.toUpperCase().replace("WSTETH", "WSTETH").replace("WPOL", "WMATIC"),
-        chain: p.chain.toUpperCase() === "POLYGON" ? "POLYGON"
-          : p.chain.toUpperCase() === "ARBITRUM" ? "ARBITRUM"
-          : p.chain.toUpperCase() === "BASE" ? "BASE"
-          : p.chain.toUpperCase(),
+        asset: (p.symbol || "").toUpperCase(),
+        chain: (p.chain || "").toUpperCase(),
         supplyAPY: p.apy || 0,
         borrowAPY: p.apyBaseBorrow || 0,
         tvlUsd: p.tvlUsd || 0,
