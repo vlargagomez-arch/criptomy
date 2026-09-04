@@ -89,7 +89,7 @@ async function fetchReserveData(chain: string, asset: string): Promise<AaveReser
         method: "eth_call",
         params: [{ to: pool.address, data }, "latest"],
       }),
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(5000),
     });
 
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -97,13 +97,6 @@ async function fetchReserveData(chain: string, asset: string): Promise<AaveReser
     if (json.error || !json.result) throw new Error("Sin respuesta");
 
     const hex = json.result.replace("0x", "");
-    // reserveData struct layout (cada campo 32 bytes / 64 hex chars):
-    // 0: configuration
-    // 1: liquidityIndex + liquidityRate (packed)
-    // 2: variableBorrowIndex + currentVariableBorrowRate (packed)
-    // 3: currentStableBorrowRate + lastUpdateTimestamp (packed)
-    // 4: availableLiquidity
-    // Simplificado: extraer liquidityRate y variableBorrowRate
     const liquidityRate = decodeRay("0x" + hex.slice(64, 128));
     const variableBorrowRate = decodeRay("0x" + hex.slice(192, 256));
 
@@ -123,28 +116,40 @@ async function fetchReserveData(chain: string, asset: string): Promise<AaveReser
 // GET /api/aave?chain=POLYGON&asset=USDC
 // GET /api/aave?chain=POLYGON&asset=ALL
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const chain = (searchParams.get("chain") || "POLYGON").toUpperCase();
-  const asset = (searchParams.get("asset") || "USDC").toUpperCase();
+  try {
+    const { searchParams } = new URL(req.url);
+    const chain = (searchParams.get("chain") || "POLYGON").toUpperCase();
+    const asset = (searchParams.get("asset") || "USDC").toUpperCase();
 
-  if (asset === "ALL") {
-    const tokens = Object.keys(TOKENS[chain] || {});
-    const results = await Promise.all(tokens.map((a) => fetchReserveData(chain, a)));
+    if (asset === "ALL") {
+      const tokens = Object.keys(TOKENS[chain] || {});
+      // Usar allSettled para que un token que falle no rompa todo
+      const results = await Promise.allSettled(
+        tokens.map((a) => fetchReserveData(chain, a))
+      );
+      const reserves = results.map((r) =>
+        r.status === "fulfilled" ? r.value : { asset: "?", chain, supplyAPY: 0, borrowAPY: 0, timestamp: Date.now(), status: "ERROR" as const, error: "Failed" }
+      );
+      return NextResponse.json({
+        chain,
+        reserves,
+        timestamp: Date.now(),
+        source: "Aave V3 (on-chain via RPC público)",
+      });
+    }
+
+    const result = await fetchReserveData(chain, asset);
     return NextResponse.json({
       chain,
-      reserves: results,
-      timestamp: Date.now(),
+      asset,
+      ...result,
       source: "Aave V3 (on-chain via RPC público)",
     });
+  } catch (err) {
+    console.error("[/api/aave]", err);
+    return NextResponse.json(
+      { error: "Error interno consultando Aave V3", detail: (err as Error).message },
+      { status: 500 }
+    );
   }
-
-  const result = await fetchReserveData(chain, asset);
-  return NextResponse.json({
-    chain,
-    asset,
-    ...result,
-    source: "Aave V3 (on-chain via RPC público)",
-    poolAddress: AAVE_POOLS[chain]?.address,
-    tokenAddress: TOKENS[chain]?.[asset],
-  });
 }
