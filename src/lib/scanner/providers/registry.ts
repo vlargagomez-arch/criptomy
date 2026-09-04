@@ -243,6 +243,24 @@ export const SCANNER_PROVIDERS: ProviderConfig[] = [
     rateLimitPerMin: 6000,
     notes: "Top 20 por volumen. API pública sin key. No bloquea Vercel (a diferencia de Bybit). 100 req/s. Reemplazo de Bybit.",
   },
+  {
+    id: "bitvavo",
+    name: "Bitvavo",
+    baseUrl: "https://api.bitvavo.com/v2",
+    logoUrl: "🟠",
+    websiteUrl: "https://bitvavo.com",
+    documentationUrl: "https://docs.bitvavo.com/",
+    requiresApiKey: false,
+    supportsP2P: false,
+    supportsMarketData: true,
+    countries: ["EU"],
+    kycRequired: true,
+    kycLevel: "MANDATORY",
+    kycNote: "Bitvavo es exchange regulado en Holanda (Registro DNB, KYC/AML obligatorio conforme a MiCA). Market data público sin auth.",
+    liquidityTier: "MEDIUM",
+    rateLimitPerMin: 1000,
+    notes: "Top 5 en Europa. Regulado por DNB (Holanda) bajo MiCA. Pairs en EUR. Sin USD directo — para USD usamos EUR como referencia. Buen liquidez en BTC/ETH/USDT/USDC vs EUR.",
+  },
 ];
 
 export function getScannerProvider(id: string): ProviderConfig | undefined {

@@ -211,7 +211,7 @@ export default function SmartSearchView() {
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-950/50 border border-emerald-800/50 text-xs text-emerald-400 mb-4">
               <Radio className="w-3 h-3" />
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Escaneando 11 exchanges en tiempo real
+              Escaneando 12 exchanges en tiempo real
             </div>
             <h1 className="text-4xl sm:text-5xl font-bold text-slate-100 mb-3 tracking-tight">
               Buscador <span className="bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">Web3</span>
@@ -292,9 +292,9 @@ export default function SmartSearchView() {
               <div className="absolute inset-0 rounded-full border-4 border-slate-800" />
               <div className="absolute inset-0 rounded-full border-4 border-emerald-500 border-t-transparent animate-spin" />
             </div>
-            <p className="text-sm text-slate-300 font-medium mb-1">Escaneando 11 exchanges en paralelo…</p>
+            <p className="text-sm text-slate-300 font-medium mb-1">Escaneando 12 exchanges en paralelo…</p>
             <p className="text-xs text-slate-500">
-              Binance · OKX · Bybit · Kraken · Coinbase · KuCoin · Gate.io · MEXC · HTX · Bitget · CoinGecko
+              Binance · OKX · Bybit · Kraken · Coinbase · KuCoin · Gate.io · MEXC · HTX · Bitget · BingX · Bitvavo · CoinGecko
             </p>
           </div>
         )}
@@ -549,6 +549,7 @@ function BestOptionCard({ result }: { result: RankedResult }) {
     htx: (a, q) => `https://www.htx.com/en-us/exchange/${a.toLowerCase()}_${q.toLowerCase()}/`,
     bitget: (a, q) => `https://www.bitget.com/spot/${a}${q}_SPBL`,
     bingx: (a, q) => `https://www.bingx.com/en/spot/${a}-${q}/`,
+    bitvavo: (a, q) => `https://bitvavo.com/en/trade/${a}-${(q === "USD" ? "EUR" : q)}`,
     coingecko: (a, q) => `https://www.coingecko.com/en/coins/${a.toLowerCase()}`,
   };
 
@@ -565,6 +566,7 @@ function BestOptionCard({ result }: { result: RankedResult }) {
     htx: { rank: "#15", trust: "Media", vol24h: "$500M+", since: "2013", desc: "Antes Huobi. Top 20. Liquidez media." },
     bitget: { rank: "#10", trust: "Media", vol24h: "$1B+", since: "2018", desc: "Top 10. Fees más baratos (0.05% taker). Copy trading." },
     bingx: { rank: "#20", trust: "Media", vol24h: "$300M+", since: "2018", desc: "Top 20. No bloquea Vercel. Reemplazo de Bybit en el buscador." },
+    bitvavo: { rank: "#25", trust: "Alta EU", vol24h: "$200M+", since: "2017", desc: "Top 5 en Europa. Regulado DNB (MiCA). Pairs en EUR. Confianza institucional EU." },
     coingecko: { rank: "N/A", trust: "Referencia", vol24h: "N/A", since: "2014", desc: "Agregador (no exchange). Precios de referencia de miles de fuentes." },
   };
 
@@ -712,6 +714,7 @@ const PROVIDER_META: Record<string, {
   htx:       { logo: "🔥", rank: "#15", trust: "Media",     vol24h: "$500M+",since: "2013", kyc: "Obligatorio", countries: "Asia", desc: "Antes Huobi. Top 20.", url: "https://www.htx.com" },
   bitget:    { logo: "🎯", rank: "#10", trust: "Media",     vol24h: "$1B+",  since: "2018", kyc: "Obligatorio", countries: "Global", desc: "Top 10. Fees más baratos (0.05% taker).", url: "https://www.bitget.com" },
   bingx:     { logo: "🟦", rank: "#20", trust: "Media",     vol24h: "$300M+",since: "2018", kyc: "Obligatorio", countries: "Global", desc: "Top 20. No bloquea Vercel.", url: "https://www.bingx.com" },
+  bitvavo:   { logo: "🟠", rank: "#25", trust: "Alta EU",   vol24h: "$200M+",since: "2017", kyc: "Obligatorio", countries: "Europa (Holanda, MiCA)", desc: "Top 5 en Europa. Regulado DNB (MiCA). Pairs en EUR.", url: "https://bitvavo.com" },
   coingecko: { logo: "🦎", rank: "N/A", trust: "Referencia",vol24h: "N/A",   since: "2014", kyc: "N/A",         countries: "Global", desc: "Agregador (no exchange). Precios de referencia.", url: "https://www.coingecko.com" },
 };
 
@@ -962,6 +965,7 @@ function ArbitrageCard({ opp, rank }: { opp: ArbitrageOpportunity; rank: number 
     "HTX (Huobi)": { rank: "#15", trust: "Media", vol: "$500M+", kyc: "Obligatorio", transferTime: "5-15 min", withdrawFee: "$1-3 USDT" },
     Bitget: { rank: "#10", trust: "Media", vol: "$1B+", kyc: "Obligatorio", transferTime: "5-15 min", withdrawFee: "$0.5-2 USDT" },
     BingX: { rank: "#20", trust: "Media", vol: "$300M+", kyc: "Obligatorio", transferTime: "5-15 min", withdrawFee: "$1-3 USDT" },
+    Bitvavo: { rank: "#25", trust: "Alta EU", vol: "$200M+", kyc: "Obligatorio (MiCA)", transferTime: "5-15 min", withdrawFee: "€0.5-3 (EU SEPA gratis)" },
     CoinGecko: { rank: "N/A", trust: "Referencia", vol: "N/A", kyc: "N/A", transferTime: "N/A", withdrawFee: "N/A" },
   };
 
@@ -1192,7 +1196,7 @@ function InitialState({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[
             { step: 1, title: "Escribe tu intención", desc: "Lenguaje natural: comprar, vender, enviar, arbitraje" },
-            { step: 2, title: "Escanea 11 exchanges", desc: "Binance, OKX, Kraken, Coinbase, KuCoin y más en paralelo" },
+            { step: 2, title: "Escanea 12 exchanges", desc: "Binance, OKX, Kraken, Coinbase, Bitvavo, KuCoin y más en paralelo" },
             { step: 3, title: "Calcula costo total", desc: "Precio + comisión + red. Ordena por mejor opción" },
           ].map((s) => (
             <div key={s.step} className="flex items-start gap-3">

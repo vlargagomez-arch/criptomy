@@ -16,6 +16,7 @@ import { fetchMexcTicker } from "./providers/mexc";
 import { fetchKucoinTicker } from "./providers/kucoin";
 import { fetchHtxTicker } from "./providers/htx";
 import { fetchBingxTicker } from "./providers/bingx";
+import { fetchBitvavoTicker } from "./providers/bitvavo";
 import { getScannerProvider } from "./providers/registry";
 import type { MarketQuote, P2POffer, ProviderHealth, ProviderStatus } from "./types";
 
@@ -71,6 +72,7 @@ export async function scanMarketData(asset: string, quote: string): Promise<Mark
     fetchHtxTicker(asset, quote),
     fetchBitgetTicker(asset, quote),
     fetchBingxTicker(asset, quote),
+    fetchBitvavoTicker(asset, quote),
     fetchCoingeckoTicker(asset, quote),
   ];
 
