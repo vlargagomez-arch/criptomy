@@ -154,9 +154,16 @@ export async function POST(req: NextRequest) {
     }
 
     const executionTimeMs = Date.now() - start;
-    const sortedResults = results.filter((r) => r.rank > 0);
-    const bestOption = sortedResults[0] || undefined;
-    const alternatives = sortedResults.slice(1, 4);
+    // Solo incluir en bestOption/alternatives los que tienen rank > 0 (ONLINE)
+    const rankedResults = results.filter((r) => r.rank > 0);
+    const bestOption = rankedResults[0] || undefined;
+    const alternatives = rankedResults.slice(1, 6);
+    // Pero en `results` mantener TODOS (incluye offline/error) para mostrar estado a usuario
+    // Ordenar: primero los ONLINE con rank, luego los demás con status visible
+    const sortedResults = [
+      ...rankedResults,
+      ...results.filter((r) => r.rank === 0),
+    ];
 
     const response: SearchResponse = {
       intent,

@@ -13,17 +13,17 @@ import type { MarketQuote, ProviderStatus } from "../types";
 const BITGET_BASE = "https://api.bitget.com";
 
 const BITGET_SYMBOLS: Record<string, Record<string, string>> = {
-  BTC: { USDT: "BTCUSDT", USDC: "BTCUSDC" },
-  ETH: { USDT: "ETHUSDT", USDC: "ETHUSDC" },
+  BTC: { USDT: "BTCUSDT", USDC: "BTCUSDC", USD: "BTCUSDT" },
+  ETH: { USDT: "ETHUSDT", USDC: "ETHUSDC", USD: "ETHUSDT" },
   USDT: { USD: "USDTUSD" },
   USDC: { USDT: "USDCUSDT" },
-  SOL: { USDT: "SOLUSDT", USDC: "SOLUSDC" },
-  BNB: { USDT: "BNBUSDT" },
-  XRP: { USDT: "XRPUSDT" },
-  DOGE: { USDT: "DOGEUSDT" },
-  ADA: { USDT: "ADAUSDT" },
-  AVAX: { USDT: "AVAXUSDT" },
-  LINK: { USDT: "LINKUSDT" },
+  SOL: { USDT: "SOLUSDT", USDC: "SOLUSDC", USD: "SOLUSDT" },
+  BNB: { USDT: "BNBUSDT", USD: "BNBUSDT" },
+  XRP: { USDT: "XRPUSDT", USD: "XRPUSDT" },
+  DOGE: { USDT: "DOGEUSDT", USD: "DOGEUSDT" },
+  ADA: { USDT: "ADAUSDT", USD: "ADAUSDT" },
+  AVAX: { USDT: "AVAXUSDT", USD: "AVAXUSDT" },
+  LINK: { USDT: "LINKUSDT", USD: "LINKUSDT" },
 };
 
 export function bitgetSymbol(asset: string, quote: string): string | null {

@@ -179,7 +179,7 @@ export default function DonacionesView() {
           copied={copied}
           onCopy={() => copyWallet(selectedCause.organizerWallet)}
           onClose={() => setSelectedCause(null)}
-          onGoSend={() => setTab("enviar")}
+          onGoSend={() => setTab("enviar-recibir")}
         />
       )}
     </div>

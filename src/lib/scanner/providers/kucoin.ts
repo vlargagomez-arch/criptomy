@@ -13,15 +13,15 @@ import type { MarketQuote, ProviderStatus } from "../types";
 const KUCOIN_BASE = "https://api.kucoin.com";
 
 const KUCOIN_SYMBOLS: Record<string, Record<string, string>> = {
-  BTC: { USDT: "BTC-USDT", USDC: "BTC-USDC" },
-  ETH: { USDT: "ETH-USDT", USDC: "ETH-USDC" },
+  BTC: { USDT: "BTC-USDT", USDC: "BTC-USDC", USD: "BTC-USDT" },
+  ETH: { USDT: "ETH-USDT", USDC: "ETH-USDC", USD: "ETH-USDT" },
   USDT: { USD: "USDT-USD" },
   USDC: { USDT: "USDC-USDT", USD: "USDC-USD" },
-  SOL: { USDT: "SOL-USDT", USDC: "SOL-USDC" },
-  BNB: { USDT: "BNB-USDT" },
-  XRP: { USDT: "XRP-USDT" },
-  DOGE: { USDT: "DOGE-USDT" },
-  ADA: { USDT: "ADA-USDT" },
+  SOL: { USDT: "SOL-USDT", USDC: "SOL-USDC", USD: "SOL-USDT" },
+  BNB: { USDT: "BNB-USDT", USD: "BNB-USDT" },
+  XRP: { USDT: "XRP-USDT", USD: "XRP-USDT" },
+  DOGE: { USDT: "DOGE-USDT", USD: "DOGE-USDT" },
+  ADA: { USDT: "ADA-USDT", USD: "ADA-USDT" },
 };
 
 export function kucoinSymbol(asset: string, quote: string): string | null {

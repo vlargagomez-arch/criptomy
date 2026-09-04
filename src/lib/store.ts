@@ -21,8 +21,7 @@ export type TabKey =
   | "inicio"
   | "buscador"
   | "dashboard"
-  | "enviar"
-  | "recibir"
+  | "enviar-recibir"
   | "mercado-p2p"
   | "retos"
   | "earn"
@@ -58,7 +57,7 @@ interface AppState {
   logout: () => void;
 }
 
-const STORAGE_VERSION = 21;
+const STORAGE_VERSION = 22;
 
 function isValidUser(user: unknown): user is CurrentUser {
   if (!user || typeof user !== "object") return false;
@@ -107,7 +106,7 @@ export const useApp = create<AppState>()(
         set({ user: null, privateKey: null, tab: "inicio", chainId: null, p2pSubTab: "explorar" }),
     }),
     {
-      name: "criptomy-v21",
+      name: "criptomy-v22",
       version: STORAGE_VERSION,
       partialize: (state) => ({
         user: state.user,
@@ -124,8 +123,7 @@ export const useApp = create<AppState>()(
           "inicio",
           "buscador",
           "dashboard",
-          "enviar",
-          "recibir",
+          "enviar-recibir",
           "mercado-p2p",
           "retos",
           "earn",
@@ -140,7 +138,16 @@ export const useApp = create<AppState>()(
           "billetera",
           "reputacion",
         ];
-        if (state.tab && !validTabs.includes(state.tab as TabKey)) state.tab = "inicio";
+        // Migrar tabs viejos a los nuevos
+        const tabAliases: Record<string, TabKey> = {
+          enviar: "enviar-recibir",
+          recibir: "enviar-recibir",
+        };
+        if (state.tab) {
+          const t = state.tab as string;
+          if (tabAliases[t]) state.tab = tabAliases[t];
+          if (!validTabs.includes(state.tab as TabKey)) state.tab = "inicio";
+        }
         return state;
       },
     }

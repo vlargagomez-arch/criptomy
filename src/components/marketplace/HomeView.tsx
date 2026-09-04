@@ -4,8 +4,8 @@ import { useApp } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import {
   Shield, Lock, Wallet, ArrowRight, Store, Trophy, Image as ImageIcon,
-  ShoppingBag, TrendingDown, Send, Download, Sparkles, Bell,
-  Zap, Globe2, Coins, LineChart,
+  ShoppingBag, TrendingDown, ArrowLeftRight, Sparkles, Bell,
+  Zap, Globe2, Coins, LineChart, Search, TrendingUp,
 } from "lucide-react";
 
 export default function HomeView() {
@@ -116,10 +116,10 @@ function Landing() {
               color: "text-blue-400",
             },
             {
-              icon: Send,
+              icon: ArrowLeftRight,
               title: "Enviar / Recibir",
               desc: "Transfiere cripto a cualquier wallet. QR + dirección + warning de red.",
-              tab: "enviar",
+              tab: "enviar-recibir",
               color: "text-cyan-400",
             },
             {
@@ -235,8 +235,8 @@ function Dashboard() {
         {[
           { icon: Store, label: "Mercado P2P", tab: "mercado-p2p", color: "bg-slate-700" },
           { icon: Trophy, label: "Retos", tab: "retos", color: "bg-blue-600" },
-          { icon: Send, label: "Enviar", tab: "enviar", color: "bg-cyan-600" },
-          { icon: Download, label: "Recibir", tab: "recibir", color: "bg-purple-600" },
+          { icon: ArrowLeftRight, label: "Enviar/Recibir", tab: "enviar-recibir", color: "bg-cyan-600" },
+          { icon: TrendingUp, label: "Earn", tab: "earn", color: "bg-emerald-600" },
           { icon: Sparkles, label: "Oportunidades", tab: "oportunidades", color: "bg-yellow-600" },
           { icon: Search, label: "Buscador", tab: "buscador", color: "bg-emerald-600" },
         ].map((a) => {

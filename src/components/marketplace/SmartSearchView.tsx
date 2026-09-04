@@ -170,18 +170,29 @@ export default function SmartSearchView() {
   };
 
   // Filtrado + re-sort en cliente
+  // IMPORTANTE: Mostramos TODOS los exchanges (online + offline + error + disabled)
+  // El usuario quiere ver todas las opciones desglosadas con su información.
   const filteredResults = useMemo(() => {
     if (!response) return [];
-    let arr = response.results.filter((r) => r.status === "ONLINE");
+    let arr = response.results;
     if (noKycOnly) arr = arr.filter((r) => r.kycLevel === "NO_KYC" || r.kycLevel === "OPTIONAL");
-    arr = [...arr].sort((a, b) => {
+    // Primero los ONLINE (rank>0) ordenados según sortBy; luego offline/error al final
+    const online = arr.filter((r) => r.status === "ONLINE" && r.rank > 0);
+    const offline = arr.filter((r) => r.status !== "ONLINE" || r.rank === 0);
+    online.sort((a, b) => {
       if (sortBy === "fee") return (a.fee || 0) - (b.fee || 0);
       if (sortBy === "liquidity") return (b.liquidity || 0) - (a.liquidity || 0);
       if (sortBy === "latency") return (a.latencyMs || 0) - (b.latencyMs || 0);
       return (a.totalCost || 0) - (b.totalCost || 0);
     });
-    return arr;
+    return [...online, ...offline];
   }, [response, noKycOnly, sortBy]);
+
+  // Para la "best option" solo consideramos ONLINE
+  const onlineResults = useMemo(
+    () => (response?.results || []).filter((r) => r.status === "ONLINE" && r.rank > 0),
+    [response]
+  );
 
   const hasResults = filteredResults.length > 0 ||
     (response?.p2pOffers.length || 0) > 0 ||
@@ -301,6 +312,7 @@ export default function SmartSearchView() {
           <ResultsLayout
             response={response}
             filteredResults={filteredResults}
+            onlineResults={onlineResults}
             noKycOnly={noKycOnly}
             setNoKycOnly={setNoKycOnly}
             sortBy={sortBy}
@@ -335,6 +347,7 @@ export default function SmartSearchView() {
 function ResultsLayout({
   response,
   filteredResults,
+  onlineResults,
   noKycOnly,
   setNoKycOnly,
   sortBy,
@@ -343,14 +356,16 @@ function ResultsLayout({
 }: {
   response: SearchResponse;
   filteredResults: RankedResult[];
+  onlineResults: RankedResult[];
   noKycOnly: boolean;
   setNoKycOnly: (v: boolean) => void;
   sortBy: "totalCost" | "fee" | "liquidity" | "latency";
   setSortBy: (v: "totalCost" | "fee" | "liquidity" | "latency") => void;
   onRetry: () => void;
 }) {
-  const best = filteredResults[0];
-  const alternatives = filteredResults.slice(1, 6);
+  const best = onlineResults[0];
+  const alternatives = onlineResults.slice(1, 6);
+  const offlineResults = filteredResults.filter((r) => r.status !== "ONLINE" || r.rank === 0);
   const { intent, p2pOffers, arbitrageOpportunities, providersOk, providersChecked, errors, executionTimeMs } = response;
 
   return (
@@ -396,9 +411,9 @@ function ResultsLayout({
       {/* MEJOR OPCIÓN — destacada */}
       {best && <BestOptionCard result={best} />}
 
-      {/* TABLA COMPARATIVA — todas las opciones */}
-      {alternatives.length > 0 && (
-        <ComparisonTable results={alternatives} sortBy={sortBy} />
+      {/* TABLA COMPARATIVA — TODOS los exchanges (online + offline + error + disabled) */}
+      {filteredResults.length > 0 && (
+        <FullProviderTable results={filteredResults} sortBy={sortBy} />
       )}
 
       {/* P2P OFFERS */}
@@ -411,7 +426,7 @@ function ResultsLayout({
         <ArbitrageSection opportunities={arbitrageOpportunities} />
       )}
 
-      {/* ERRORES DE PROVIDERS */}
+      {/* RESUMEN DE ERRORES */}
       {errors.length > 0 && (
         <div className="bg-slate-900/50 border border-slate-800/50 rounded-xl p-4">
           <div className="text-xs uppercase text-slate-500 mb-2 flex items-center gap-2">
@@ -676,55 +691,144 @@ function Metric({ label, value, color, bold, tooltip }: { label: string; value: 
 }
 
 // ============================================================
-// COMPARISON TABLE — tabla profesional tipo Bloomberg
+// FULL PROVIDER TABLE — TODOS los exchanges (online + offline + error)
+// Muestra cada exchange con su status, info, KYC, liquidez, precio, error
+// Responde al requerimiento: "que salga todas las opciones desglosada con su respectiva información"
 // ============================================================
-function ComparisonTable({ results, sortBy }: { results: RankedResult[]; sortBy: string }) {
+
+// Metadata estática de cada exchange (logo, rank, trust, KYC, vol, país, descripción)
+const PROVIDER_META: Record<string, {
+  logo: string; rank: string; trust: string; vol24h: string; since: string; kyc: string;
+  countries: string; desc: string; url: string;
+}> = {
+  binance:   { logo: "🟧", rank: "#1",  trust: "Alta",      vol24h: "$15B+", since: "2017", kyc: "Obligatorio", countries: "Global (excl. USA)", desc: "Mayor exchange del mundo por volumen. Liquidez extrema.", url: "https://www.binance.com" },
+  okx:       { logo: "⚫", rank: "#5",  trust: "Alta",      vol24h: "$3B+",  since: "2017", kyc: "Obligatorio", countries: "Global", desc: "Top 5 global. Liquidez TOP.", url: "https://www.okx.com" },
+  bybit:     { logo: "🟡", rank: "#3",  trust: "Alta",      vol24h: "$5B+",  since: "2018", kyc: "Obligatorio", countries: "Global (excl. USA/UK)", desc: "Top 3 global. Bloqueado desde Vercel.", url: "https://www.bybit.com" },
+  kraken:    { logo: "🟣", rank: "#10", trust: "Muy alta", vol24h: "$1B+",  since: "2011", kyc: "Obligatorio", countries: "USA + Europa", desc: "Exchange más regulado. Confianza institucional.", url: "https://www.kraken.com" },
+  coinbase:  { logo: "🔵", rank: "#3",  trust: "Muy alta", vol24h: "$2B+",  since: "2012", kyc: "Obligatorio", countries: "USA + Europa", desc: "Listado en NASDAQ. Máxima confianza.", url: "https://www.coinbase.com" },
+  kucoin:    { logo: "🟢", rank: "#8",  trust: "Media-alta",vol24h: "$1B+",  since: "2017", kyc: "Obligatorio", countries: "Global", desc: "Top 10. Amplia variedad de tokens.", url: "https://www.kucoin.com" },
+  gate:      { logo: "🚪", rank: "#15", trust: "Media",     vol24h: "$500M+",since: "2013", kyc: "Obligatorio", countries: "Global", desc: "Top 20. Buena liquidez para altcoins.", url: "https://www.gate.io" },
+  mexc:      { logo: "🟪", rank: "#10", trust: "Media",     vol24h: "$1B+",  since: "2018", kyc: "Opcional",    countries: "Global", desc: "Top 10. Listado rápido de tokens.", url: "https://www.mexc.com" },
+  htx:       { logo: "🔥", rank: "#15", trust: "Media",     vol24h: "$500M+",since: "2013", kyc: "Obligatorio", countries: "Asia", desc: "Antes Huobi. Top 20.", url: "https://www.htx.com" },
+  bitget:    { logo: "🎯", rank: "#10", trust: "Media",     vol24h: "$1B+",  since: "2018", kyc: "Obligatorio", countries: "Global", desc: "Top 10. Fees más baratos (0.05% taker).", url: "https://www.bitget.com" },
+  bingx:     { logo: "🟦", rank: "#20", trust: "Media",     vol24h: "$300M+",since: "2018", kyc: "Obligatorio", countries: "Global", desc: "Top 20. No bloquea Vercel.", url: "https://www.bingx.com" },
+  coingecko: { logo: "🦎", rank: "N/A", trust: "Referencia",vol24h: "N/A",   since: "2014", kyc: "N/A",         countries: "Global", desc: "Agregador (no exchange). Precios de referencia.", url: "https://www.coingecko.com" },
+};
+
+function FullProviderTable({ results, sortBy }: { results: RankedResult[]; sortBy: string }) {
+  const onlineCount = results.filter((r) => r.status === "ONLINE" && r.rank > 0).length;
+  const offlineCount = results.length - onlineCount;
+
   return (
     <div>
       <h3 className="text-xs uppercase tracking-wide text-slate-500 mb-3 flex items-center gap-2">
         <BarChart3 className="w-3.5 h-3.5" />
-        Comparativa · {results.length} opciones
+        Todos los exchanges · {onlineCount} online + {offlineCount} sin datos
+        <span className="text-emerald-400">· orden: {sortBy}</span>
       </h3>
+
       <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
         {/* Header */}
         <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-slate-800/50 text-[10px] uppercase text-slate-500 font-semibold">
           <div className="col-span-3">Exchange</div>
           <div className="col-span-2 text-right">Precio</div>
-          <div className="col-span-2 text-right">Comisión</div>
           <div className="col-span-2 text-right">Costo total</div>
-          <div className="col-span-2 text-right">Vol 24h</div>
-          <div className="col-span-1 text-right">Lat</div>
+          <div className="col-span-1 text-right">KYC</div>
+          <div className="col-span-2 text-right">Liquidez</div>
+          <div className="col-span-2 text-right">Estado</div>
         </div>
-        {/* Rows */}
+
+        {/* Rows — TODOS los exchanges, online primero, luego offline */}
         {results.map((r, i) => {
+          const isOnline = r.status === "ONLINE" && r.rank > 0;
           const price = r.price ?? 0;
           const fee = r.fee ?? 0;
           const totalCost = r.totalCost ?? 0;
           const liquidity = r.liquidity ?? 0;
+          const meta = PROVIDER_META[r.provider] || { logo: "❓", rank: "?", trust: "?", vol24h: "?", since: "?", kyc: "?", countries: "?", desc: "", url: "#" };
+
+          // Status visual
+          const statusBadge = isOnline
+            ? <span className="text-[9px] px-1.5 py-0.5 bg-emerald-900/50 text-emerald-300 rounded">🟢 ONLINE</span>
+            : r.status === "DISABLED"
+              ? <span className="text-[9px] px-1.5 py-0.5 bg-slate-800 text-slate-500 rounded">⚫ DISABLED</span>
+              : <span className="text-[9px] px-1.5 py-0.5 bg-amber-900/50 text-amber-300 rounded">🔴 {r.status}</span>;
+
+          // KYC badge
+          const kycBadge = r.kycLevel === "NO_KYC"
+            ? "🔓 Sin KYC"
+            : r.kycLevel === "OPTIONAL"
+              ? "🔓 Opcional"
+              : r.kycLevel === "MANDATORY"
+                ? "🔒 Obligatorio"
+                : "❔ ?";
 
           const kycColor = r.kycLevel === "NO_KYC" || r.kycLevel === "OPTIONAL"
             ? "text-teal-400" : r.kycLevel === "MANDATORY" ? "text-red-400" : "text-slate-500";
 
           return (
-            <div key={`row-${r.provider}-${i}`} className="grid grid-cols-12 gap-2 px-4 py-3 border-t border-slate-800 hover:bg-slate-800/30 transition text-xs">
-              <div className="col-span-3 flex items-center gap-2">
-                <span className={`w-1.5 h-1.5 rounded-full ${r.status === "ONLINE" ? "bg-emerald-500" : "bg-red-500"}`} />
-                <span className="text-slate-200 font-medium">{r.providerName}</span>
-                {r.badge === "CHEAPEST" && <span className="text-[9px] px-1 py-0.5 bg-blue-900/50 text-blue-300 rounded">💰</span>}
-                {r.badge === "MOST_LIQUID" && <span className="text-[9px] px-1 py-0.5 bg-purple-900/50 text-purple-300 rounded">🌊</span>}
-                {r.badge === "NO_KYC" && <span className="text-[9px] px-1 py-0.5 bg-teal-900/50 text-teal-300 rounded">🔓</span>}
-                <span className={`text-[9px] ${kycColor}`}>
-                  {r.kycLevel === "NO_KYC" ? "🔓" : r.kycLevel === "OPTIONAL" ? "🔓?" : r.kycLevel === "MANDATORY" ? "🔒" : "❔"}
-                </span>
+            <div
+              key={`row-${r.provider}-${i}`}
+              className={`grid grid-cols-12 gap-2 px-4 py-3 border-t border-slate-800 transition text-xs ${isOnline ? "hover:bg-slate-800/30" : "bg-slate-950/30"}`}
+              title={meta.desc}
+            >
+              {/* Exchange name + logo + rank */}
+              <div className="col-span-3 flex items-center gap-2 min-w-0">
+                <span className="text-base shrink-0">{meta.logo}</span>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className={`font-medium ${isOnline ? "text-slate-100" : "text-slate-500"}`}>{r.providerName}</span>
+                    <span className="text-[9px] px-1 py-0.5 bg-slate-800 rounded text-slate-400">#{meta.rank}</span>
+                    {r.badge === "BEST" && <span className="text-[9px] px-1 py-0.5 bg-emerald-900/50 text-emerald-300 rounded">🥇</span>}
+                    {r.badge === "CHEAPEST" && <span className="text-[9px] px-1 py-0.5 bg-blue-900/50 text-blue-300 rounded">💰</span>}
+                    {r.badge === "MOST_LIQUID" && <span className="text-[9px] px-1 py-0.5 bg-purple-900/50 text-purple-300 rounded">🌊</span>}
+                    {r.badge === "NO_KYC" && <span className="text-[9px] px-1 py-0.5 bg-teal-900/50 text-teal-300 rounded">🔓</span>}
+                  </div>
+                  <div className="text-[10px] text-slate-500 truncate">{meta.countries} · {meta.vol24h} vol · desde {meta.since}</div>
+                </div>
               </div>
-              <div className="col-span-2 text-right text-slate-300 font-mono">{price > 0 ? fmtPrice(price) : "—"}</div>
-              <div className="col-span-2 text-right text-amber-400 font-mono">{fee > 0 ? fmtPrice(fee, 4) : "Gratis"}</div>
-              <div className="col-span-2 text-right text-emerald-400 font-mono font-semibold">{totalCost > 0 ? fmtPrice(totalCost) : "—"}</div>
-              <div className="col-span-2 text-right text-slate-500 font-mono">{liquidity > 0 ? `${(liquidity / 1e6).toFixed(1)}M` : "—"}</div>
-              <div className="col-span-1 text-right text-slate-500 font-mono">{r.latencyMs || 0}ms</div>
+
+              {/* Precio */}
+              <div className="col-span-2 text-right text-slate-300 font-mono">
+                {price > 0 ? fmtPrice(price) : "—"}
+              </div>
+
+              {/* Costo total */}
+              <div className="col-span-2 text-right text-emerald-400 font-mono font-semibold">
+                {totalCost > 0 ? fmtPrice(totalCost) : "—"}
+              </div>
+
+              {/* KYC */}
+              <div className={`col-span-1 text-right text-[10px] ${kycColor}`}>
+                {kycBadge}
+              </div>
+
+              {/* Liquidez */}
+              <div className="col-span-2 text-right text-slate-500 font-mono">
+                {liquidity > 0 ? `${(liquidity / 1e6).toFixed(1)}M` : "—"}
+              </div>
+
+              {/* Estado */}
+              <div className="col-span-2 text-right flex flex-col items-end gap-1">
+                {statusBadge}
+                {!isOnline && r.reason && (
+                  <div className="text-[9px] text-slate-600 italic line-clamp-1">{r.reason}</div>
+                )}
+                {isOnline && r.latencyMs !== undefined && (
+                  <div className="text-[9px] text-slate-500">{r.latencyMs}ms</div>
+                )}
+              </div>
             </div>
           );
         })}
+      </div>
+
+      {/* Leyenda */}
+      <div className="mt-2 text-[10px] text-slate-500 flex items-center gap-3 flex-wrap">
+        <span>🟢 ONLINE — datos en vivo</span>
+        <span>🔴 ERROR — falló el escaneo</span>
+        <span>⚫ DISABLED — bloqueado por el exchange</span>
+        <span className="ml-auto">Volumen y latencia del último escaneo. Refresca cada 15s.</span>
       </div>
     </div>
   );

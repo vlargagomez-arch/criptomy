@@ -150,16 +150,8 @@ export default function EnviarView() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
-          <Send className="w-6 h-6 text-cyan-400" />
-          Enviar cripto
-        </h1>
-        <p className="text-sm text-slate-400 mt-1">
-          Transfiere desde tu propia wallet a cualquier dirección. Tú firmas, nosotros nunca tocamos tus claves.
-        </p>
-      </div>
+    <div className="max-w-2xl mx-auto px-4 sm:px-6 pb-6">
+      {!user && null}
 
       {/* Panel explicativo */}
       <div className="mb-6 bg-slate-900/50 border border-slate-800/50 rounded-xl p-4">
@@ -187,15 +179,7 @@ export default function EnviarView() {
         </div>
       </div>
 
-      {!user && (
-        <div className="bg-amber-950/30 border border-amber-800/50 rounded-lg p-3 text-xs text-amber-300 mb-4 flex items-start gap-2">
-          <Wallet className="w-4 h-4 shrink-0 mt-0.5" />
-          <div>
-            <b>Conecta tu wallet (MetaMask)</b> para enviar cripto. Necesitas tener saldo
-            del token que quieres enviar en la red elegida.
-          </div>
-        </div>
-      )}
+      {!user && null}
 
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
         <div className="grid grid-cols-2 gap-3">

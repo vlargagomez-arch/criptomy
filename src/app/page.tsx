@@ -5,8 +5,7 @@ import { useApp, TabKey } from "@/lib/store";
 import Header from "@/components/marketplace/Header";
 import HomeView from "@/components/marketplace/HomeView";
 import SmartSearchView from "@/components/marketplace/SmartSearchView";
-import EnviarView from "@/components/marketplace/EnviarView";
-import RecibirView from "@/components/marketplace/RecibirView";
+import EnviarRecibirView from "@/components/marketplace/EnviarRecibirView";
 import RemesasView from "@/components/marketplace/RemesasView";
 import TarjetaView from "@/components/marketplace/TarjetaView";
 import MercadoP2PUnifiedView from "@/components/marketplace/MercadoP2PUnifiedView";
@@ -24,7 +23,7 @@ import EducacionView from "@/components/marketplace/EducacionView";
 import EarnView from "@/components/marketplace/EarnView";
 
 const VALID_TABS: TabKey[] = [
-  "inicio", "buscador", "dashboard", "earn", "enviar", "recibir",
+  "inicio", "buscador", "dashboard", "earn", "enviar-recibir",
   "mercado-p2p", "retos", "educacion", "alertas",
   "oportunidades", "proveedores", "comparador",
   "scanner-admin", "compliance", "admin", "billetera", "reputacion",
@@ -65,8 +64,7 @@ export default function Home() {
         {tab === "buscador" && <SmartSearchView />}
         {tab === "dashboard" && <HomeView />}
         {tab === "earn" && <EarnView />}
-        {tab === "enviar" && <EnviarView />}
-        {tab === "recibir" && <RecibirView />}
+        {tab === "enviar-recibir" && <EnviarRecibirView />}
         {tab === "mercado-p2p" && <MercadoP2PUnifiedView />}
         {tab === "retos" && <RetosP2PView />}
         {tab === "educacion" && <EducacionView />}

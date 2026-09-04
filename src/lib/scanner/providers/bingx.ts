@@ -13,17 +13,17 @@ import type { MarketQuote, ProviderStatus } from "../types";
 const BINGX_BASE = "https://open-api.bingx.com";
 
 const BINGX_SYMBOLS: Record<string, Record<string, string>> = {
-  BTC: { USDT: "BTC-USDT", USDC: "BTC-USDC" },
-  ETH: { USDT: "ETH-USDT", USDC: "ETH-USDC" },
+  BTC: { USDT: "BTC-USDT", USDC: "BTC-USDC", USD: "BTC-USDT" },
+  ETH: { USDT: "ETH-USDT", USDC: "ETH-USDC", USD: "ETH-USDT" },
   USDT: { USD: "USDT-USD" },
   USDC: { USDT: "USDC-USDT" },
-  SOL: { USDT: "SOL-USDT" },
-  BNB: { USDT: "BNB-USDT" },
-  XRP: { USDT: "XRP-USDT" },
-  DOGE: { USDT: "DOGE-USDT" },
-  ADA: { USDT: "ADA-USDT" },
-  AVAX: { USDT: "AVAX-USDT" },
-  LINK: { USDT: "LINK-USDT" },
+  SOL: { USDT: "SOL-USDT", USD: "SOL-USDT" },
+  BNB: { USDT: "BNB-USDT", USD: "BNB-USDT" },
+  XRP: { USDT: "XRP-USDT", USD: "XRP-USDT" },
+  DOGE: { USDT: "DOGE-USDT", USD: "DOGE-USDT" },
+  ADA: { USDT: "ADA-USDT", USD: "ADA-USDT" },
+  AVAX: { USDT: "AVAX-USDT", USD: "AVAX-USDT" },
+  LINK: { USDT: "LINK-USDT", USD: "LINK-USDT" },
 };
 
 export function bingxSymbol(asset: string, quote: string): string | null {

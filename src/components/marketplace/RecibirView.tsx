@@ -20,7 +20,7 @@ export default function RecibirView() {
 
   if (!user) {
     return (
-      <div className="max-w-4xl mx-auto p-8 text-center text-slate-400">
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 text-center text-slate-400 text-sm">
         Conecta tu wallet para ver tu dirección de recepción.
       </div>
     );
@@ -28,7 +28,7 @@ export default function RecibirView() {
 
   const network = NETWORKS.find((n) => n.id === networkId)!;
   const address = user.walletAddress;
-  const qrValue = `${address}`; // EIP-681 podría ser más completo, pero la address cruda es estándar
+  const qrValue = `${address}`;
 
   const copy = () => {
     navigator.clipboard?.writeText(address);
@@ -37,17 +37,7 @@ export default function RecibirView() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
-          <Download className="w-6 h-6 text-purple-400" />
-          Recibir cripto
-        </h1>
-        <p className="text-sm text-slate-400 mt-1">
-          Comparte tu dirección o QR para recibir cripto en tu wallet.
-        </p>
-      </div>
-
+    <div className="max-w-2xl mx-auto px-4 sm:px-6 pb-6">
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
         {/* Selector de red */}
         <div className="mb-4">

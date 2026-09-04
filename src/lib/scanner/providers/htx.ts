@@ -13,15 +13,15 @@ import type { MarketQuote, ProviderStatus } from "../types";
 const HTX_BASE = "https://api.huobi.pro";
 
 const HTX_SYMBOLS: Record<string, Record<string, string>> = {
-  BTC: { USDT: "btcusdt", USDC: "btcusdc" },
-  ETH: { USDT: "ethusdt", USDC: "ethusdc" },
+  BTC: { USDT: "btcusdt", USDC: "btcusdc", USD: "btcusdt" },
+  ETH: { USDT: "ethusdt", USDC: "ethusdc", USD: "ethusdt" },
   USDT: { USD: "usdtusd" },
   USDC: { USDT: "usdcusdt" },
-  SOL: { USDT: "solusdt" },
-  BNB: { USDT: "bnbusdt" },
-  XRP: { USDT: "xrpusdt" },
-  DOGE: { USDT: "dogeusdt" },
-  ADA: { USDT: "adausdt" },
+  SOL: { USDT: "solusdt", USD: "solusdt" },
+  BNB: { USDT: "bnbusdt", USD: "bnbusdt" },
+  XRP: { USDT: "xrpusdt", USD: "xrpusdt" },
+  DOGE: { USDT: "dogeusdt", USD: "dogeusdt" },
+  ADA: { USDT: "adausdt", USD: "adausdt" },
 };
 
 export function htxSymbol(asset: string, quote: string): string | null {

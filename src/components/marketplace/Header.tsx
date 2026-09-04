@@ -13,7 +13,7 @@ import {
 import {
   Home, Store, ArrowLeftRight, Trophy, Wallet, Star,
   Image as ImageIcon, CalendarClock, Bell, LogOut, Copy,
-  ShoppingBag, TrendingDown, Send, Download, Sparkles, Grid3x3,
+  ShoppingBag, Sparkles, Grid3x3,
   Globe2, CreditCard, ShieldAlert, Settings, Menu, X, ChevronRight, Search, Activity,
   Heart, BookOpen, TrendingUp,
 } from "lucide-react";
@@ -36,8 +36,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   {
     title: "Cripto",
     items: [
-      { key: "enviar", label: "Enviar", icon: Send, desc: "Transferencia on-chain" },
-      { key: "recibir", label: "Recibir", icon: Download, desc: "Tu dirección + QR" },
+      { key: "enviar-recibir", label: "Enviar / Recibir", icon: ArrowLeftRight, desc: "Transfiere o recibe cripto — unificado" },
     ],
   },
   {
@@ -62,8 +61,7 @@ const COMPACT_NAV: TabKey[] = [
   "buscador",
   "dashboard",
   "earn",
-  "enviar",
-  "recibir",
+  "enviar-recibir",
   "mercado-p2p",
   "retos",
 ];

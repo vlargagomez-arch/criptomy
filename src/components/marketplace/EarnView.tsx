@@ -5,7 +5,9 @@ import {
   TrendingUp, TrendingDown, Loader2, Info, ShieldCheck,
   Activity, Zap, ExternalLink, RefreshCw, Lock, Unlock,
   Building2, Coins, BarChart3, ArrowRight, CheckCircle2, AlertCircle,
+  Award,
 } from "lucide-react";
+import P2PArbitrageView from "./P2PArbitrageView";
 
 interface YieldPool {
   protocol: string;
@@ -107,6 +109,8 @@ export default function EarnView() {
   const [protocol, setProtocol] = useState("ALL");
   const [riskFilter, setRiskFilter] = useState("ALL");
   const [loading, setLoading] = useState(true);
+  // Sub-tab: "defi" (pools Aave/Compound/Lido) | "p2p-arbitrage" (sección nueva)
+  const [subTab, setSubTab] = useState<"defi" | "p2p-arbitrage">("defi");
 
   useEffect(() => {
     const timer = setTimeout(() => setLoading(false), 500);
@@ -126,17 +130,54 @@ export default function EarnView() {
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
       {/* Header */}
-      <div className="mb-6">
+      <div className="mb-4">
         <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
           <TrendingUp className="w-6 h-6 text-emerald-400" />
           Earn — Rendimientos sin banco
         </h1>
         <p className="text-sm text-slate-400 mt-1">
-          Pon tu cripto a trabajar en los mejores protocolos DeFi. Sin KYC, sin banco, sin aprobación.
-          Smart contracts auditados, billones en TVL. Tú solo depositas y ganas.
+          Pon tu cripto a trabajar. DeFi (Aave, Compound, Lido) o Arbitraje P2P (Binance, Kraken, Bitvavo).
+          Sin KYC, sin banco, sin aprobación.
         </p>
       </div>
 
+      {/* Sub-nav interna: DeFi | Arbitraje P2P */}
+      <div className="mb-6 flex gap-1 bg-slate-900/50 border border-slate-800 rounded-xl p-1 max-w-md">
+        <button
+          onClick={() => setSubTab("defi")}
+          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg transition ${
+            subTab === "defi"
+              ? "bg-emerald-600 text-white"
+              : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+          }`}
+        >
+          <TrendingUp className="w-3.5 h-3.5" />
+          DeFi Pools
+        </button>
+        <button
+          onClick={() => setSubTab("p2p-arbitrage")}
+          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg transition ${
+            subTab === "p2p-arbitrage"
+              ? "bg-purple-600 text-white"
+              : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+          }`}
+        >
+          <Award className="w-3.5 h-3.5" />
+          Arbitraje P2P
+          <span className="text-[9px] px-1 py-0.5 bg-purple-900/50 text-purple-300 rounded">NEW</span>
+        </button>
+      </div>
+
+      {/* ============================================================ */}
+      {/* SUB-TAB: Arbitraje P2P — Binance + Kraken + Bitvavo + más */}
+      {/* ============================================================ */}
+      {subTab === "p2p-arbitrage" && <P2PArbitrageView />}
+
+      {/* ============================================================ */}
+      {/* SUB-TAB: DeFi Pools — Aave / Compound / Lido / Uniswap */}
+      {/* ============================================================ */}
+      {subTab === "defi" && (
+        <>
       {/* Panel explicativo */}
       <div className="mb-6 bg-gradient-to-br from-emerald-950/30 to-slate-900 border border-emerald-800/50 rounded-xl p-5">
         <div className="flex items-center gap-2 mb-3">
@@ -339,6 +380,8 @@ export default function EarnView() {
           Nunca deposites más de lo que estás dispuesto a perder. Dyor (Do your own research).
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }
