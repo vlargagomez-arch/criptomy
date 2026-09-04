@@ -204,9 +204,53 @@ export default function P2PArbitrageView() {
   }, [load]);
 
   // ============================================================
-  // CLIENT-SIDE FETCH — para exchanges bloqueados desde server
-  // (OKX, HTX, KuCoin, Bitget) que el navegador del usuario SÍ
-  // puede acceder.
+  // AUTO-TRIGGER: Ejecutar client-side fetch automáticamente
+  // cuando la página carga, sin que el usuario tenga que hacer click.
+  // Esto intenta OKX/HTX/KuCoin/Bitget/MEXC desde el navegador del
+  // usuario. Funciona si: (1) CORS lo permite, o (2) el usuario ya
+  // visitó el exchange en otra pestaña y tiene cookies.
+  // ============================================================
+  const autoTriggerClientSide = useCallback(async () => {
+    // Solo auto-trigger una vez por montaje
+    setClientLoading(true);
+    setClientError(null);
+    try {
+      const [buyResults, sellResults] = await Promise.all([
+        scanAllP2PFromBrowser({ asset, fiat, tradeType: "BUY" }),
+        scanAllP2PFromBrowser({ asset, fiat, tradeType: "SELL" }),
+      ]);
+      // Merge: BUY + SELL results, manteniendo el mejor estado por provider
+      const merged = new Map<string, ClientP2PResult>();
+      for (const r of buyResults) {
+        merged.set(r.providerId, r);
+      }
+      for (const r of sellResults) {
+        const existing = merged.get(r.providerId);
+        if (!existing || (existing.status !== "ONLINE" && r.status === "ONLINE")) {
+          merged.set(r.providerId, r);
+        } else if (existing.status === "ONLINE" && r.status === "ONLINE") {
+          // Merge offers de ambos
+          merged.set(r.providerId, {
+            ...existing,
+            offers: [...existing.offers, ...r.offers],
+          });
+        }
+      }
+      setClientResults(Array.from(merged.values()));
+    } catch (e) {
+      setClientError((e as Error).message);
+    } finally {
+      setClientLoading(false);
+    }
+  }, [asset, fiat]);
+
+  // Auto-trigger en mount + cuando cambia asset/fiat
+  useEffect(() => {
+    autoTriggerClientSide();
+  }, [autoTriggerClientSide]);
+
+  // ============================================================
+  // CLIENT-SIDE FETCH manual (botón)
   // ============================================================
   const loadClientSide = useCallback(async (tradeType: "BUY" | "SELL") => {
     setClientLoading(true);
@@ -395,37 +439,65 @@ export default function P2PArbitrageView() {
             })}
           </div>
 
-          {/* Banner: Configurar Cloudflare Worker proxy */}
+          {/* Banner: Configurar Cloudflare Worker proxy — UN SOLO COMANDO */}
           {disabledProviders.length > 0 && (
             <div className="mt-3 p-3 bg-purple-950/30 border border-purple-700/40 rounded-lg">
-              <div className="text-xs text-purple-200 font-medium flex items-center gap-1.5 mb-1">
+              <div className="text-xs text-purple-200 font-medium flex items-center gap-1.5 mb-2">
                 <Zap className="w-3.5 h-3.5 text-purple-400" />
-                Solución: activar TODOS los exchanges bloqueados con Cloudflare Worker proxy (gratis, 5 min)
+                ⚡ Activar TODOS los exchanges bloqueados con 1 comando (gratis, 5 min)
               </div>
+              <div className="text-[10px] text-slate-400 mb-3">
+                Los exchanges P2P (OKX, MEXC, KuCoin, Bitget, Gate.io, HTX) bloquean llamadas
+                desde servidores cloud (Vercel). <b className="text-slate-200">Cloudflare Workers</b> corren
+                en la red de Cloudflare cuyas IPs NO están bloqueadas — solución definitiva.
+              </div>
+
+              {/* Comando único para deploy automático */}
+              <div className="bg-slate-950/80 border border-purple-800/40 rounded-lg p-3 mb-2">
+                <div className="text-[10px] text-slate-400 mb-1.5 uppercase font-semibold">
+                  ▶ Ejecuta este comando en tu terminal:
+                </div>
+                <div className="font-mono text-xs text-emerald-400 bg-slate-950 px-3 py-2 rounded overflow-x-auto">
+                  <code>bash scripts/deploy-p2p-proxy.sh</code>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard?.writeText("bash scripts/deploy-p2p-proxy.sh");
+                    }}
+                    className="ml-2 text-[10px] text-slate-500 hover:text-emerald-400 transition"
+                  >
+                    📋 copiar
+                  </button>
+                </div>
+                <div className="text-[10px] text-slate-500 mt-1.5">
+                  El script hace todo: instala wrangler, abre login de Cloudflare, despliega el Worker,
+                  y te da la URL final para Vercel.
+                </div>
+              </div>
+
               <div className="text-[10px] text-slate-400 mb-2">
-                Los exchanges P2P (OKX, MEXC, KuCoin, Bitget, Gate.io, HTX) bloquean llamadas desde servidores cloud (Vercel).
-                Cloudflare Workers corren en la red de Cloudflare cuyas IPs NO están bloqueadas — solución definitiva.
-                Una vez configurado, todos los providers pasan a ONLINE.
+                <b className="text-slate-300">Después del deploy:</b>
+                <br/>
+                1. Copia la URL del Worker (algo como <code className="text-emerald-400">https://criptomy-p2p-proxy.tu-cuenta.workers.dev</code>)
+                <br/>
+                2. En Vercel → Settings → Environment Variables → agrega <code className="text-emerald-400">P2P_PROXY_URL</code>
+                <br/>
+                3. Redeploy el proyecto — todos los exchanges se activan automáticamente
               </div>
-              <div className="text-[10px] text-slate-400 mb-2">
-                <b className="text-slate-300">Paso 1:</b> Crea un Worker gratis en dash.cloudflare.com → Workers & Pages → Create Worker<br/>
-                <b className="text-slate-300">Paso 2:</b> Pega el código de <code className="text-emerald-400">docs/cloudflare-p2p-proxy/worker.js</code> y deploy<br/>
-                <b className="text-slate-300">Paso 3:</b> Copia la URL del Worker<br/>
-                <b className="text-slate-300">Paso 4:</b> En Vercel → Settings → Environment Variables, agrega <code className="text-emerald-400">P2P_PROXY_URL</code> con esa URL<br/>
-                <b className="text-slate-300">Paso 5:</b> Redeploy en Vercel — todos los exchanges se activan automáticamente
+
+              <div className="flex items-center gap-2 flex-wrap mt-2">
+                <a
+                  href="https://dash.cloudflare.com/?to=/:account/workers"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  Crear cuenta Cloudflare
+                </a>
+                <span className="text-[10px] text-slate-500">
+                  o ver <code className="text-emerald-400">docs/cloudflare-p2p-proxy/README.md</code> para guía paso a paso manual
+                </span>
               </div>
-              <a
-                href="https://dash.cloudflare.com/?to=/:account/workers"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-xs px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition"
-              >
-                <ExternalLink className="w-3 h-3" />
-                Crear Worker en Cloudflare
-              </a>
-              <span className="ml-2 text-[10px] text-slate-500">
-                Ver docs/cloudflare-p2p-proxy/README.md para guía paso a paso
-              </span>
             </div>
           )}
 

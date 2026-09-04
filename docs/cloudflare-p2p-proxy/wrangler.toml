@@ -1,0 +1,7 @@
+name = "criptomy-p2p-proxy"
+main = "worker.js"
+compatibility_date = "2024-09-01"
+
+# Configuración gratuita del Cloudflare Worker
+# Sin workers_dev = false, se despliega en <name>.<account>.workers.dev
+# Gratis: 100,000 requests por día
