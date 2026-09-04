@@ -3,42 +3,70 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Loader2, RefreshCw, ExternalLink, Shield, ChevronDown,
-  TrendingUp, TrendingDown, Zap, AlertCircle, Info, ArrowRight, Award,
-  AlertTriangle, Crown, Check, User, Circle,
+  TrendingUp, TrendingDown, Zap, AlertCircle, Info, ArrowRight,
+  AlertTriangle, Check, User, Clock, Radio, ArrowLeftRight,
 } from "lucide-react";
 import { COUNTRIES, SUPPORTED_ASSETS, type CountryConfig } from "@/lib/api-clients/catalog";
 import type { ArbitrageOpportunity, ArbitrageResponse } from "@/lib/p2p-arbitrage/engine-v3";
 
 // ============================================================
-// P2PArbitragePanel — Diseño al estilo ArbitrajePro
+// P2PArbitragePanel — Replicación exacta del screenshot ArbitrajePro
 // ============================================================
-// Layout:
-//   1. Header: título + status bar (En vivo | Oportunidades: 30 | Próx | Últ | Refrescar)
-//   2. Filtros: 3 dropdowns + anuncios count por exchange (color-coded)
-//   3. Tags de pago (botones quick filter, activo en amarillo)
-//   4. Stats summary bar (Oportunidades, Mejor NETO, Reputación mín)
-//   5. Cards de oportunidad (2 columnas: BUY verde | SELL rojo, footer con profit y botones)
+// Estructura:
+//   HEADER: Título "Arbitraje P2P Real (4 exchanges)" + subtítulo
+//           Badges estado derecha: ● En vivo | Oportunidades: 91 | Próx: 13s | Últ: 00:22:13 p.m. | Refrescar
+//
+//   FILTROS: 3 dropdowns (co Colombia COP, USDT, Todo método de pag)
+//            Anuncios: Binance 30 · OKX 30 · Bybit 30 (amarillo)
+//            Pagos: [Todos] [Nequi] [Davivienda S.A] [Bancolombia S.A] [Daviplata] [Bre-B Keys]
+//            (Todos = activo amarillo, otros gris)
+//
+//   STATS BAR: Oportunidades: 91 | Mejor NETO: +2.05% | ✓ Reputación mín: 80% (1 merchants filtrados)
+//              * Arbitraje real: comprar barato en un P2P, vender caro en otro · fee de retiro ya descontado
+//
+//   CARDS (repetible):
+//     TOP BAR (negro): [BUY OKX] → [SELL Bybit] [CROSS-EXCHANGE badge]
+//                      +2.05% (verde grande)
+//                      bruto +2.36% · fees -0.32% (gris pequeño)
+//     LEFT (verde oscuro #022C22):
+//       COMPRAR EN .............. OKX (verde)
+//       3,086 COP (blanco grande)
+//       👤 Merchant: HTCAMBIOSCRIP (gris)
+//       ✓ Reputación: 97.5% · 5992 ordenes
+//       LÍMITES DE OPERACIÓN
+//         Min: 1,000,000 COP (blanco)
+//         Max: 19,850,602.42 COP (blanco)
+//         Disp: 6432.47 USDT (verde)
+//       [Nequi] [Bancolombia] [Las llaves (Bre-B)]
+//     RIGHT (rojo oscuro #450A0A):
+//       VENDER EN .............. Bybit (rojo)
+//       3,158.98 COP (blanco grande)
+//       👤 Merchant: mbsola (gris)
+//       ✓ Reputación: 88.0% · 12973 ordenes
+//       LÍMITES DE OPERACIÓN
+//         Min: 50,000 COP
+//         Max: 4,147,114.31 COP
+//         Disp: 26919.09 USDT (rojo)
+//       [Nequi] [Bancolombia] [Bre-B Keys]
+//     FOOTER (negro):
+//       Operación: 1,000,000 COP (324.04 USDT) · Fee retiro: 1 USDT (rojo)
+//       Profit NETO: +20489.76 COP (~$20.49 USD/$1000) (verde bold)
+//       ⚡ 1. Comprar en OKX P2P ↗ (verde)
+//       ⚡ 2. Vender en Bybit P2P ↗ (rojo)
+//       > Detalle (gris link)
 // ============================================================
 
-const EXCHANGE_COLORS: Record<string, { bg: string; text: string; border: string; name: string; initial: string }> = {
-  Binance: { bg: "bg-yellow-500/20", text: "text-yellow-400", border: "border-yellow-500/30", name: "Binance", initial: "B" },
-  OKX:     { bg: "bg-cyan-500/20",    text: "text-cyan-400",   border: "border-cyan-500/30",   name: "OKX",     initial: "O" },
-  Bybit:   { bg: "bg-orange-500/20",  text: "text-orange-400", border: "border-orange-500/30", name: "Bybit",   initial: "Y" },
-  Kraken:  { bg: "bg-purple-500/20",  text: "text-purple-400", border: "border-purple-500/30", name: "Kraken",  initial: "K" },
+// Colores de exchange (logos circulares)
+const EXCHANGE_COLORS: Record<string, { bg: string; text: string; border: string; ring: string }> = {
+  Binance: { bg: "bg-amber-950", text: "text-amber-400", border: "border-amber-500", ring: "ring-amber-500/30" },
+  OKX:     { bg: "bg-slate-950", text: "text-cyan-400", border: "border-cyan-500", ring: "ring-cyan-500/30" },
+  Bybit:   { bg: "bg-slate-950", text: "text-orange-400", border: "border-orange-500", ring: "ring-orange-500/30" },
+  Kraken:  { bg: "bg-slate-950", text: "text-purple-400", border: "border-purple-500", ring: "ring-purple-500/30" },
 };
 
-function ExchangeCircle({ exchange, size = "md" }: { exchange: string; size?: "sm" | "md" | "lg" }) {
-  const style = EXCHANGE_COLORS[exchange] || { bg: "bg-slate-700", text: "text-slate-200", border: "border-slate-600", initial: "?", name: exchange };
-  const sizeClass = size === "lg" ? "w-10 h-10 text-base" : size === "md" ? "w-8 h-8 text-sm" : "w-6 h-6 text-xs";
-  return (
-    <span
-      className={`inline-flex items-center justify-center rounded-full font-bold border-2 ${style.bg} ${style.text} ${style.border} ${sizeClass} shrink-0 bg-slate-950`}
-      title={style.name}
-    >
-      {style.initial}
-    </span>
-  );
-}
+const EXCHANGE_INITIAL: Record<string, string> = {
+  Binance: "B", OKX: "O", Bybit: "Y", Kraken: "K",
+};
 
 function fmtPrice(n: number): string {
   if (!n) return "—";
@@ -110,39 +138,46 @@ export default function P2PArbitragePanel() {
   const bestOpp = opportunities[0];
   const suspiciousCount = opportunities.filter(isSuspicious).length;
 
+  // Totales anuncios (sumar buy+sell por exchange)
+  const totalAds = Object.values(quotes).reduce((s, q) => s + q.buy + q.sell, 0);
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 text-slate-100">
       {/* ===== HEADER ===== */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-            Arbitraje P2P Real
-            <span className="text-sm font-normal text-slate-500">(4 exchanges)</span>
+        <div className="flex-1 min-w-0">
+          <h2 className="text-2xl font-bold text-white">
+            Arbitraje P2P Real <span className="text-slate-500 font-normal text-lg">(4 exchanges)</span>
           </h2>
-          <p className="text-sm text-slate-400 mt-0.5">
-            Compra barato en Binance/OKX/Bybit, vende caro en otro. Profit NETO después de fees de retiro.
+          <p className="text-sm text-slate-400 mt-1 max-w-3xl">
+            Compra barato en Binance/OKX/Bybit P2P o Kraken Spot, vende caro en otro.
+            Anuncios reales en vivo de 4 exchanges en paralelo. Profit NETO después de fees de retiro crypto.
           </p>
         </div>
-        <div className="flex items-center gap-3 text-xs text-slate-300">
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            En vivo
+
+        {/* Badges de estado derecha */}
+        <div className="flex items-center gap-2 flex-wrap text-xs">
+          <span className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-950 border border-emerald-700 rounded-full">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-emerald-400 font-medium">En vivo</span>
           </span>
+          <span className="text-slate-500">Oportunidades: <b className="text-slate-200">{opportunities.length}</b></span>
           <span className="text-slate-600">|</span>
-          <span>Oportunidades: <b className="text-emerald-400">{opportunities.length}</b></span>
-          <span className="text-slate-600">|</span>
-          <span>Próx: <b className="text-slate-200">{refreshIn}s</b></span>
+          <span className="flex items-center gap-1 text-slate-500">
+            <Clock className="w-3 h-3" />
+            Próx: <b className="text-slate-200">{refreshIn}s</b>
+          </span>
           {data && (
             <>
               <span className="text-slate-600">|</span>
-              <span>Últ: <b className="text-slate-200">{new Date(data.timestamp).toLocaleTimeString()}</b></span>
+              <span className="text-slate-500">Últ: <b className="text-slate-200">{new Date(data.timestamp).toLocaleTimeString()}</b></span>
             </>
           )}
           <span className="text-slate-600">|</span>
           <button
             onClick={load}
             disabled={loading}
-            className="flex items-center gap-1 text-emerald-400 hover:text-emerald-300 disabled:opacity-50 transition"
+            className="flex items-center gap-1 px-2.5 py-1 bg-slate-100 hover:bg-white text-slate-900 rounded transition disabled:opacity-50"
           >
             {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
             Refrescar
@@ -151,15 +186,16 @@ export default function P2PArbitragePanel() {
       </div>
 
       {/* ===== FILTROS ===== */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-3">
-        <div className="flex items-center gap-3 flex-wrap">
+      <div className="bg-slate-800 border border-slate-700 rounded-lg p-3">
+        {/* Fila 1: dropdowns + anuncios count */}
+        <div className="flex items-center gap-2 flex-wrap">
           <select
             value={country.code}
             onChange={(e) => {
               const c = COUNTRIES.find((x) => x.code === e.target.value);
               if (c) setCountry(c);
             }}
-            className="px-3 py-1.5 bg-slate-950 border border-slate-700 rounded text-slate-100 text-sm cursor-pointer focus:outline-none focus:border-emerald-500"
+            className="px-3 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-100 text-sm cursor-pointer focus:outline-none focus:border-emerald-500"
           >
             {COUNTRIES.map((c) => (
               <option key={c.code} value={c.code} className="bg-slate-900">
@@ -171,7 +207,7 @@ export default function P2PArbitragePanel() {
           <select
             value={asset}
             onChange={(e) => setAsset(e.target.value)}
-            className="px-3 py-1.5 bg-slate-950 border border-slate-700 rounded text-slate-100 text-sm cursor-pointer focus:outline-none focus:border-emerald-500"
+            className="px-3 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-100 text-sm cursor-pointer focus:outline-none focus:border-emerald-500"
           >
             {SUPPORTED_ASSETS.map((a) => (
               <option key={a} value={a} className="bg-slate-900">{a}</option>
@@ -181,39 +217,38 @@ export default function P2PArbitragePanel() {
           <select
             value={payment}
             onChange={(e) => setPayment(e.target.value)}
-            className="px-3 py-1.5 bg-slate-950 border border-slate-700 rounded text-slate-100 text-sm cursor-pointer focus:outline-none focus:border-emerald-500"
+            className="px-3 py-1.5 bg-slate-900 border border-slate-700 rounded text-slate-100 text-sm cursor-pointer focus:outline-none focus:border-emerald-500"
           >
-            <option value="" className="bg-slate-900">Todo método de pago</option>
+            <option value="" className="bg-slate-900">Todo método de pag</option>
             {country.paymentMethods.map((m) => (
               <option key={m.id} value={m.id} className="bg-slate-900">{m.name}</option>
             ))}
           </select>
 
-          {/* Anuncios count por exchange */}
-          <div className="ml-auto flex items-center gap-2 text-xs">
+          {/* Anuncios count derecha */}
+          <div className="ml-auto flex items-center gap-3 text-xs">
             <span className="text-slate-500">Anuncios:</span>
             {Object.entries(quotes).map(([ex, q]) => {
               const style = EXCHANGE_COLORS[ex];
               if (!style) return null;
               return (
-                <span key={ex} className="flex items-center gap-1">
-                  <span className={style.text}>{style.name}</span>
-                  <b className={style.text}>{q.buy + q.sell}</b>
+                <span key={ex} className={style.text}>
+                  <b className="font-semibold">{ex}</b> {q.buy + q.sell}
                 </span>
               );
             })}
           </div>
         </div>
 
-        {/* Tags de pago (quick filter) */}
+        {/* Fila 2: tags de pago */}
         <div className="mt-3 flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-slate-500">Pagos:</span>
+          <span className="text-xs text-slate-400">Pagos:</span>
           <button
             onClick={() => setPayment("")}
-            className={`px-3 py-1 rounded text-xs font-medium transition ${
+            className={`px-3 py-1 rounded-full text-xs font-medium transition ${
               !payment
                 ? "bg-amber-500 text-black"
-                : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                : "bg-slate-700 text-slate-300 hover:bg-slate-600"
             }`}
           >
             Todos
@@ -222,10 +257,10 @@ export default function P2PArbitragePanel() {
             <button
               key={m.id}
               onClick={() => setPayment(m.id)}
-              className={`px-3 py-1 rounded text-xs transition ${
+              className={`px-3 py-1 rounded-full text-xs transition ${
                 payment === m.id
                   ? "bg-amber-500 text-black font-medium"
-                  : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+                  : "bg-slate-700 text-slate-300 hover:bg-slate-600"
               }`}
             >
               {m.name}
@@ -234,38 +269,33 @@ export default function P2PArbitragePanel() {
         </div>
       </div>
 
-      {/* ===== STATS SUMMARY ===== */}
-      <div className="flex items-center gap-6 flex-wrap text-sm">
-        <div>
-          <span className="text-slate-500">Oportunidades: </span>
-          <b className="text-emerald-400">{opportunities.length}</b>
-        </div>
-        <div>
-          <span className="text-slate-500">Mejor NETO: </span>
-          <b className="text-emerald-400">
-            {bestOpp ? `+${bestOpp.netSpreadPct.toFixed(2)}%` : "—"}
-          </b>
-        </div>
-        {reputation && (
-          <div className="flex items-center gap-1.5">
-            <Check className="w-3.5 h-3.5 text-emerald-400" />
-            <span className="text-slate-500">Reputación mín: </span>
-            <b className="text-emerald-400">{reputation.minRequired}%</b>
-            <span className="text-slate-500 text-xs">
-              ({reputation.merchantsFilteredOut} merchants filtrados)
+      {/* ===== STATS BAR ===== */}
+      <div className="bg-slate-900 border border-slate-800 rounded-lg px-4 py-2.5 flex items-center justify-between gap-4 flex-wrap text-sm">
+        <div className="flex items-center gap-4 flex-wrap">
+          <span><span className="text-slate-500">Oportunidades:</span> <b className="text-white">{opportunities.length}</b></span>
+          <span>
+            <span className="text-slate-500">Mejor NETO:</span>{" "}
+            <b className="text-emerald-400">{bestOpp ? `+${bestOpp.netSpreadPct.toFixed(2)}%` : "—"}</b>
+          </span>
+          {reputation && (
+            <span className="flex items-center gap-1.5">
+              <Check className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-slate-500">Reputación mín:</span>
+              <b className="text-emerald-400">{reputation.minRequired}%</b>
+              <span className="text-slate-500 text-xs">({reputation.merchantsFilteredOut} merchants filtrados)</span>
             </span>
-          </div>
-        )}
-        {suspiciousCount > 0 && (
-          <div className="flex items-center gap-1.5 text-xs">
-            <AlertTriangle className="w-3 h-3 text-amber-400" />
-            <span className="text-amber-400">{suspiciousCount} sospechosas</span>
-          </div>
-        )}
+          )}
+          {suspiciousCount > 0 && (
+            <span className="flex items-center gap-1.5 text-xs text-amber-400">
+              <AlertTriangle className="w-3 h-3" />
+              {suspiciousCount} sospechosas
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-slate-500 italic">
+          * Arbitraje real: comprar barato en un P2P, vender caro en otro · fee de retiro ya descontado
+        </p>
       </div>
-      <p className="text-xs text-slate-500 italic">
-        Arbitraje real: comprar barato en un P2P, vender caro en otro — fee de retiro ya descontado
-      </p>
 
       {/* ===== ERROR ===== */}
       {error && (
@@ -284,7 +314,7 @@ export default function P2PArbitragePanel() {
         </div>
       )}
 
-      {/* ===== RESULTADOS — LISTA DE OPPORTUNITY CARDS ===== */}
+      {/* ===== OPPORTUNITY CARDS ===== */}
       {data && !loading && (
         opportunities.length === 0 ? (
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center">
@@ -315,7 +345,7 @@ export default function P2PArbitragePanel() {
 }
 
 // ============================================================
-// OPPORTUNITY CARD — 2 columnas BUY (verde) | SELL (rojo)
+// OPPORTUNITY CARD — EXACTO como el screenshot
 // ============================================================
 function OpportunityCard({ opp, rank, fiat, expanded, onToggle }: {
   opp: ArbitrageOpportunity;
@@ -326,168 +356,182 @@ function OpportunityCard({ opp, rank, fiat, expanded, onToggle }: {
 }) {
   const suspicious = isSuspicious(opp);
   const isCross = opp.buyExchange !== opp.sellExchange;
+  const buyStyle = EXCHANGE_COLORS[opp.buyExchange];
+  const sellStyle = EXCHANGE_COLORS[opp.sellExchange];
 
   return (
-    <div className={`bg-slate-900 border ${suspicious ? "border-amber-700/40" : "border-slate-800"} rounded-xl overflow-hidden hover:border-slate-700 transition`}>
-      {/* Header de la card: badges + spread neto */}
-      <div className="flex items-center justify-between px-4 py-2 bg-slate-950/40 border-b border-slate-800">
-        <div className="flex items-center gap-2">
-          <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-            rank === 1 ? "bg-amber-500/20 text-amber-300 border-amber-500/30" :
-            rank <= 3 ? "bg-slate-700/40 text-slate-200 border-slate-600/30" :
-            "bg-slate-800 text-slate-400 border-slate-700"
-          }`}>
-            #{rank}
-          </span>
+    <div className="bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
+      {/* ===== TOP BAR: badges + profit ===== */}
+      <div className="bg-black px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+        {/* Izquierda: BUY → SELL + badges */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Badge BUY */}
+          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-950 border border-emerald-600 rounded">
+            <span className={`w-5 h-5 rounded-full ${buyStyle.bg} border-2 ${buyStyle.border} flex items-center justify-center text-[10px] font-bold ${buyStyle.text}`}>
+              {EXCHANGE_INITIAL[opp.buyExchange] || "?"}
+            </span>
+            <span className="text-emerald-300 text-xs font-bold uppercase">BUY {opp.buyExchange}</span>
+          </div>
+
+          <span className="text-slate-400">→</span>
+
+          {/* Badge SELL */}
+          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-red-950 border border-red-600 rounded">
+            <span className={`w-5 h-5 rounded-full ${sellStyle.bg} border-2 ${sellStyle.border} flex items-center justify-center text-[10px] font-bold ${sellStyle.text}`}>
+              {EXCHANGE_INITIAL[opp.sellExchange] || "?"}
+            </span>
+            <span className="text-red-300 text-xs font-bold uppercase">SELL {opp.sellExchange}</span>
+          </div>
+
+          {/* Badge CROSS-EXCHANGE */}
           {isCross && (
-            <span className="text-[9px] px-1.5 py-0.5 border border-amber-500/40 text-amber-400 rounded font-semibold">
+            <span className="text-[10px] px-2 py-0.5 border border-amber-500 text-amber-300 rounded font-semibold tracking-wide">
               CROSS-EXCHANGE
             </span>
           )}
           {suspicious && (
-            <span className="text-[9px] px-1.5 py-0.5 border border-red-500/40 text-red-400 rounded font-semibold flex items-center gap-1">
+            <span className="text-[10px] px-2 py-0.5 border border-red-500 text-red-300 rounded font-semibold flex items-center gap-1">
               <AlertTriangle className="w-2.5 h-2.5" />
               SOSPECHOSO
             </span>
           )}
-          <span className="text-[9px] text-slate-500 font-mono">
-            {opp.type === "P2P-P2P" ? "P2P→P2P" : opp.type === "P2P-Spot" ? "P2P→Spot" : "Spot→P2P"}
-          </span>
         </div>
+
+        {/* Derecha: profit grande */}
         <div className="text-right">
           <div className="text-2xl font-bold text-emerald-400 leading-none">
             +{opp.netSpreadPct.toFixed(2)}%
           </div>
-          <div className="text-[10px] text-slate-500">
+          <div className="text-[10px] text-slate-500 mt-0.5">
             bruto +{opp.grossSpreadPct.toFixed(2)}% · fees -{opp.feesPct.toFixed(2)}%
           </div>
         </div>
       </div>
 
-      {/* Body: 2 columnas BUY | SELL */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-0">
-        {/* BUY side */}
-        <div className="p-4 border-r border-slate-800">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="px-2 py-0.5 rounded bg-emerald-950/60 text-emerald-400 text-[10px] font-bold uppercase tracking-wide">
-              BUY
-            </span>
-            <ExchangeCircle exchange={opp.buyExchange} />
-            <span className="text-slate-300 font-semibold text-sm">{opp.buyExchange}</span>
+      {/* ===== BODY: 2 columnas BUY (verde oscuro) | SELL (rojo oscuro) ===== */}
+      <div className="grid grid-cols-1 sm:grid-cols-2">
+        {/* ===== LEFT: COMPRAR (fondo verde muy oscuro) ===== */}
+        <div className="p-4 bg-emerald-950/40 border-r border-slate-700">
+          {/* Header interno */}
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs text-blue-400 uppercase tracking-wide font-semibold">COMPRAR EN</span>
+            <span className="text-emerald-400 font-bold text-sm">{opp.buyExchange}</span>
           </div>
-          <div className="text-2xl font-bold text-white font-mono mb-2">
-            {fmtPrice(opp.buyPrice)} <span className="text-sm text-slate-500">{fiat}</span>
+
+          {/* Precio principal */}
+          <div className="text-2xl font-bold text-white font-mono mb-3">
+            {fmtPrice(opp.buyPrice)} <span className="text-sm text-slate-400 font-sans">{fiat}</span>
           </div>
-          <div className="space-y-1.5 text-xs">
-            <div className="flex items-center gap-1.5 text-slate-300">
-              <User className="w-3 h-3 text-slate-500" />
-              <span className="font-medium">{opp.buyMerchant}</span>
+
+          {/* Info vendedor */}
+          <div className="space-y-1.5 mb-3 text-xs">
+            <div className="flex items-center gap-1.5">
+              <User className="w-3.5 h-3.5 text-purple-400" />
+              <span className="text-slate-400">Merchant:</span>
+              <span className="text-slate-200 font-medium">{opp.buyMerchant}</span>
               {opp.buyMerchantPro && (
                 <span className="text-[8px] px-1 py-0.5 bg-amber-900/50 text-amber-300 rounded font-semibold">PRO</span>
               )}
             </div>
-            <div className="flex items-center gap-1.5 text-emerald-400">
-              <Check className="w-3 h-3" />
-              <span>{opp.buyMerchantReputation.toFixed(1)}%</span>
+            <div className="flex items-center gap-1.5">
+              <Check className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-slate-400">Reputación:</span>
+              <b className="text-emerald-400">{opp.buyMerchantReputation.toFixed(1)}%</b>
               <span className="text-slate-500">· {opp.buyMerchantOrderCount.toLocaleString()} órdenes</span>
             </div>
           </div>
-          <div className="mt-3 bg-slate-950/50 rounded p-2 text-[10px]">
-            <div className="text-slate-500 uppercase mb-1">Límites de operación</div>
-            <div className="grid grid-cols-3 gap-1 text-slate-300 font-mono">
-              <div>
-                <div className="text-slate-500 text-[9px]">Min</div>
-                <div>{fmtAmount(opp.buyMinAmount)}</div>
-              </div>
-              <div>
-                <div className="text-slate-500 text-[9px]">Max</div>
-                <div>{fmtAmount(opp.buyMaxAmount)}</div>
-              </div>
-              <div>
-                <div className="text-slate-500 text-[9px]">Disp</div>
-                <div className="text-emerald-400">{fmtAmount(opp.buyAvailableQty)} {opp.asset}</div>
-              </div>
+
+          {/* Límites de operación */}
+          <div className="border border-slate-700/50 rounded p-2 mb-3 text-[11px] font-mono">
+            <div className="text-slate-500 uppercase text-[9px] mb-1 font-sans tracking-wide">Límites de operación</div>
+            <div className="space-y-0.5">
+              <div><span className="text-slate-500">Min:</span> <span className="text-white">{fmtPrice(opp.buyMinAmount)} {fiat}</span></div>
+              <div><span className="text-slate-500">Max:</span> <span className="text-white">{fmtPrice(opp.buyMaxAmount)} {fiat}</span></div>
+              <div><span className="text-slate-500">Disp:</span> <span className="text-emerald-400">{opp.buyAvailableQty.toFixed(2)} {opp.asset}</span></div>
             </div>
           </div>
-          <div className="mt-2 flex flex-wrap gap-1">
+
+          {/* Tags de pago */}
+          <div className="flex flex-wrap gap-1">
             {opp.buyPaymentMethods.slice(0, 4).map((m) => (
-              <span key={m} className="text-[9px] px-1.5 py-0.5 bg-slate-800 text-slate-300 rounded">{m}</span>
+              <span key={m} className="text-[10px] px-2 py-0.5 bg-slate-700 text-slate-300 rounded">{m}</span>
             ))}
             {opp.buyPaymentMethods.length > 4 && (
-              <span className="text-[9px] px-1.5 py-0.5 bg-slate-800 text-slate-500 rounded">+{opp.buyPaymentMethods.length - 4}</span>
+              <span className="text-[10px] px-2 py-0.5 bg-slate-700 text-slate-500 rounded">+{opp.buyPaymentMethods.length - 4}</span>
             )}
           </div>
         </div>
 
-        {/* SELL side */}
-        <div className="p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="px-2 py-0.5 rounded bg-rose-950/60 text-rose-400 text-[10px] font-bold uppercase tracking-wide">
-              SELL
-            </span>
-            <ExchangeCircle exchange={opp.sellExchange} />
-            <span className="text-slate-300 font-semibold text-sm">{opp.sellExchange}</span>
+        {/* ===== RIGHT: VENDER (fondo rojo muy oscuro) ===== */}
+        <div className="p-4 bg-red-950/40">
+          {/* Header interno */}
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs text-blue-400 uppercase tracking-wide font-semibold">VENDER EN</span>
+            <span className="text-red-400 font-bold text-sm">{opp.sellExchange}</span>
           </div>
-          <div className="text-2xl font-bold text-white font-mono mb-2">
-            {fmtPrice(opp.sellPrice)} <span className="text-sm text-slate-500">{fiat}</span>
+
+          {/* Precio principal */}
+          <div className="text-2xl font-bold text-white font-mono mb-3">
+            {fmtPrice(opp.sellPrice)} <span className="text-sm text-slate-400 font-sans">{fiat}</span>
           </div>
-          <div className="space-y-1.5 text-xs">
-            <div className="flex items-center gap-1.5 text-slate-300">
-              <User className="w-3 h-3 text-slate-500" />
-              <span className="font-medium">{opp.sellMerchant}</span>
+
+          {/* Info comprador */}
+          <div className="space-y-1.5 mb-3 text-xs">
+            <div className="flex items-center gap-1.5">
+              <User className="w-3.5 h-3.5 text-purple-400" />
+              <span className="text-slate-400">Merchant:</span>
+              <span className="text-slate-200 font-medium">{opp.sellMerchant}</span>
               {opp.sellMerchantPro && (
                 <span className="text-[8px] px-1 py-0.5 bg-amber-900/50 text-amber-300 rounded font-semibold">PRO</span>
               )}
             </div>
-            <div className="flex items-center gap-1.5 text-emerald-400">
-              <Check className="w-3 h-3" />
-              <span>{opp.sellMerchantReputation.toFixed(1)}%</span>
+            <div className="flex items-center gap-1.5">
+              <Check className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-slate-400">Reputación:</span>
+              <b className="text-emerald-400">{opp.sellMerchantReputation.toFixed(1)}%</b>
               <span className="text-slate-500">· {opp.sellMerchantOrderCount.toLocaleString()} órdenes</span>
             </div>
           </div>
-          <div className="mt-3 bg-slate-950/50 rounded p-2 text-[10px]">
-            <div className="text-slate-500 uppercase mb-1">Límites de operación</div>
-            <div className="grid grid-cols-3 gap-1 text-slate-300 font-mono">
-              <div>
-                <div className="text-slate-500 text-[9px]">Min</div>
-                <div>{fmtAmount(opp.sellMinAmount)}</div>
-              </div>
-              <div>
-                <div className="text-slate-500 text-[9px]">Max</div>
-                <div>{fmtAmount(opp.sellMaxAmount)}</div>
-              </div>
-              <div>
-                <div className="text-slate-500 text-[9px]">Disp</div>
-                <div className="text-rose-400">{fmtAmount(opp.sellAvailableQty)} {opp.asset}</div>
-              </div>
+
+          {/* Límites de operación */}
+          <div className="border border-slate-700/50 rounded p-2 mb-3 text-[11px] font-mono">
+            <div className="text-slate-500 uppercase text-[9px] mb-1 font-sans tracking-wide">Límites de operación</div>
+            <div className="space-y-0.5">
+              <div><span className="text-slate-500">Min:</span> <span className="text-white">{fmtPrice(opp.sellMinAmount)} {fiat}</span></div>
+              <div><span className="text-slate-500">Max:</span> <span className="text-white">{fmtPrice(opp.sellMaxAmount)} {fiat}</span></div>
+              <div><span className="text-slate-500">Disp:</span> <span className="text-red-400">{opp.sellAvailableQty.toFixed(2)} {opp.asset}</span></div>
             </div>
           </div>
-          <div className="mt-2 flex flex-wrap gap-1">
+
+          {/* Tags de pago */}
+          <div className="flex flex-wrap gap-1">
             {opp.sellPaymentMethods.slice(0, 4).map((m) => (
-              <span key={m} className="text-[9px] px-1.5 py-0.5 bg-slate-800 text-slate-300 rounded">{m}</span>
+              <span key={m} className="text-[10px] px-2 py-0.5 bg-slate-700 text-slate-300 rounded">{m}</span>
             ))}
             {opp.sellPaymentMethods.length > 4 && (
-              <span className="text-[9px] px-1.5 py-0.5 bg-slate-800 text-slate-500 rounded">+{opp.sellPaymentMethods.length - 4}</span>
+              <span className="text-[10px] px-2 py-0.5 bg-slate-700 text-slate-500 rounded">+{opp.sellPaymentMethods.length - 4}</span>
             )}
           </div>
         </div>
       </div>
 
-      {/* Footer: operación + profit + botones */}
-      <div className="border-t border-slate-800 bg-slate-950/40 px-4 py-3">
+      {/* ===== FOOTER (negro): operación + botones + profit ===== */}
+      <div className="bg-black px-4 py-3">
         <div className="flex items-center justify-between gap-3 flex-wrap mb-3 text-xs">
+          {/* Izquierda: operación */}
           <div className="text-slate-400">
-            Operación: <b className="text-white">{fmtAmount(opp.operationFiatAmount)} {fiat}</b>
+            Operación: <b className="text-white">{fmtPrice(opp.operationFiatAmount)} {fiat}</b>
             <span className="text-slate-500"> ({opp.operationAssetAmount.toFixed(2)} {opp.asset})</span>
             <span className="text-slate-600 mx-2">·</span>
-            Fee retiro: <b className="text-rose-400">{opp.withdrawalFee} {opp.asset}</b>
-            <span className="text-slate-500"> ({fmtAmount(opp.withdrawalFeeFiat)} {fiat})</span>
+            Fee retiro: <b className="text-red-400">{opp.withdrawalFee} {opp.asset}</b>
           </div>
+
+          {/* Derecha: profit final */}
           <div>
-            <span className="text-slate-500">Profit NETO: </span>
-            <b className="text-emerald-400 text-base font-mono">+{fmtAmount(opp.netProfitForOperation)} {fiat}</b>
+            <span className="text-slate-400">Profit NETO: </span>
+            <b className="text-emerald-400 text-base font-mono">+{fmtPrice(opp.netProfitForOperation)} {fiat}</b>
             <span className="text-slate-500 text-[10px] ml-1">
-              (~${(opp.netProfitForOperation / 4100).toFixed(2)} USD / $1000)
+              (~${(opp.netProfitForOperation / 4100).toFixed(2)} USD/$1000)
             </span>
           </div>
         </div>
@@ -498,7 +542,7 @@ function OpportunityCard({ opp, rank, fiat, expanded, onToggle }: {
             href={opp.buyDirectUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1.5 text-xs px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition font-semibold"
+            className="flex items-center gap-1.5 text-xs px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded transition font-semibold"
           >
             <Zap className="w-3.5 h-3.5" />
             1. Comprar en {opp.buyExchange} P2P
@@ -508,7 +552,7 @@ function OpportunityCard({ opp, rank, fiat, expanded, onToggle }: {
             href={opp.sellDirectUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1.5 text-xs px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-lg transition font-semibold"
+            className="flex items-center gap-1.5 text-xs px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded transition font-semibold"
           >
             <Zap className="w-3.5 h-3.5" />
             2. Vender en {opp.sellExchange} P2P
@@ -516,7 +560,7 @@ function OpportunityCard({ opp, rank, fiat, expanded, onToggle }: {
           </a>
           <button
             onClick={onToggle}
-            className="ml-auto text-xs text-slate-500 hover:text-slate-300 transition flex items-center gap-1"
+            className="ml-auto text-xs text-slate-500 hover:text-slate-300 transition"
           >
             {expanded ? "Ocultar detalle" : "> Detalle"}
           </button>
@@ -525,45 +569,44 @@ function OpportunityCard({ opp, rank, fiat, expanded, onToggle }: {
         {/* Detalle expandible */}
         {expanded && (
           <div className="mt-3 pt-3 border-t border-slate-800 space-y-2 text-xs">
-            <div className="text-[10px] uppercase text-slate-500 font-semibold">Cálculo del profit NETO (algoritmo)</div>
+            <div className="text-[10px] uppercase text-slate-500 font-semibold tracking-wide">Cálculo del profit NETO (algoritmo)</div>
             <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 font-mono text-[11px]">
               <div>
-                <div className="text-slate-500 text-[9px]">Tamaño op.</div>
-                <div className="text-slate-200">{fmtAmount(opp.operationFiatAmount)} {fiat}</div>
+                <div className="text-slate-500 text-[9px] font-sans">Tamaño op.</div>
+                <div className="text-slate-200">{fmtPrice(opp.operationFiatAmount)} {fiat}</div>
               </div>
               <div>
-                <div className="text-slate-500 text-[9px]">Asset comprado</div>
+                <div className="text-slate-500 text-[9px] font-sans">Asset comprado</div>
                 <div className="text-slate-200">{opp.operationAssetAmount.toFixed(3)} {opp.asset}</div>
               </div>
               <div>
-                <div className="text-slate-500 text-[9px]">Spread bruto</div>
+                <div className="text-slate-500 text-[9px] font-sans">Spread bruto</div>
                 <div className="text-slate-300">+{opp.grossSpreadPct.toFixed(2)}%</div>
               </div>
               <div>
-                <div className="text-slate-500 text-[9px]">Fee retiro</div>
-                <div className="text-rose-400">-{fmtAmount(opp.withdrawalFeeFiat)} {fiat}</div>
+                <div className="text-slate-500 text-[9px] font-sans">Fee retiro</div>
+                <div className="text-red-400">-{fmtPrice(opp.withdrawalFeeFiat)} {fiat}</div>
               </div>
               <div>
-                <div className="text-slate-500 text-[9px]">Profit NETO</div>
-                <div className="text-emerald-400 font-bold">+{fmtAmount(opp.netProfitForOperation)} {fiat}</div>
+                <div className="text-slate-500 text-[9px] font-sans">Profit NETO</div>
+                <div className="text-emerald-400 font-bold">+{fmtPrice(opp.netProfitForOperation)} {fiat}</div>
               </div>
               <div>
-                <div className="text-slate-500 text-[9px]">Profit/1000</div>
+                <div className="text-slate-500 text-[9px] font-sans">Profit/1000</div>
                 <div className="text-emerald-400">+{opp.netProfitOn1000.toFixed(2)}</div>
               </div>
             </div>
             {opp.commonPaymentMethod && (
-              <div className="text-[10px] text-slate-400 flex items-center gap-1.5">
+              <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
                 <Check className="w-3 h-3 text-blue-400" />
                 Método de pago común: <b className="text-blue-300">{opp.commonPaymentMethod}</b> · facilita el round-trip fiat
               </div>
             )}
             {suspicious && (
-              <div className="bg-red-950/30 border border-red-700/40 rounded p-2 text-[10px] text-red-300 flex items-start gap-2">
+              <div className="bg-red-950/30 border border-red-700/40 rounded p-2 text-[11px] text-red-300 flex items-start gap-2">
                 <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
                 <span>
-                  Spread &gt; 30% es prácticamente imposible en P2P real. Probable bait ad — el merchant recibe tu pago pero no libera el crypto.
-                  Verifica en el exchange directamente antes de operar.
+                  Spread &gt; 30% es prácticamente imposible en P2P real. Probable bait ad — el merchant recibe tu pago pero no libera el crypto. Verifica en el exchange directamente antes de operar.
                 </span>
               </div>
             )}
