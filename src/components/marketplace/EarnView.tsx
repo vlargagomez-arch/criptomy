@@ -45,12 +45,12 @@ export default function EarnView() {
       // manualmente. Marcado claramente en la UI.
       const STATIC_DATA: Record<string, AaveReserve[]> = {
         POLYGON: [
-          { asset: "USDC", chain: "POLYGON", supplyAPY: 2.88, borrowAPY: 4.95, timestamp: Date.now(), status: "ONLINE" },
-          { asset: "USDT", chain: "POLYGON", supplyAPY: 3.30, borrowAPY: 5.12, timestamp: Date.now(), status: "ONLINE" },
+          { asset: "USDC", chain: "POLYGON", supplyAPY: 2.96, borrowAPY: 4.95, timestamp: Date.now(), status: "ONLINE" },
+          { asset: "USDT", chain: "POLYGON", supplyAPY: 3.31, borrowAPY: 5.12, timestamp: Date.now(), status: "ONLINE" },
           { asset: "WETH", chain: "POLYGON", supplyAPY: 0.28, borrowAPY: 1.87, timestamp: Date.now(), status: "ONLINE" },
           { asset: "WBTC", chain: "POLYGON", supplyAPY: 0.01, borrowAPY: 0.52, timestamp: Date.now(), status: "ONLINE" },
           { asset: "WMATIC", chain: "POLYGON", supplyAPY: 0.05, borrowAPY: 1.15, timestamp: Date.now(), status: "ONLINE" },
-          { asset: "DAI", chain: "POLYGON", supplyAPY: 2.75, borrowAPY: 4.81, timestamp: Date.now(), status: "ONLINE" },
+          { asset: "DAI", chain: "POLYGON", supplyAPY: 3.60, borrowAPY: 4.81, timestamp: Date.now(), status: "ONLINE" },
         ],
         BASE: [
           { asset: "USDC", chain: "BASE", supplyAPY: 4.12, borrowAPY: 5.45, timestamp: Date.now(), status: "ONLINE" },

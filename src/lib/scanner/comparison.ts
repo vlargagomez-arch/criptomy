@@ -213,7 +213,7 @@ export function detectArbitrage(quotes: MarketQuote[], capital: number = 1000): 
       const netProfit = grossProfit - feesTotal;
       const roiPercent = (netProfit / capital) * 100;
 
-      if (spreadPercent > 0.05) { // solo mostrar si spread > 0.05%
+      if (spreadPercent > 0.01) { // mostrar si spread > 0.01% (más sensible)
         opportunities.push({
           asset: buyAt.asset,
           buyAt: { provider: buyAt.providerName, price: buyPrice },

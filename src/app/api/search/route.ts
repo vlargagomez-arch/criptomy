@@ -3,7 +3,7 @@ import { interpretQuery } from "@/lib/scanner/interpreter";
 import { scanMarketData, scanP2P } from "@/lib/scanner/engine";
 import { calculateQuoteResult, calculateP2PResult, rankResults, detectArbitrage } from "@/lib/scanner/comparison";
 import { findRoutes } from "@/lib/scanner/route-engine";
-import type { SearchResponse, RankedResult, P2POffer } from "@/lib/scanner/types";
+import type { SearchResponse, RankedResult, P2POffer, MarketQuote } from "@/lib/scanner/types";
 
 // POST /api/search
 // Body: { query: "Quiero comprar 1000 USDT con COP" }
@@ -98,8 +98,39 @@ export async function POST(req: NextRequest) {
       }
 
       // Arbitraje: detectar oportunidades entre providers
+      // Para arbitraje, escanear BTC y ETH además del asset pedido
+      // (donde hay más diferencia de precio entre exchanges)
       if (intent.operation === "ARBITRAGE") {
-        arbitrageOpportunities = detectArbitrage(quotes, amount * (intent.fiat ? 1 : 1000));
+        const arbitrageAssets = [asset, "BTC", "ETH"].filter((a, i, arr) => arr.indexOf(a) === i);
+        const allArbQuotes: MarketQuote[] = [];
+        for (const arbAsset of arbitrageAssets) {
+          const arbQuotes = await scanMarketData(arbAsset, scanQuote === "USD" ? "USDT" : scanQuote);
+          // Filtrar solo los que tienen bid y ask válidos
+          const valid = arbQuotes.filter((q) => q.status === "ONLINE" && q.bidPrice && q.askPrice && q.bidPrice > 0 && q.askPrice > 0);
+          if (valid.length >= 2) {
+            // Convertir a fiat local si es necesario
+            if (isLocalFiat && fiat !== "USD") {
+              const fiatRates: Record<string, number> = {
+                COP: 4100, MXN: 18.5, ARS: 950, BRL: 5.05, CLP: 950, PEN: 3.75, VES: 36, DOP: 58,
+              };
+              const rate = fiatRates[fiat] || 1;
+              valid.forEach((q) => {
+                q.lastPrice *= rate;
+                q.bidPrice = q.bidPrice ? q.bidPrice * rate : undefined;
+                q.askPrice = q.askPrice ? q.askPrice * rate : undefined;
+                q.spread = q.spread ? q.spread * rate : undefined;
+                q.quoteCurrency = fiat;
+              });
+            }
+            allArbQuotes.push(...valid);
+            const arbOpps = detectArbitrage(valid, amount * (intent.fiat ? 1 : 1000));
+            arbitrageOpportunities.push(...arbOpps);
+          }
+        }
+        // Ordenar por ROI descendente
+        arbitrageOpportunities.sort((a, b) => b.estimatedRoiPercent - a.estimatedRoiPercent);
+        // Limitar a 8 oportunidades
+        arbitrageOpportunities = arbitrageOpportunities.slice(0, 8);
       }
     }
 
