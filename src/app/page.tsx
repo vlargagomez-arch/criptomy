@@ -21,11 +21,10 @@ import ScannerAdminView from "@/components/marketplace/ScannerAdminView";
 import WalletView from "@/components/marketplace/WalletView";
 import ReputationView from "@/components/marketplace/ReputationView";
 import EducacionView from "@/components/marketplace/EducacionView";
-import ConversorView from "@/components/marketplace/ConversorView";
 import EarnView from "@/components/marketplace/EarnView";
 
 const VALID_TABS: TabKey[] = [
-  "inicio", "buscador", "dashboard", "conversor", "earn", "enviar", "recibir",
+  "inicio", "buscador", "dashboard", "earn", "enviar", "recibir",
   "mercado-p2p", "retos", "educacion", "alertas",
   "oportunidades", "proveedores", "comparador",
   "scanner-admin", "compliance", "admin", "billetera", "reputacion",
@@ -65,7 +64,6 @@ export default function Home() {
         {tab === "inicio" && <HomeView />}
         {tab === "buscador" && <SmartSearchView />}
         {tab === "dashboard" && <HomeView />}
-        {tab === "conversor" && <ConversorView />}
         {tab === "earn" && <EarnView />}
         {tab === "enviar" && <EnviarView />}
         {tab === "recibir" && <RecibirView />}

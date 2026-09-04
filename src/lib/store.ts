@@ -25,7 +25,6 @@ export type TabKey =
   | "recibir"
   | "mercado-p2p"
   | "retos"
-  | "conversor"
   | "earn"
   | "educacion"
   | "alertas"
@@ -59,7 +58,7 @@ interface AppState {
   logout: () => void;
 }
 
-const STORAGE_VERSION = 20;
+const STORAGE_VERSION = 21;
 
 function isValidUser(user: unknown): user is CurrentUser {
   if (!user || typeof user !== "object") return false;
@@ -108,7 +107,7 @@ export const useApp = create<AppState>()(
         set({ user: null, privateKey: null, tab: "inicio", chainId: null, p2pSubTab: "explorar" }),
     }),
     {
-      name: "criptomy-v20",
+      name: "criptomy-v21",
       version: STORAGE_VERSION,
       partialize: (state) => ({
         user: state.user,
@@ -129,7 +128,6 @@ export const useApp = create<AppState>()(
           "recibir",
           "mercado-p2p",
           "retos",
-          "conversor",
           "earn",
           "educacion",
           "alertas",
