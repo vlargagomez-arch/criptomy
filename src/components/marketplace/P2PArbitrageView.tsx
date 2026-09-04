@@ -68,6 +68,7 @@ interface Opportunity {
   buyAt: BuySellOffer;
   sellAt: BuySellOffer;
   matchedRange: { min: number; max: number; executable: boolean };
+  type?: "INTRA-EXCHANGE" | "CROSS-EXCHANGE";
   spread: number;
   spreadPercent: number;
   estimatedProfit: number;
@@ -75,6 +76,15 @@ interface Opportunity {
   spotReference: { provider: string; price: number; note: string } | null;
   timestamp: number;
   warnings: string[];
+}
+
+interface P2PProvider {
+  providerId: string;
+  providerName: string;
+  offers: BuySellOffer[];
+  status: string; // "ONLINE" | "ERROR" | "DISABLED"
+  error?: string;
+  latencyMs?: number;
 }
 
 interface ApiResponse {
@@ -85,7 +95,7 @@ interface ApiResponse {
   sellOffers: BuySellOffer[];
   spotRef: unknown;
   spotProviders: unknown[];
-  providers: { id: string; name: string; role: string; status: string; note?: string }[];
+  p2pProviders?: P2PProvider[];
   timestamp: number;
   error?: string;
 }
@@ -141,7 +151,9 @@ export default function P2PArbitrageView() {
   const opps = data?.opportunities || [];
   const buyOffers = data?.buyOffers || [];
   const sellOffers = data?.sellOffers || [];
-  const providers = data?.providers || [];
+  const p2pProviders = data?.p2pProviders || [];
+  const onlineProviders = p2pProviders.filter((p) => p.status === "ONLINE");
+  const disabledProviders = p2pProviders.filter((p) => p.status !== "ONLINE");
 
   return (
     <div>
@@ -221,34 +233,63 @@ export default function P2PArbitrageView() {
             <span>Auto-refresh cada 30s</span>
           </div>
           <div className="text-xs text-slate-500">
-            Escaneando: {providers.map((p) => `${p.name} (${p.role})`).join(" · ") || "Binance P2P, Kraken, Bitvavo, Coinbase"}
+            Escaneando: <b className="text-emerald-400">{onlineProviders.length}</b> P2P online + <b className="text-amber-400">{disabledProviders.length}</b> bloqueados + Kraken/Bitvavo/Coinbase spot
           </div>
         </div>
       </div>
 
-      {/* Providers activos */}
-      {providers.length > 0 && (
-        <div className="mb-6 grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {providers.map((p) => {
-            const online = p.status === "ONLINE";
-            return (
-              <div
-                key={p.id}
-                className={`p-2.5 rounded-lg border text-xs ${
-                  online
-                    ? "bg-emerald-950/30 border-emerald-800/50"
-                    : "bg-slate-900/30 border-slate-800"
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-medium text-slate-200">{p.name}</span>
-                  <span className={`w-1.5 h-1.5 rounded-full ${online ? "bg-emerald-500" : "bg-slate-600"}`} />
+      {/* P2P Providers — grid detallado mostrando TODOS los exchanges intentados */}
+      {p2pProviders.length > 0 && (
+        <div className="mb-6">
+          <h3 className="text-xs uppercase tracking-wide text-slate-500 mb-2 flex items-center gap-2">
+            <Activity className="w-3.5 h-3.5 text-purple-400" />
+            Exchanges P2P escaneados · {onlineProviders.length} online + {disabledProviders.length} bloqueados
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {p2pProviders.map((p) => {
+              const online = p.status === "ONLINE";
+              return (
+                <div
+                  key={p.providerId}
+                  className={`p-3 rounded-lg border text-xs ${
+                    online
+                      ? "bg-emerald-950/30 border-emerald-800/50"
+                      : "bg-amber-950/20 border-amber-800/30"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-medium text-slate-200">{p.providerName}</span>
+                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${
+                      online
+                        ? "bg-emerald-600/30 text-emerald-300"
+                        : "bg-amber-600/30 text-amber-300"
+                    }`}>
+                      {online ? "🟢 ONLINE" : "🔴 BLOQUEADO"}
+                    </span>
+                  </div>
+                  {online ? (
+                    <div className="text-[10px] text-slate-400">
+                      <div>{p.offers.length} ofertas encontradas</div>
+                      <div className="text-slate-500">Latencia: {p.latencyMs || 0}ms</div>
+                    </div>
+                  ) : (
+                    <div className="text-[10px] text-amber-400/80 italic">
+                      {p.error || "No disponible"}
+                    </div>
+                  )}
                 </div>
-                <div className="text-[10px] text-slate-400">{p.role}</div>
-                {p.note && <div className="text-[10px] text-slate-500 italic mt-0.5">{p.note}</div>}
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+          {/* Info explicativa */}
+          <div className="mt-2 text-[10px] text-slate-500 bg-slate-900/50 border border-slate-800/50 rounded-lg p-2.5">
+            <Info className="w-3 h-3 inline mr-1 text-purple-400" />
+            <b className="text-slate-400">¿Por qué algunos exchanges están bloqueados?</b> La mayoría de los exchanges P2P
+            (Bybit, OKX, KuCoin, Gate.io, MEXC) usan APIs internas no documentadas que bloquean llamadas
+            desde servidores cloud (Vercel) mediante Cloudflare/Akamai. <b className="text-slate-400">Binance P2P</b> es el
+            único con endpoint público confiable. Los exchanges bloqueados se muestran aquí para que veas el estado real
+            y sepas por qué no aparecen ofertas suyas.
+          </div>
         </div>
       )}
 
@@ -369,13 +410,24 @@ export default function P2PArbitrageView() {
                 </h3>
                 <ol className="text-[12px] text-slate-400 space-y-2 list-decimal pl-4">
                   <li>
-                    El sistema escanea en paralelo las ofertas <b className="text-emerald-400">BUY</b> (anuncios de
-                    vendedores que venden cripto a cambio de fiat) y <b className="text-amber-400">SELL</b> (anuncios de
-                    compradores que compran cripto pagando fiat) en Binance P2P.
+                    El sistema escanea en paralelo las ofertas <b className="text-emerald-400">BUY</b> y
+                    <b className="text-amber-400">SELL</b> en <b className="text-slate-200">TODOS</b> los
+                    exchanges P2P disponibles (Binance, Bybit, OKX, HTX, KuCoin, Bitget, Gate.io — los que
+                    respondan). Solo Binance P2P responde de forma confiable desde el server (los demás
+                    están bloqueados por WAF).
                   </li>
                   <li>
                     Para cada par (BUY, SELL) donde SELL {'>'} BUY, calcula el <b className="text-slate-200">spread</b> (ganancia
-                    por unidad). Si el spread es {'>'} 0.5%, es candidato.
+                    por unidad). Si el spread es {'>'} 0.5% (intra-exchange) o {'>'} 1% (cross-exchange),
+                    es candidato.
+                  </li>
+                  <li>
+                    <b className="text-blue-400">INTRA-exchange:</b> comprador y vendedor están en el mismo exchange
+                    (ej. Binance). Más simple, no hay transfer entre exchanges.
+                  </li>
+                  <li>
+                    <b className="text-purple-400">CROSS-exchange:</b> comprador en un exchange, vendedor en otro.
+                    Requiere transferir el cripto entre exchanges (5-30 min + fees de retiro/deposito).
                   </li>
                   <li>
                     <b className="text-purple-400">Matching de cantidades:</b> calcula la intersección entre el rango
@@ -397,7 +449,8 @@ export default function P2PArbitrageView() {
                     <b>Riesgos reales:</b> el precio P2P cambia entre que inicias la compra y la venta.
                     Los advertisers pueden cancelar. Puede haber demoras en la liberación del escrow.
                     El spread debe cubrir el tiempo que llevas la operación. El ROI mostrado es bruto,
-                    sin contar posibles costos de transferencia entre métodos de pago.
+                    sin contar posibles costos de transferencia entre métodos de pago. Para cross-exchange,
+                    considera fees de retiro + deposito + el tiempo de la transferencia on-chain.
                   </div>
                 </div>
               </div>
@@ -432,9 +485,11 @@ function OpportunityCard({
 }) {
   const positive = opp.estimatedProfit > 0;
   const fiat = opp.fiat;
+  const isCross = opp.type === "CROSS-EXCHANGE";
+  const sameProvider = opp.buyAt.provider === opp.sellAt.provider;
 
   return (
-    <div className={`bg-slate-900 border rounded-xl p-4 ${positive ? "border-emerald-800/50" : "border-slate-800"}`}>
+    <div className={`bg-slate-900 border rounded-xl p-4 ${positive ? (isCross ? "border-purple-800/50" : "border-emerald-800/50") : "border-slate-800"}`}>
       {/* Header */}
       <div className="flex items-center justify-between gap-3 mb-3">
         <div className="flex items-center gap-3">
@@ -444,11 +499,19 @@ function OpportunityCard({
           <div>
             <div className="text-sm font-medium text-slate-100 flex items-center gap-2 flex-wrap">
               <span className="text-emerald-400 font-semibold">Comprar a @{opp.buyAt.advertiser}</span>
+              <span className="text-[9px] px-1.5 py-0.5 bg-emerald-900/40 text-emerald-300 rounded">{opp.buyAt.provider}</span>
               <ArrowRight className="w-3 h-3 text-slate-500" />
               <span className="text-amber-400 font-semibold">Vender a @{opp.sellAt.advertiser}</span>
+              <span className="text-[9px] px-1.5 py-0.5 bg-amber-900/40 text-amber-300 rounded">{opp.sellAt.provider}</span>
             </div>
-            <div className="text-[10px] text-slate-500 mt-0.5">
-              {opp.asset}/{fiat} · Ambos en {opp.buyAt.provider}
+            <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-2 flex-wrap">
+              <span>{opp.asset}/{fiat}</span>
+              {isCross ? (
+                <span className="text-[9px] px-1.5 py-0.5 bg-purple-900/50 text-purple-300 rounded font-semibold">CROSS-EXCHANGE</span>
+              ) : (
+                <span className="text-[9px] px-1.5 py-0.5 bg-blue-900/50 text-blue-300 rounded font-semibold">INTRA-EXCHANGE</span>
+              )}
+              {sameProvider && <span className="text-slate-500">(mismo exchange)</span>}
             </div>
           </div>
         </div>
@@ -596,21 +659,26 @@ function OffersTable({
       </h3>
       <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
         <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-slate-800/50 text-[9px] uppercase text-slate-500 font-semibold">
-          <div className="col-span-4">Advertiser</div>
+          <div className="col-span-4">Advertiser / Exchange</div>
           <div className="col-span-2 text-right">Precio</div>
           <div className="col-span-3 text-right">Límites</div>
           <div className="col-span-2 text-right">Trades</div>
           <div className="col-span-1 text-right">Disp.</div>
         </div>
-        {offers.slice(0, 10).map((o, i) => (
-          <div key={`${type}-${o.advertiser}-${i}`} className="grid grid-cols-12 gap-2 px-3 py-2.5 border-t border-slate-800 hover:bg-slate-800/30 transition text-[11px]">
+        {offers.slice(0, 15).map((o, i) => (
+          <div key={`${type}-${o.provider}-${o.advertiser}-${i}`} className="grid grid-cols-12 gap-2 px-3 py-2.5 border-t border-slate-800 hover:bg-slate-800/30 transition text-[11px]">
             <div className="col-span-4 flex items-center gap-2 min-w-0">
               <div className={`w-6 h-6 rounded-full ${type === "BUY" ? "bg-emerald-900/50" : "bg-amber-900/50"} flex items-center justify-center text-[10px] font-bold text-white shrink-0`}>
                 {o.advertiser.slice(0, 2).toUpperCase()}
               </div>
               <div className="min-w-0">
                 <div className="text-slate-200 font-medium truncate">@{o.advertiser}</div>
-                <div className="text-[9px] text-slate-500 truncate">{o.paymentMethods.slice(0, 2).join(", ")}</div>
+                <div className="text-[9px] text-slate-500 truncate">
+                  <span className="text-purple-400">{o.provider}</span>
+                  {o.paymentMethods.length > 0 && (
+                    <> · {o.paymentMethods.slice(0, 2).join(", ")}</>
+                  )}
+                </div>
               </div>
             </div>
             <div className={`col-span-2 text-right font-mono font-bold ${type === "BUY" ? "text-emerald-400" : "text-amber-400"}`}>

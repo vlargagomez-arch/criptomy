@@ -1,43 +1,50 @@
 // ============================================================
-// P2P ARBITRAGE ENGINE — Arbitraje entre exchanges P2P y spot
+// P2P ARBITRAGE ENGINE — Arbitraje entre exchanges P2P
 // ============================================================
-// Combina datos de:
-//   - Binance P2P (BUY + SELL) — el mayor mercado P2P de LATAM
-//   - Kraken spot — precio referencia regulado
-//   - Bitvavo spot — exchange holandés con buena liquidez EU
-//   - Coinbase spot — referencia USD
+// Combina datos de TODOS los exchanges P2P disponibles:
+//   - Binance P2P  ✅ funciona
+//   - Bybit P2P    ⚠️ intentamos (puede que no responda)
+//   - OKX P2P      ⚠️ intentamos (API no documentada)
+//   - HTX P2P      ⚠️ intentamos
+//   - KuCoin P2P   ⚠️ intentamos (Cloudflare)
+//   - Bitget P2P   ⚠️ intentamos
+//   - Gate.io P2P  ⚠️ intentamos (Akamai)
 //
-// Detecta oportunidades de arbitraje entre:
-//   1. Comprar P2P barato (BUY offer más baja) en exchange A
-//   2. Vender P2P caro (SELL offer más alta) en exchange B
-//   3. Solo incluye pares donde las cantidades (min-max) se cruzan
-//      para que la operación sea realmente ejecutable
+// Y referencia spot de:
+//   - Kraken, Coinbase, Bitvavo (spot)
 //
-// El matching de cantidades es crítico: si el BUY en A acepta
-// 100-500 USDT y el SELL en B acepta 50-200 USDT, el rango ejecutable
-// es 100-200 USDT (intersección). El usuario solicitó EXPLICITAMENTE
-// que las cantidades de compra y venta coincidan.
+// DETECCIÓN DE ARBITRAJE:
+//   1. Toma TODAS las ofertas BUY (donde puedes comprar cripto) de TODOS los exchanges
+//   2. Toma TODAS las ofertas SELL (donde puedes vender cripto) de TODOS los exchanges
+//   3. Para cada par (BUY_i, SELL_j) donde SELL > BUY:
+//      - Si son del MISMO exchange: arbitraje intra-exchange
+//      - Si son de DIFERENTES exchanges: arbitraje cross-exchange (más complejo)
+//        porque hay que transferir el cripto entre exchanges (5-30 min, fee de red)
+//      - Calcula el rango ejecutable (intersección de min/max)
+//      - Si hay intersección, es una oportunidad real
+//      - Estima ganancia operando el monto máximo del rango matched
+//   4. Ordena por ROI descendente
 // ============================================================
 
-import { fetchBinanceP2P } from "../scanner/providers/binance";
 import { fetchKrakenTicker } from "../scanner/providers/kraken";
 import { fetchCoinbaseTicker } from "../scanner/providers/coinbase";
 import { fetchBitvavoTicker } from "../scanner/providers/bitvavo";
 import type { P2POffer, MarketQuote } from "../scanner/types";
+import { scanAllP2PProviders, type P2PProviderResult } from "./p2p-providers";
 
 // ============================================================
 // TIPO DE DATO: Oportunidad de arbitraje P2P
 // ============================================================
 export interface P2PArbitrageOpportunity {
-  asset: string;       // "USDT"
-  fiat: string;        // "COP"
+  asset: string;
+  fiat: string;
   // Compra (BUY) — donde el usuario compra cripto pagando fiat
   buyAt: {
-    provider: string;          // "Binance P2P"
+    provider: string;          // "Binance P2P" / "Bybit P2P" / etc.
     advertiser: string;
-    price: number;             // precio por unidad en fiat
-    minAmount: number;         // fiat
-    maxAmount: number;         // fiat
+    price: number;
+    minAmount: number;
+    maxAmount: number;
     paymentMethods: string[];
     tradeCount: number;
     completionRate?: number;
@@ -55,37 +62,30 @@ export interface P2PArbitrageOpportunity {
   };
   // Matching de cantidades — rango ejecutable real
   matchedRange: {
-    min: number;              // max(buyMin, sellMin)
-    max: number;              // min(buyMax, sellMax)
-    executable: boolean;       // true si hay intersección
+    min: number;
+    max: number;
+    executable: boolean;
   };
+  // Tipo de arbitraje
+  type: "INTRA-EXCHANGE" | "CROSS-EXCHANGE";
   // Métricas
-  spread: number;             // sellPrice - buyPrice (en fiat por unidad)
-  spreadPercent: number;      // (spread / buyPrice) * 100
-  estimatedProfit: number;    // ganancia neta estimada al operar el monto máximo del rango matched
+  spread: number;
+  spreadPercent: number;
+  estimatedProfit: number;
   estimatedRoiPercent: number;
-  // Referencia spot (para contexto, no para operar)
+  // Referencia spot
   spotReference: {
-    provider: string;         // "Kraken" o "Bitvavo" o "Coinbase"
+    provider: string;
     price: number;
-    note: string;             // "Precio spot USD/EUR de referencia"
+    note: string;
   } | null;
   timestamp: number;
   warnings: string[];
 }
 
 // ============================================================
-// MOTOR PRINCIPAL: Detectar oportunidades de arbitraje P2P
+// MOTOR PRINCIPAL: Detectar oportunidades de arbitraje P2P multi-exchange
 // ============================================================
-// Estrategia:
-// 1. Escanea P2P BUY offers (precios ASK — usuario paga para comprar cripto)
-// 2. Escanea P2P SELL offers (precios BID — usuario recibe por vender cripto)
-// 3. Para cada par (BUY_i, SELL_j) donde SELL > BUY:
-//    - Calcula el rango ejecutable (intersección de min/max)
-//    - Si hay intersección, es una oportunidad real
-//    - Estima ganancia operando el monto máximo del rango matched
-// 4. Ordena por ROI descendente
-
 export async function scanP2PArbitrage(params: {
   asset: string;
   fiat: string;
@@ -96,16 +96,37 @@ export async function scanP2PArbitrage(params: {
   sellOffers: P2POffer[];
   spotRef: MarketQuote | null;
   spotProviders: MarketQuote[];
+  p2pProviders: P2PProviderResult[];
 }> {
   const { asset, fiat } = params;
 
-  // 1. Escanear P2P en paralelo (Binance BUY + SELL)
-  const [buyOffers, sellOffers] = await Promise.all([
-    fetchBinanceP2P({ asset, fiat, tradeType: "BUY", rows: 20 }),
-    fetchBinanceP2P({ asset, fiat, tradeType: "SELL", rows: 20 }),
+  // 1. Escanear TODOS los P2P providers en paralelo (BUY y SELL)
+  const [buyResults, sellResults] = await Promise.all([
+    scanAllP2PProviders({ asset, fiat, tradeType: "BUY" }),
+    scanAllP2PProviders({ asset, fiat, tradeType: "SELL" }),
   ]);
 
-  // 2. Escanear spot de referencia (Kraken, Bitvavo, Coinbase) en paralelo
+  // Concatenar todas las ofertas BUY y SELL de todos los providers
+  const buyOffers = buyResults.results.flatMap((r) => r.offers);
+  const sellOffers = sellResults.results.flatMap((r) => r.offers);
+
+  // Combinar la lista única de providers (BUY + SELL) para el UI
+  const p2pProviderMap = new Map<string, P2PProviderResult>();
+  for (const r of buyResults.results) {
+    p2pProviderMap.set(r.providerId, r);
+  }
+  for (const r of sellResults.results) {
+    const existing = p2pProviderMap.get(r.providerId);
+    if (!existing) {
+      p2pProviderMap.set(r.providerId, r);
+    } else if (existing.status !== "ONLINE" && r.status === "ONLINE") {
+      // Si BUY fue offline pero SELL online, usar el online
+      p2pProviderMap.set(r.providerId, r);
+    }
+  }
+  const p2pProviders = Array.from(p2pProviderMap.values());
+
+  // 2. Escanear spot de referencia (Kraken, Bitvavo, Coinbase)
   let spotRef: MarketQuote | null = null;
   const spotProviders: MarketQuote[] = [];
 
@@ -113,8 +134,6 @@ export async function scanP2PArbitrage(params: {
   const isLocalFiat = LOCAL_FIATS.includes(fiat);
 
   if (isLocalFiat) {
-    // Para fiats locales LATAM, no hay spot directo. Usamos USDT/USD como referencia
-    // y convertimos a fiat local con tasa aproximada.
     const [kraken, coinbase, bitvavo] = await Promise.all([
       fetchKrakenTicker(asset, "USD").catch(() => null),
       fetchCoinbaseTicker(asset, "USD").catch(() => null),
@@ -123,7 +142,6 @@ export async function scanP2PArbitrage(params: {
     spotProviders.push(...[kraken, coinbase, bitvavo].filter((q): q is MarketQuote => q !== null && q.status === "ONLINE"));
     spotRef = spotProviders[0] || null;
   } else {
-    // fiat es USD o EUR — usamos el par directo
     const [kraken, coinbase, bitvavo] = await Promise.all([
       fetchKrakenTicker(asset, fiat).catch(() => null),
       fetchCoinbaseTicker(asset, fiat).catch(() => null),
@@ -133,10 +151,9 @@ export async function scanP2PArbitrage(params: {
     spotRef = spotProviders[0] || null;
   }
 
-  // 3. Detectar oportunidades de arbitraje
-  // BUY offer = precio que el usuario paga para COMPRAR cripto (ASK)
-  // SELL offer = precio que el usuario recibe para VENDER cripto (BID)
-  // Arbitraje: comprar barato (BUY bajo) en un advertiser y vender caro (SELL alto) en otro
+  // 3. Detectar oportunidades de arbitraje — matching CROSS-EXCHANGE
+  // Para cada BUY offer (precio bajo), busca SELL offers (precio alto) de cualquier exchange
+  // donde SELL > BUY + spread mínimo. Calcula matching de cantidades.
   const opportunities: P2PArbitrageOpportunity[] = [];
 
   for (const buy of buyOffers) {
@@ -148,7 +165,16 @@ export async function scanP2PArbitrage(params: {
       // Solo considerar spreads > 0.5% (mínimo realista)
       if (spreadPercent < 0.5) continue;
 
-      // MATCHING DE CANTIDADES — el usuario solicitó EXPLÍCITAMENTE que coincidan
+      // Tipo de arbitraje
+      const isCrossExchange = buy.provider !== sell.provider;
+      const type: "INTRA-EXCHANGE" | "CROSS-EXCHANGE" = isCrossExchange
+        ? "CROSS-EXCHANGE"
+        : "INTRA-EXCHANGE";
+
+      // Para cross-exchange, exigir spread mayor (para cubrir transfer entre exchanges)
+      if (isCrossExchange && spreadPercent < 1.0) continue;
+
+      // MATCHING DE CANTIDADES
       const buyMin = buy.minAmount || 0;
       const buyMax = buy.maxAmount || 0;
       const sellMin = sell.minAmount || 0;
@@ -187,12 +213,21 @@ export async function scanP2PArbitrage(params: {
         }
       }
 
-      const warnings: string[] = [
-        "El arbitraje P2P implica hacer 2 transacciones con 2 personas distintas.",
-        "El precio puede cambiar entre que inicias la compra y la venta.",
-        "El advertiser de venta debe estar ONLINE y disponible.",
-        "Si usas la misma red de pago, tu identidad queda expuesta al advertiser.",
-      ];
+      // Warnings — más estrictos para cross-exchange
+      const warnings: string[] = [];
+      if (type === "INTRA-EXCHANGE") {
+        warnings.push("Arbitraje INTRA-exchange: misma plataforma, 2 advertisers distintos.");
+        warnings.push("Más simple — no hay transferencia entre exchanges.");
+      } else {
+        warnings.push("Arbitraje CROSS-exchange: 2 plataformas distintas.");
+        warnings.push(`Después de comprar en ${buy.providerName}, transfieres el ${asset} a ${sell.providerName}.`);
+        warnings.push("Toma 5-30 min + fee de retiro (~$1-5 USDT) + fee de depósito (~gratis).");
+        warnings.push("Mientras la transferencia se confirma, el precio SELL puede cambiar.");
+        warnings.push("Necesitas cuenta verificada (KYC) en ambos exchanges.");
+      }
+      warnings.push("El advertiser de venta debe estar ONLINE y disponible.");
+      warnings.push("Si usas la misma red de pago, tu identidad queda expuesta al advertiser.");
+
       if (spreadPercent < 2) {
         warnings.push("⚠️ Spread bajo: una fluctuación pequeña puede eliminar la ganancia.");
       }
@@ -231,6 +266,7 @@ export async function scanP2PArbitrage(params: {
           max: matchedMax,
           executable,
         },
+        type,
         spread,
         spreadPercent,
         estimatedProfit,
@@ -246,10 +282,11 @@ export async function scanP2PArbitrage(params: {
   opportunities.sort((a, b) => b.estimatedRoiPercent - a.estimatedRoiPercent);
 
   return {
-    opportunities: opportunities.slice(0, 15),
+    opportunities: opportunities.slice(0, 20),
     buyOffers,
     sellOffers,
     spotRef,
     spotProviders,
+    p2pProviders,
   };
 }
