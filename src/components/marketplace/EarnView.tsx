@@ -38,12 +38,41 @@ export default function EarnView() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/aave?chain=${chain}&asset=ALL`);
-      if (!res.ok) return;
+      // Fetch directo desde el navegador a DefiLlama (API pública, sin key)
+      // El endpoint /pools devuelve todos los pools DeFi; filtramos Aave V3
+      const res = await fetch("https://yields.llama.fi/pools", {
+        signal: AbortSignal.timeout(30000),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      setReserves(data.reserves || []);
-    } catch {}
-    finally { setLoading(false); }
+
+      // Filtrar solo pools de Aave V3 en la chain seleccionada
+      const aavePools = (data.data || [])
+        .filter((p: { project: string; chain: string }) => {
+          const project = (p.project || "").toLowerCase();
+          const chainName = (p.chain || "").toLowerCase();
+          return (
+            project.includes("aave") &&
+            chainName === chain.toLowerCase()
+          );
+        })
+        .slice(0, 20)
+        .map((p: { symbol: string; apy: number; apyBaseBorrow?: number; tvlUsd: number }) => ({
+          asset: (p.symbol || "").toUpperCase(),
+          chain: chain,
+          supplyAPY: p.apy || 0,
+          borrowAPY: p.apyBaseBorrow || 0,
+          timestamp: Date.now(),
+          status: "ONLINE" as const,
+        }));
+
+      setReserves(aavePools);
+    } catch (err) {
+      console.warn("[earn] fetch failed:", err);
+      setReserves([]);
+    } finally {
+      setLoading(false);
+    }
   }, [chain]);
 
   useEffect(() => {
