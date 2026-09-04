@@ -202,8 +202,15 @@ export function detectArbitrage(quotes: MarketQuote[], capital: number = 1000): 
 
       const spreadPercent = ((sellPrice - buyPrice) / buyPrice) * 100;
       // Fees: taker en ambos extremos
-      const buyFee = (buyPrice * (PROVIDER_FEES[buyAt.provider]?.takerPercent || 0)) / 100;
-      const sellFee = (sellPrice * (PROVIDER_FEES[sellAt.provider]?.takerPercent || 0)) / 100;
+      const buyFeePct = PROVIDER_FEES[buyAt.provider]?.takerPercent || 0;
+      const sellFeePct = PROVIDER_FEES[sellAt.provider]?.takerPercent || 0;
+      const totalFeePct = buyFeePct + sellFeePct;
+
+      // Solo mostrar si hay spread bruto positivo (> 0.01%)
+      if (spreadPercent <= 0.01) continue;
+
+      const buyFee = (buyPrice * buyFeePct) / 100;
+      const sellFee = (sellPrice * sellFeePct) / 100;
 
       const unitsBought = capital / (buyPrice + buyFee);
       const grossSell = unitsBought * sellPrice;
@@ -213,32 +220,39 @@ export function detectArbitrage(quotes: MarketQuote[], capital: number = 1000): 
       const netProfit = grossProfit - feesTotal;
       const roiPercent = (netProfit / capital) * 100;
 
-      if (spreadPercent > 0.01) { // mostrar si spread > 0.01% (más sensible)
-        opportunities.push({
-          asset: buyAt.asset,
-          buyAt: { provider: buyAt.providerName, price: buyPrice },
-          sellAt: { provider: sellAt.providerName, price: sellPrice },
-          spreadPercent,
-          estimatedProfit: grossProfit,
-          estimatedRoiPercent: roiPercent,
-          feesEstimated: feesTotal,
-          netProfit,
-          capital,
-          assumptions: [
-            `Capital: $${capital} USD`,
-            `Compra al ask en ${buyAt.providerName} ($${buyPrice.toFixed(2)})`,
-            `Venta al bid en ${sellAt.providerName} ($${sellPrice.toFixed(2)})`,
-            `Comisiones taker aplicadas en ambos extremos`,
-            `No incluye costos de transferencia entre exchanges`,
-            `No incluye slippage real`,
-            `Los precios son del momento del escaneo y cambian constantemente`,
-          ],
-          timestamp: Date.now(),
-        });
-      }
+      // Determinar si es rentable después de comisiones
+      const isProfitable = netProfit > 0;
+
+      const assumptions = [
+        `Capital: $${capital} USD`,
+        `Compra al ask en ${buyAt.providerName} ($${buyPrice.toFixed(2)})`,
+        `Venta al bid en ${sellAt.providerName} ($${sellPrice.toFixed(2)})`,
+        `Spread bruto: ${spreadPercent.toFixed(3)}%`,
+        `Comisiones taker: ${totalFeePct.toFixed(2)}% total (${buyFeePct}% + ${sellFeePct}%)`,
+        isProfitable
+          ? `✅ Rentable después de comisiones`
+          : `❌ NO rentable después de comisiones (spread ${spreadPercent.toFixed(3)}% < comisiones ${totalFeePct.toFixed(2)}%)`,
+        `No incluye costos de transferencia entre exchanges`,
+        `No incluye slippage real`,
+        `Los precios son del momento del escaneo y cambian constantemente`,
+      ];
+
+      opportunities.push({
+        asset: buyAt.asset,
+        buyAt: { provider: buyAt.providerName, price: buyPrice },
+        sellAt: { provider: sellAt.providerName, price: sellPrice },
+        spreadPercent,
+        estimatedProfit: grossProfit,
+        estimatedRoiPercent: roiPercent,
+        feesEstimated: feesTotal,
+        netProfit,
+        capital,
+        assumptions,
+        timestamp: Date.now(),
+      });
     }
   }
 
-  // Ordenar por ROI descendente
-  return opportunities.sort((a, b) => b.estimatedRoiPercent - a.estimatedRoiPercent);
+  // Ordenar por spread descendente (mayor spread primero)
+  return opportunities.sort((a, b) => b.spreadPercent - a.spreadPercent);
 }
