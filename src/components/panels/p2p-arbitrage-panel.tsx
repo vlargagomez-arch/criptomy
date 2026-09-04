@@ -251,6 +251,65 @@ export default function P2PArbitragePanel() {
         </div>
       )}
 
+      {/* ===== BANNER ESTADO DE EXCHANGES (debug) ===== */}
+      {data?.rawAdsByExchange && (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-3">
+          <div className="text-[10px] uppercase text-slate-500 font-semibold mb-2 flex items-center gap-1.5">
+            <Zap className="w-3 h-3 text-amber-400" />
+            Estado de exchanges (data cruda recibida)
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {Object.entries(data.rawAdsByExchange).map(([ex, count]) => {
+              const quoteData = data.quotes?.[ex] || { buy: 0, sell: 0 };
+              const total = quoteData.buy + quoteData.sell;
+              const status = total > 0 ? "ONLINE" : count > 0 ? "FILTRADO" : "SIN_DATA";
+              const statusColor = status === "ONLINE" ? "text-emerald-400" : status === "FILTRADO" ? "text-amber-400" : "text-red-400";
+              return (
+                <div key={ex} className="bg-slate-950/40 border border-slate-800 rounded-lg p-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <ExchangeBadge exchange={ex} />
+                    <span className={`text-[9px] font-semibold ${statusColor}`}>{status}</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    <div><b className="text-slate-300">{count}</b> ads recibidos</div>
+                    <div>
+                      <b className="text-emerald-400">{quoteData.buy}</b> BUY ·{" "}
+                      <b className="text-amber-400">{quoteData.sell}</b> SELL válidos
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {/* Diversidad de pares en oportunidades finales */}
+            {data.exchangesInOpportunities && (
+              <div className="bg-purple-950/30 border border-purple-700/40 rounded-lg p-2">
+                <div className="text-[10px] uppercase text-purple-400 font-semibold mb-1">Diversidad</div>
+                <div className="text-[10px] text-slate-400">
+                  <div>{data.exchangesInOpportunities.uniquePairs.length} rutas únicas</div>
+                  <div className="text-[9px] text-slate-500">
+                    {data.exchangesInOpportunities.uniquePairs.slice(0, 6).join(", ")}
+                    {data.exchangesInOpportunities.uniquePairs.length > 6 && "..."}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          {/* Warning si solo hay 1 exchange */}
+          {data.exchangesInOpportunities && data.exchangesInOpportunities.uniquePairs.length <= 1 && (
+            <div className="mt-2 text-[10px] text-amber-400 flex items-start gap-2">
+              <AlertCircle className="w-3 h-3 shrink-0 mt-0.5" />
+              <span>
+                Solo 1 ruta de arbitraje detectada — el cross-exchange está dando 0 resultados.
+                Verifica que Binance/OKX/Bybit devuelvan data. Si todos están en el mismo
+                exchange, las oportunidades son INTRA-exchange (comprar a advertiser X, vender a
+                advertiser Y del mismo exchange). El cross-exchange real (Binance→OKX) requiere
+                que ambos exchanges devuelvan ads válidos.
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ===== BANNER EXPLICATIVO ===== */}
       {data && allOpportunities.length > 0 && (
         <div className="bg-emerald-950/30 border border-emerald-700/40 rounded-xl p-3 text-xs text-slate-300 flex items-start gap-2">

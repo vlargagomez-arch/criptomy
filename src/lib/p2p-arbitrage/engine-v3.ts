@@ -120,6 +120,14 @@ export interface ArbitrageResponse {
   asset: string;
   fiat: string;
   timestamp: number;
+  // Debug info: cuántos ads trajo cada exchange ANTES del filtro de reputation
+  rawAdsByExchange?: Record<string, number>;
+  // Diversidad de exchanges en las opportunities finales
+  exchangesInOpportunities?: {
+    buy: string[];
+    sell: string[];
+    uniquePairs: string[];
+  };
 }
 
 // ============================================================
@@ -128,7 +136,13 @@ export interface ArbitrageResponse {
 
 const TOP_N = 12; // top 12 BUY × top 12 SELL = 144 combinaciones max
 const MIN_NET_SPREAD_PCT = 0.1;
-const MIN_OPERATION_USD = 200; // mínimo $200 USD equiv o minAmount
+// FX rate aproximado: USD → cada fiat local. Se usa para calcular el mínimo
+// de operación en fiat local (equivalente a $200 USD).
+const FX_USD_TO_FIAT: Record<string, number> = {
+  COP: 4100, ARS: 950, BRL: 5.05, MXN: 18.5, EUR: 0.92, USD: 1,
+  PEN: 3.75, CLP: 950, VES: 36, DOP: 58,
+};
+const MIN_OPERATION_USD = 200; // mínimo $200 USD equiv o minAmount del merchant
 const MAX_OPPORTUNITIES = 30;
 
 export async function scanP2PArbitrage(params: {
@@ -249,9 +263,77 @@ export async function scanP2PArbitrage(params: {
   const sortedBuy = [...buyAds].sort((a, b) => a.price - b.price); // BUY asc
   const sortedSell = [...sellAds].sort((a, b) => b.price - a.price); // SELL desc
 
-  // === PASO 5: Cross-match (top 12 × top 12 = 144 max) ===
-  const topBuy = sortedBuy.slice(0, TOP_N);
-  const topSell = sortedSell.slice(0, TOP_N);
+  // === PASO 5: Cross-match con DIVERSIDAD GARANTIZADA por exchange
+  // Si solo usamos top 12 global, todos serían del exchange con precio más bajo/caros
+  // (ej: OKX tiene 1719 COP fake que domina los 12 BUY, dejando Binance/Bybit fuera).
+  //
+  // SOLUCIÓN: Top N por EXCHANGE, no global.
+  // - Si hay 4 exchanges habilitados → top 3 por exchange = 12 (garantiza 4 BUY de cada)
+  // - Si hay 1 exchange habilitado → top 12 de ese exchange (mantiene comportamiento original)
+  const EXCHANGES_PER_SIDE = Math.max(3, Math.ceil(TOP_N / enabledExchanges.length));
+  const perExchangeBuy = TOP_N;
+  const perExchangeSell = TOP_N;
+
+  // Tomar top N por cada exchange, garantizando que cada exchange tenga representación
+  const topBuy: NormalizedAd[] = [];
+  const topSell: NormalizedAd[] = [];
+  const buySeen = new Set<string>();
+  const sellSeen = new Set<string>();
+  const uniqueExchanges = [...new Set([
+    ...sortedBuy.map(a => a.exchange),
+    ...sortedSell.map(a => a.exchange),
+  ])];
+
+  // Round-robin: ir tomando de cada exchange
+  // while topBuy.length < TOP_N o ya no haya más
+  let added = true;
+  while (added && (topBuy.length < TOP_N || topSell.length < TOP_N)) {
+    added = false;
+    for (const ex of uniqueExchanges) {
+      if (topBuy.length >= TOP_N) break;
+      const nextBuy = sortedBuy.find(a =>
+        a.exchange === ex && !buySeen.has(`${ex}-${a.advertiserName}-${a.price}`)
+      );
+      if (nextBuy) {
+        topBuy.push(nextBuy);
+        buySeen.add(`${nextBuy.exchange}-${nextBuy.advertiserName}-${nextBuy.price}`);
+        added = true;
+      }
+    }
+    for (const ex of uniqueExchanges) {
+      if (topSell.length >= TOP_N) break;
+      const nextSell = sortedSell.find(a =>
+        a.exchange === ex && !sellSeen.has(`${ex}-${a.advertiserName}-${a.price}`)
+      );
+      if (nextSell) {
+        topSell.push(nextSell);
+        sellSeen.add(`${nextSell.exchange}-${nextSell.advertiserName}-${nextSell.price}`);
+        added = true;
+      }
+    }
+  }
+
+  // Fallback: si no hay suficientes con round-robin, llenar con los mejores globales
+  if (topBuy.length < TOP_N) {
+    for (const a of sortedBuy) {
+      if (topBuy.length >= TOP_N) break;
+      const key = `${a.exchange}-${a.advertiserName}-${a.price}`;
+      if (!buySeen.has(key)) {
+        topBuy.push(a);
+        buySeen.add(key);
+      }
+    }
+  }
+  if (topSell.length < TOP_N) {
+    for (const a of sortedSell) {
+      if (topSell.length >= TOP_N) break;
+      const key = `${a.exchange}-${a.advertiserName}-${a.price}`;
+      if (!sellSeen.has(key)) {
+        topSell.push(a);
+        sellSeen.add(key);
+      }
+    }
+  }
 
   const opportunities: ArbitrageOpportunity[] = [];
 
@@ -283,10 +365,13 @@ export async function scanP2PArbitrage(params: {
       // Si los maxAmount son MAX_SAFE_INTEGER (Kraken), usar min(buyMax, sellMax) = sellMax
       const operationFiatAmount = opByLimits > 0 ? opByLimits : 0;
 
-      // Límite mínimo: $200 USD o minAmount de ambos merchants
+      // Límite mínimo: $200 USD equivalente en fiat local, o minAmount de ambos merchants
+      // CORRECCIÓN: antes comparaba 200 (USD) con operationFiatAmount (COP) directamente.
+      // Ahora convertimos $200 USD a fiat local con FX_USD_TO_FIAT.
+      const fxRate = FX_USD_TO_FIAT[fiat.toUpperCase()] || 1;
+      const minOpFiat = MIN_OPERATION_USD * fxRate;
       const minAmountBoth = Math.max(buy.minAmount, sell.minAmount);
-      const minOpUSD = MIN_OPERATION_USD * (buy.exchange === "Kraken" ? 1 : 1); // simplificación
-      const effectiveMin = Math.max(minAmountBoth, minOpUSD);
+      const effectiveMin = Math.max(minAmountBoth, minOpFiat);
       if (operationFiatAmount < effectiveMin) continue;
 
       // operationAssetAmount = operationFiatAmount / buyPrice
@@ -387,16 +472,40 @@ export async function scanP2PArbitrage(params: {
   const topOpportunities = opportunities.slice(0, MAX_OPPORTUNITIES);
 
   // Stats de quotes por exchange
+  // IMPORTANTE: los ads tienen exchange: "Binance"|"OKX"|"Bybit"|"Kraken" (case-sensitive)
+  // No usar toUpperCase genérico que rompe OKX → Okx
+  const EXCHANGE_NAME_MAP: Record<string, Exchange> = {
+    binance: "Binance",
+    okx: "OKX",
+    bybit: "Bybit",
+    kraken: "Kraken",
+  };
   const quotes: Record<string, { buy: number; sell: number }> = {};
   for (const ex of enabledExchanges) {
-    const exCap = ex.charAt(0).toUpperCase() + ex.slice(1);
-    const buyCount = buyAds.filter((a) => a.exchange === exCap).length;
-    const sellCount = sellAds.filter((a) => a.exchange === exCap).length;
-    quotes[exCap] = { buy: buyCount, sell: sellCount };
+    const exName = EXCHANGE_NAME_MAP[ex.toLowerCase()] || (ex.charAt(0).toUpperCase() + ex.slice(1));
+    const buyCount = buyAds.filter((a) => a.exchange === exName).length;
+    const sellCount = sellAds.filter((a) => a.exchange === exName).length;
+    quotes[exName] = { buy: buyCount, sell: sellCount };
   }
   // Kraken puede tener 1 quote
   if (krakenQuote) {
     quotes["Kraken"] = { buy: 1, sell: 1 };
+  }
+
+  // Debug: cuántos ads trajo cada exchange ANTES del filtro de reputation
+  const rawAdsByExchange: Record<string, number> = {};
+  for (const ad of flatResults) {
+    rawAdsByExchange[ad.exchange] = (rawAdsByExchange[ad.exchange] || 0) + 1;
+  }
+
+  // Diversidad: qué exchanges aparecen en las opportunities finales
+  const buySet = new Set<string>();
+  const sellSet = new Set<string>();
+  const pairSet = new Set<string>();
+  for (const o of topOpportunities) {
+    buySet.add(o.buyExchange);
+    sellSet.add(o.sellExchange);
+    pairSet.add(`${o.buyExchange}→${o.sellExchange}`);
   }
 
   return {
@@ -414,6 +523,12 @@ export async function scanP2PArbitrage(params: {
     asset,
     fiat,
     timestamp: Date.now(),
+    rawAdsByExchange,
+    exchangesInOpportunities: {
+      buy: Array.from(buySet),
+      sell: Array.from(sellSet),
+      uniquePairs: Array.from(pairSet),
+    },
   };
 }
 
