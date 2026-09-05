@@ -354,7 +354,25 @@ function CreateOfferForm({ user, onCreated }: { user: any; onCreated: () => void
     setCreating(false);
   };
 
-  if (!user) return <div className="bg-slate-900 border border-slate-800 rounded-xl p-12 text-center text-slate-500 text-sm">Conecta tu wallet para crear ofertas</div>;
+  if (!user) {
+    return (
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-12 text-center">
+        <Lock className="w-10 h-10 mx-auto text-slate-700 mb-3" />
+        <p className="text-sm text-slate-300 font-medium">Conecta tu wallet para crear ofertas</p>
+        <p className="text-xs text-slate-500 mt-1">Necesitas una wallet conectada para vender con escrow</p>
+        <button
+          onClick={() => {
+            const ev = new CustomEvent("open-onboarding");
+            window.dispatchEvent(ev);
+          }}
+          className="mt-4 flex items-center gap-1.5 text-xs px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black rounded-lg transition font-semibold mx-auto"
+        >
+          <Wallet className="w-3.5 h-3.5" />
+          Conectar wallet
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 max-w-xl">
@@ -419,6 +437,42 @@ function CreateOfferForm({ user, onCreated }: { user: any; onCreated: () => void
             <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="50"
               className="w-full pl-10 pr-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-sm focus:outline-none focus:border-amber-500 transition" />
           </div>
+          {price && parseFloat(price) > 0 && (
+            <div className="mt-2 flex items-center gap-3 text-[11px]">
+              <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1.5 rounded-lg">
+                <span className="text-slate-500">Comisión escrow (2%):</span>
+                <b className="text-amber-400">{(parseFloat(price) * 0.02).toFixed(2)} USDT</b>
+              </div>
+              <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1.5 rounded-lg">
+                <span className="text-slate-500">Recibes:</span>
+                <b className="text-emerald-400">{(parseFloat(price) * 0.98).toFixed(2)} USDT</b>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Tiempo de inspección */}
+        <div>
+          <label className="text-[11px] text-slate-400 uppercase tracking-wide font-semibold">Tiempo de inspección del comprador</label>
+          <select defaultValue="24h"
+            className="mt-2 w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-sm focus:outline-none focus:border-amber-500 transition">
+            <option value="1h" className="bg-slate-900">1 hora</option>
+            <option value="6h" className="bg-slate-900">6 horas</option>
+            <option value="12h" className="bg-slate-900">12 horas</option>
+            <option value="24h" className="bg-slate-900">24 horas (recomendado)</option>
+            <option value="48h" className="bg-slate-900">48 horas</option>
+            <option value="7d" className="bg-slate-900">7 días</option>
+          </select>
+          <p className="text-[10px] text-slate-500 mt-1">Tiempo que tiene el comprador para verificar el producto antes de que se liberen los fondos automáticamente.</p>
+        </div>
+
+        {/* Términos */}
+        <div className="flex items-start gap-2 bg-slate-950/50 border border-slate-700/50 rounded-lg p-3">
+          <input type="checkbox" defaultChecked className="mt-0.5 accent-amber-500" />
+          <p className="text-[11px] text-slate-400">
+            Acepto los <b className="text-slate-300">términos del escrow</b>: los fondos se retienen hasta que el comprador
+            confirme la recepción. Si hay disputa, un árbitro revisará el caso. La comisión del 2% se descuenta al liberar.
+          </p>
         </div>
 
         {error && <div className="text-xs text-red-400 bg-red-950/30 border border-red-800/50 p-2.5 rounded-lg">{error}</div>}
