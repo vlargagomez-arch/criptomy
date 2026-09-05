@@ -772,3 +772,45 @@ Stage Summary:
 - Build local: 0 errores
 - Los datos ahora coinciden con lo que el usuario VE en la web de OKX
 - Sin precios irreales, solo merchants reales con buena reputación
+
+---
+Task ID: clon-exacto-arbitrajepro-3-tarjetas
+Agent: main
+Task: Clonar exactamente el diseño de ArbitrajePro con todas las secciones
+
+Work Log:
+- Analicé las 2 imágenes del usuario con VLM (vision)
+- Comparé mi panel actual vs el screenshot de ArbitrajePro
+- Encontré 3 secciones que faltaban en mi panel:
+
+1. 3 TARJETAS DE SERVICIOS (fila superior):
+   - Sports Value Finder (Trophy icono gris, badge LIVE gris)
+   - Predicciones Polymarket (Target icono gris, badge LIVE gris)
+   - Arbitraje P2P (ACTIVA con borde dorado, icono dorado,
+     badge LIVE dorado, texto 'Binance + OKX + Bybit')
+
+2. BLOQUE DESCRIPCIÓN (debajo de las tarjetas):
+   - Icono dorado en cuadrado redondeado bg-amber-500/10
+   - Título 'Arbitraje P2P' + badge '● EN VIVO' dorado
+   - Texto descriptivo completo con filtro anti-estafa, profit NETO,
+     6 países soportados
+   - Texto derecha: 'BINANCE + OKX + BYBIT · PROFIT REAL DESPUÉS DE FEES'
+
+3. BADGES DE ESTADO en el header:
+   - ● En vivo (verde con dot pulsante en pill)
+   - Oportunidades: N
+   - 🕐 Próx: Ns (counter regresivo cada segundo)
+   - Últ: HH:MM:SS
+   - ↻ Refrescar (botón blanco bg-white text-black)
+
+- Paleta actualizada:
+  * Acento principal: amber-500 (dorado #D4A853) en badges, tags,
+    tarjeta activa, icono
+  * Verde profit: emerald-400 (mantiene)
+  * Rojo SELL/fee: red-400/red-600 (mantiene)
+
+Stage Summary:
+- Commit 9e47d6b → origin/main
+- 1 archivo cambiado, +183 / -152 lineas
+- Build local: 0 errores
+- Panel ahora tiene las 3 secciones del screenshot + dorado como acento
