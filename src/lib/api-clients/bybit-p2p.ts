@@ -95,7 +95,11 @@ export async function fetchBybitP2PAds(params: {
       side,
       price: parseFloat(it.price),
       advertiserName: it.nickName || "anónimo",
-      completionRate: it.recentExecuteRate ? parseFloat(it.recentExecuteRate) : null,
+      // Bybit recentExecuteRate: integer 0-100 (ej: 98 = 98%, NO 0.98)
+      // Convertimos a fracción 0-1 para consistencia con Binance/OKX
+      completionRate: it.recentExecuteRate !== undefined && it.recentExecuteRate !== null
+        ? parseFloat(String(it.recentExecuteRate)) / 100
+        : null,
       minAmount: parseFloat(it.minAmount || "0"),
       maxAmount: parseFloat(it.maxAmount || "0"),
       availableQty: parseFloat(it.lastQuantity || it.quantity || "0"),
