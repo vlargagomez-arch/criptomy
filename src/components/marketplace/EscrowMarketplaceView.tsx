@@ -259,17 +259,28 @@ function CreateOfferForm({ user, onCreated }: { user: any; onCreated: () => void
   };
 
   if (!user) {
+    // Mostrar formulario igual pero con banner arriba pidiendo wallet
     return (
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 sm:p-12 text-center">
-        <Lock className="w-10 h-10 mx-auto text-slate-700 mb-3" />
-        <p className="text-sm text-slate-300 font-medium">Conecta tu wallet para crear ofertas</p>
-        <button onClick={() => window.dispatchEvent(new CustomEvent("open-onboarding"))} className="mt-4 flex items-center gap-1.5 text-xs px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black rounded-lg transition font-semibold mx-auto"><Wallet className="w-3.5 h-3.5" /> Conectar wallet</button>
+      <div className="space-y-3">
+        <div className="bg-amber-950/30 border border-amber-700/40 rounded-xl p-3 flex items-center gap-3 flex-wrap">
+          <Lock className="w-5 h-5 text-amber-400 shrink-0" />
+          <p className="text-xs text-amber-300 flex-1 min-w-0">Necesitas conectar tu wallet para publicar la oferta. Puedes llenar el formulario ahora y conectar al final.</p>
+          <button onClick={() => window.dispatchEvent(new CustomEvent("open-onboarding"))} className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black rounded-lg transition font-semibold shrink-0"><Wallet className="w-3.5 h-3.5" /> Conectar wallet</button>
+        </div>
+        <CreateOfferFormContent type={type} setType={setType} title={title} setTitle={setTitle} description={description} setDescription={setDescription} category={category} setCategory={setCategory} price={price} setPrice={setPrice} categories={categories} creating={creating} error={error} onSubmit={handleSubmit} disabled={true} submitLabel="Conectar wallet para publicar" />
       </div>
     );
   }
 
+  return <CreateOfferFormContent type={type} setType={setType} title={title} setTitle={setTitle} description={description} setDescription={setDescription} category={category} setCategory={setCategory} price={price} setPrice={setPrice} categories={categories} creating={creating} error={error} onSubmit={handleSubmit} disabled={false} submitLabel="Publicar oferta" />;
+}
+
+// ============================================================
+// FORM CONTENT — Contenido del formulario (reutilizable)
+// ============================================================
+function CreateOfferFormContent({ type, setType, title, setTitle, description, setDescription, category, setCategory, price, setPrice, categories, creating, error, onSubmit, disabled, submitLabel }: any) {
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-6 max-w-xl">
+    <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-6 w-full max-w-2xl">
       <h3 className="text-base font-bold text-white mb-4 sm:mb-5 flex items-center gap-2"><Plus className="w-4 h-4 text-amber-400" /> Nueva oferta de escrow</h3>
       <div className="space-y-3 sm:space-y-4">
         {/* Tipo */}
@@ -292,7 +303,7 @@ function CreateOfferForm({ user, onCreated }: { user: any; onCreated: () => void
           <label className="text-[11px] text-slate-400 uppercase tracking-wide font-semibold">Categoría</label>
           <select value={category} onChange={(e) => setCategory(e.target.value)} className="mt-2 w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-sm focus:outline-none focus:border-amber-500 transition">
             <option value="">Selecciona...</option>
-            {categories.map((c) => <option key={c} value={c} className="bg-slate-900">{c}</option>)}
+            {categories.map((c: string) => <option key={c} value={c} className="bg-slate-900">{c}</option>)}
           </select>
         </div>
         {/* Título */}
@@ -338,9 +349,9 @@ function CreateOfferForm({ user, onCreated }: { user: any; onCreated: () => void
           <p className="text-[11px] text-slate-400">Acepto los <b className="text-slate-300">términos del escrow</b>: fondos retenidos hasta confirmación. Comisión 2% al liberar. Disputas con arbitraje.</p>
         </div>
         {error && <div className="text-xs text-red-400 bg-red-950/30 border border-red-800/50 p-2.5 rounded-lg">{error}</div>}
-        <button onClick={handleSubmit} disabled={creating} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-amber-500 hover:bg-amber-400 text-black rounded-lg transition font-bold disabled:opacity-50">
-          {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-          {creating ? "Publicando..." : "Publicar oferta"}
+        <button onClick={onSubmit} disabled={creating || disabled} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-amber-500 hover:bg-amber-400 text-black rounded-lg transition font-bold disabled:opacity-50">
+          {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : disabled ? <Lock className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+          {creating ? "Publicando..." : submitLabel}
         </button>
         <div className="bg-slate-950/50 border border-slate-700/50 rounded-lg p-3 text-[11px] text-slate-400 flex items-start gap-2">
           <Shield className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
