@@ -21,10 +21,11 @@ import WalletView from "@/components/marketplace/WalletView";
 import ReputationView from "@/components/marketplace/ReputationView";
 import EducacionView from "@/components/marketplace/EducacionView";
 import EarnView from "@/components/marketplace/EarnView";
+import EscrowMarketplaceView from "@/components/marketplace/EscrowMarketplaceView";
 
 const VALID_TABS: TabKey[] = [
   "inicio", "buscador", "dashboard", "earn", "enviar-recibir",
-  "mercado-p2p", "retos", "educacion", "alertas",
+  "mercado-p2p", "retos", "escrow", "educacion", "alertas",
   "oportunidades", "proveedores", "comparador",
   "scanner-admin", "compliance", "admin", "billetera", "reputacion",
 ];
@@ -67,6 +68,7 @@ export default function Home() {
         {tab === "enviar-recibir" && <EnviarRecibirView />}
         {tab === "mercado-p2p" && <MercadoP2PUnifiedView />}
         {tab === "retos" && <RetosP2PView />}
+        {tab === "escrow" && <EscrowMarketplaceView />}
         {tab === "educacion" && <EducacionView />}
         {tab === "alertas" && <PriceAlertsView />}
         {tab === "oportunidades" && <OportunidadesView />}

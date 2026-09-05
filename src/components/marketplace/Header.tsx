@@ -15,7 +15,7 @@ import {
   Image as ImageIcon, CalendarClock, Bell, LogOut, Copy,
   ShoppingBag, Sparkles, Grid3x3,
   Globe2, CreditCard, ShieldAlert, Settings, Menu, X, ChevronRight, Search, Activity,
-  Heart, BookOpen, TrendingUp,
+  Heart, BookOpen, TrendingUp, Shield,
 } from "lucide-react";
 import { reputationLabel, avatarGradient } from "@/lib/format";
 import Onboarding from "./Onboarding";
@@ -44,6 +44,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     items: [
       { key: "mercado-p2p", label: "Mercado P2P", icon: Store, desc: "Compra/venta persona a persona" },
       { key: "retos", label: "Retos gaming", icon: Trophy, desc: "Apuestas 1v1 con verificación" },
+      { key: "escrow", label: "Escrow Digital", icon: Shield, desc: "Gift cards, productos digitales, suscripciones con escrow" },
     ],
   },
   {

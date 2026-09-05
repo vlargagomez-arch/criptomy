@@ -21,10 +21,11 @@ export type TabKey =
   | "inicio"
   | "buscador"
   | "dashboard"
+  | "earn"
   | "enviar-recibir"
   | "mercado-p2p"
   | "retos"
-  | "earn"
+  | "escrow"
   | "educacion"
   | "alertas"
   | "oportunidades"
@@ -123,10 +124,11 @@ export const useApp = create<AppState>()(
           "inicio",
           "buscador",
           "dashboard",
+          "earn",
           "enviar-recibir",
           "mercado-p2p",
           "retos",
-          "earn",
+          "escrow",
           "educacion",
           "alertas",
           "oportunidades",
