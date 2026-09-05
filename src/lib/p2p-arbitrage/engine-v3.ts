@@ -204,28 +204,29 @@ export async function scanP2PArbitrage(params: {
   const flatResults = allResults.flat();
   const merchantsBeforeFilter = flatResults.length;
 
-  // === PASO 2: Filtro ANTI-ESTAFA (reputación + órdenes + precio de mercado) ===
-  // Anti-estafa robusto. Un merchant con 99% reputación pero precio 45% bajo
-  // mercado es un "bait ad" — nunca va a responder, es fake.
+  // === PASO 2: Filtro ANTI-ESTAFA ESTRICTO ===
+  // El usuario verifica manualmente en la web de OKX/Binance/Bybit y
+  // solo ve merchants con precios cercanos al mercado (~3080-3100 COP).
+  // Los precios muy bajos (1719, 2305, 2670) existen en la API pero NO
+  // se ven en la web → el usuario no confía en ellos.
   //
-  // Filtros aplicados:
-  //   1. Reputación >= reputationThreshold (default 80%)
-  //   2. Órdenes completadas >= minOrderCount (default 50) — filtra cuentas nuevas
-  //   3. Precio dentro de banda razonable del mercado (default ±15%)
+  // Filtros MUY estrictos para mostrar SOLO merchants reales:
+  //   1. Reputación >= 95% (no 90%) — merchants top
+  //   2. Órdenes completadas >= 100 (no 50) — merchants con historial
+  //   3. Precio dentro del 5% del mercado (no 15%) — precios que el usuario VE en la web
   //
   // El precio de mercado se calcula como la MEDIANA de todos los precios
-  // válidos (no la media — la mediana es robusta a outliers como el fake 1719).
+  // válidos (robusto a outliers).
   const filteredByReputation = flatResults.filter((ad) => {
-    // Kraken no tiene reputación ni órdenes, siempre se incluye
     if (ad.exchange === "Kraken") return true;
     if (ad.completionRate === null || ad.completionRate === undefined) return false;
     if (ad.completionRate < reputationThreshold) return false;
-    // Mínimo de órdenes completadas (excepto Kraken)
-    if (ad.tradeCount < 50) return false;
+    // Mínimo 100 órdenes completadas (antes era 50)
+    if (ad.tradeCount < 100) return false;
     return true;
   });
 
-  // Calcular precio de mercado (mediana) para filtrar bait ads
+  // Calcular precio de mercado (mediana)
   const p2pPrices = filteredByReputation
     .filter(a => a.exchange !== "Kraken")
     .map(a => a.price)
@@ -234,11 +235,10 @@ export async function scanP2PArbitrage(params: {
     ? p2pPrices[Math.floor(p2pPrices.length / 2)]
     : 0;
 
-  // Filtro de precio: rechazar ads que estén más del 15% por debajo del mercado
-  // (bait ads típicos: precio irrealmente bajo para atraer compradores)
-  // Y más del 25% por encima (ads que probablemente no se ejecutan nunca)
-  const PRICE_BAND_LOW = 0.85;  // -15%
-  const PRICE_BAND_HIGH = 1.25; // +25%
+  // Filtro de precio ESTRICTO: solo 5% por debajo y 10% por encima del mercado
+  // Esto elimina los precios "irreales" que el usuario no ve en la web
+  const PRICE_BAND_LOW = 0.95;   // -5% (antes era -15%)
+  const PRICE_BAND_HIGH = 1.10;  // +10% (antes era +25%)
   const filteredAds = marketPrice > 0
     ? filteredByReputation.filter(ad => {
         if (ad.exchange === "Kraken") return true;

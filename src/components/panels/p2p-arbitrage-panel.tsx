@@ -65,7 +65,7 @@ export default function P2PArbitragePanel() {
       const params = new URLSearchParams({
         asset, fiat: country.fiat, rows: "15",
         exchanges: "binance,okx,bybit,kraken",
-        minReputation: "90", minNetSpread: "0.1",
+        minReputation: "95", minNetSpread: "0.1",
       });
       if (payment) params.set("payment", payment);
       const res = await fetch(`/api/arbitrage/p2p?${params.toString()}`);
