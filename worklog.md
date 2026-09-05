@@ -696,3 +696,44 @@ Stage Summary:
 - Verificado visualmente con playwright + VLM
 - El panel sigue EXACTAMENTE el diseño del screenshot ArbitrajePro
 - Sin elementos no queridos (LIVE/TODAY/UPCOMING, filtros extra, etc.)
+
+---
+Task ID: fix-datos-reales-arbitraje-p2p
+Agent: main
+Task: Verificar que los datos del arbitraje P2P sean reales, no invertidos
+
+Work Log:
+- Verifiqué en vivo con curl directo a las APIs de cada exchange:
+  1. OKX /v3/c2c/tradingOrders/books: Trust_Point precio 2745 COP (rate 0.9885, 605 órdenes) ✓
+  2. OKX cristiantrader: 3752.40 COP (rate 0.9974, 1583 órdenes) ✓
+  3. OKX GILBALACRIPTO: 3591.19 COP (rate 0.9965, 1149 órdenes) ✓
+  4. Bybit BETHELEXCHANGE: 3075 COP, rate=99 (entero), orders=3354
+
+- BUG ENCONTRADO Y ARREGLADO:
+  Bybit devuelve recentExecuteRate como integer 0-100 (ej: 99)
+  El código hacía parseFloat(it.recentExecuteRate) → 99 (creía que era 0.99)
+  Engine multiplicaba por 100 → 99 * 100 = 9900% (mostraba rep=9900.0%)
+  
+  FIX: dividir por 100 en el client de Bybit
+  99 → 0.99 → 99.0% (correcto)
+
+- Verificación post-fix:
+  BETHELEXCHANGE: ahora muestra rep=99.0% (no 9900.0%) ✓
+
+- Formatos de reputación verificados:
+  Binance: monthFinishRate = float 0-1 (ej: 0.967)
+  OKX: completedRate = string '0.9049' (parseFloat → 0.9049)
+  Bybit: recentExecuteRate = integer 0-100 (99 → /100 → 0.99)
+
+- Todos los datos son REALES, de APIs públicas en vivo:
+  * Binance P2P: p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search
+  * OKX P2P: okx.com/v3/c2c/tradingOrders/books
+  * Bybit P2P: api2.bybit.com/fiat/otc/item/online
+  * Kraken Spot: api.kraken.com/0/public/Ticker (para BTC/ETH, no USDT)
+
+Stage Summary:
+- Commit cb37748 → origin/main
+- 1 archivo cambiado, +5 / -1 lineas
+- Build local: 0 errores
+- Bug de Bybit reputation arreglado (9900% → 99.0%)
+- Todos los datos del panel verificados como reales contra las APIs
