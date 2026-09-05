@@ -814,3 +814,51 @@ Stage Summary:
 - 1 archivo cambiado, +183 / -152 lineas
 - Build local: 0 errores
 - Panel ahora tiene las 3 secciones del screenshot + dorado como acento
+
+---
+Task ID: sistema-escrow-digital
+Agent: main
+Task: Crear sistema de escrow para productos digitales, gift cards, con validación y mensajes
+
+Work Log:
+- Creado sistema completo de escrow digital:
+
+1. 4 tipos de productos soportados:
+   - GIFT_CARD (Amazon, Steam, Google Play, Netflix, Spotify, etc.)
+   - DIGITAL_PRODUCT (cursos, ebooks, software, licencias)
+   - SUBSCRIPTION (Netflix, Spotify, Disney+, HBO Max, etc.)
+   - GAME_ACCOUNT (Steam, Epic, Riot, PUBG, Fortnite, Free Fire)
+
+2. Flujo de escrow:
+   CREATED → FUNDED (comprador paga) → DELIVERED (vendedor entrega) →
+   COMPLETED (comprador confirma) o DISPUTED
+
+3. Validación automática:
+   - GIFT_CARD: valida código alfanumérico mínimo 8 chars
+   - GAME_ACCOUNT: valida formato usuario:password
+   - Otros: validación genérica
+
+4. Sistema de mensajes:
+   - Chat entre comprador y vendedor dentro de cada trade
+   - API /api/escrow/messages (GET/POST)
+
+5. APIs creadas:
+   - /api/escrow (GET/POST): CRUD + acciones (create, fund, deliver, confirm, dispute, cancel)
+   - /api/escrow/messages (GET/POST): mensajes
+
+6. UI: EscrowMarketplaceView
+   - 3 sub-tabs: Explorar, Crear oferta, Mis trades
+   - Filtros por tipo de producto
+   - Cards con info del producto, precio, vendedor
+   - Trade detail con mensajes, acciones (entregar, confirmar, disputar)
+   - Formulario de entrega según tipo (código, credenciales, link)
+
+7. Integrado en menú:
+   - Nuevo tab 'escrow' en store y page.tsx
+   - Header nav: sección Mercado → 'Escrow Digital' con icono Shield
+
+Stage Summary:
+- Commit 678b73d → origin/main
+- 6 archivos cambiados, +933 / -4 lineas
+- Build local: 0 errores
+- APIs: /api/escrow + /api/escrow/messages
