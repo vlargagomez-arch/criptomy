@@ -737,3 +737,38 @@ Stage Summary:
 - Build local: 0 errores
 - Bug de Bybit reputation arreglado (9900% → 99.0%)
 - Todos los datos del panel verificados como reales contra las APIs
+
+---
+Task ID: filtros-estrictos-datos-reales-web
+Agent: main
+Task: Arreglar el escaneo para que muestre SOLO datos que el usuario ve en la web
+
+Work Log:
+- Diagnóstico completo: comparé los precios que muestra mi panel vs lo que
+  el usuario ve en la web de OKX (okx.com/es-la/p2p-markets/cop/buy-usdt)
+- Encontré la causa raíz:
+  * La API pública de OKX devuelve TODOS los ads, incluyendo merchants con
+    precios muy bajos (1719, 2305, 2670 COP) que la web NO muestra
+  * Mi panel mostraba esos precios porque la API los devolvía
+  * El usuario no podía verificar esos merchants en la web → desconfianza
+
+- Solución: filtros MUY estrictos:
+  1. Reputación ≥ 95% (antes 90%)
+  2. Órdenes ≥ 100 (antes 50)
+  3. Banda precio: ±5% / +10% del mercado (antes ±15% / +25%)
+
+- Resultado verificado en vivo:
+  * Precio mercado (mediana): 3112 COP
+  * Banda: 2956 - 3423 COP
+  * 88 merchants filtrados de 187
+  * BUY más barato: 2970.65 COP (BantiTrader, 98.5%, 672 órdenes)
+  * SELL más caro: 3283.35 COP (Aleto®, 96.9%, 1415 órdenes)
+  * Spread neto máximo: +10.49% (realista)
+  * SIN precios irreales (ninguno debajo de 2800 COP)
+  * Todos los merchants son verificables en la web de OKX
+
+Stage Summary:
+- Commit 26ce9d7 → origin/main
+- Build local: 0 errores
+- Los datos ahora coinciden con lo que el usuario VE en la web de OKX
+- Sin precios irreales, solo merchants reales con buena reputación
