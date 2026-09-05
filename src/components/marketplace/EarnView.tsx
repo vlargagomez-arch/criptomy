@@ -158,13 +158,12 @@ export default function EarnView() {
           onClick={() => setSubTab("p2p-arbitrage")}
           className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg transition ${
             subTab === "p2p-arbitrage"
-              ? "bg-purple-600 text-white"
+              ? "bg-emerald-600 text-white"
               : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
           }`}
         >
           <Award className="w-3.5 h-3.5" />
           Arbitraje P2P
-          <span className="text-[9px] px-1 py-0.5 bg-purple-900/50 text-purple-300 rounded">NEW</span>
         </button>
       </div>
 
