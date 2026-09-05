@@ -662,3 +662,37 @@ Stage Summary:
 - Verificado en vivo con 3 assets (USDT, BTC, ETH) — todos los 4 exchanges
   aparecen cuando tienen ads disponibles
 - 'sospechoso' quitado del UI completamente
+
+---
+Task ID: clon-diseno-arbitraje-p2p-final
+Agent: main
+Task: Clonar exactamente el diseño del screenshot + quitar elementos no queridos
+
+Work Log:
+- Analicé el screenshot del usuario con VLM (vision)
+- Confirmé que el usuario está RECHAZANDO (❌) los siguientes elementos:
+  * 'Configuración de inversión con 3 controles manuales'
+  * 'Filtros por dirección, probabilidad, ordenar por'
+  * 'Badge LIVE/TODAY/UPCOMING en cada card'
+- Verifiqué con playwright + screenshot real que mi panel NO tiene esos
+  elementos
+- Tomé screenshot del estado actual con playwright (click en sub-tab
+  'Arbitraje P2P') y verifiqué visualmente con VLM:
+  ✅ 3 dropdowns de filtros arriba (País, Asset, Método de pago)
+  ✅ Cards con columnas BUY (verde oscuro) / SELL (rojo oscuro)
+  ✅ Botones de acción verde/rojo (Comprar/Vender)
+  ✅ Stats arriba (Oportunidades: 30, Mejor NETO: +40.40%, Reputación: 90%)
+  ❌ NO hay badges LIVE/TODAY/UPCOMING
+  ❌ NO hay filtros por dirección/probabilidad/ordenar por
+  ❌ NO hay 'configuración de inversión con 3 controles manuales'
+
+- Quité el badge 'NEW' del sub-tab Arbitraje P2P en EarnView (no estaba
+  en el screenshot de referencia)
+- Unifiqué el color del botón activo a emerald-600 (antes era
+  purple-600 para P2P) para consistencia visual
+
+Stage Summary:
+- Commit 3b38715 → origin/main
+- Verificado visualmente con playwright + VLM
+- El panel sigue EXACTAMENTE el diseño del screenshot ArbitrajePro
+- Sin elementos no queridos (LIVE/TODAY/UPCOMING, filtros extra, etc.)
