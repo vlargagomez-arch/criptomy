@@ -39,7 +39,7 @@ export function calculateQuoteResult(quote: MarketQuote, operation: "BUY" | "SEL
     : quote.bidPrice || quote.lastPrice;
 
   // Comisión: taker si compra/vende inmediatamente al libro
-  const grossCost = isBuy ? price * amount : price * amount; // mismo cálculo, dirección cambia el efecto
+  const grossCost = isBuy ? price * amount : price * amount;
   const fee = (grossCost * feeInfo.takerPercent) / 100;
 
   // Costo de red: para spot en exchanges no aplica (es off-chain). 0 para estos providers.
@@ -49,8 +49,52 @@ export function calculateQuoteResult(quote: MarketQuote, operation: "BUY" | "SEL
   const totalCost = isBuy ? grossCost + fee : grossCost - fee;
   const effectivePrice = totalCost / amount;
 
+  // --- Campos humanos ---
+  const currency = quote.quoteCurrency;
+  const youPay = isBuy ? totalCost : amount;
+  const youReceive = isBuy ? amount : totalCost;
+  const feeHuman = `${fee.toFixed(2)} ${currency}`;
+  const totalCostHuman = `${totalCost.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${currency}`;
+  const exchangeRateHuman = `1 ${quote.asset} ≈ ${effectivePrice.toFixed(4)} ${currency}`;
+
+  // Explicación
+  const feePct = feeInfo.takerPercent;
+  let explanation = "";
+  if (isBuy) {
+    explanation = `Pagas ${totalCostHuman} y recibes ${amount} ${quote.asset}. `;
+    if (feePct === 0) explanation += `Sin comisión de exchange. `;
+    else explanation += `Comisión del ${feePct}% incluida (${feeHuman}). `;
+    if (quote.kycLevel === "NO_KYC" || quote.kycLevel === "OPTIONAL") explanation += `No requiere KYC obligatorio. `;
+    else if (quote.kycLevel === "MANDATORY") explanation += `Requiere verificación KYC. `;
+  } else {
+    explanation = `Entregas ${amount} ${quote.asset} y recibes ${totalCostHuman}. `;
+    if (feePct === 0) explanation += `Sin comisión. `;
+    else explanation += `Comisión del ${feePct}% descontada (${feeHuman}). `;
+  }
+
+  // Warnings
+  const warnings: string[] = [];
+  if (quote.liquidityTier === "LOW") warnings.push("Liquidez baja — el precio real puede variar para montos grandes.");
+  if (quote.kycLevel === "MANDATORY") warnings.push("Requiere KYC (verificación de identidad).");
+  if (quote.spreadPercent && quote.spreadPercent > 0.5) warnings.push(`Spread alto (${quote.spreadPercent.toFixed(2)}%) — diferencia entre precio de compra y venta.`);
+
+  // Pasos
+  const steps = isBuy ? [
+    `Vas a ${quote.providerName} y creas una cuenta.`,
+    `Verificas tu identidad (KYC) si es requerido.`,
+    `Depositas ${totalCostHuman} via transferencia/tarjeta.`,
+    `Compras ${amount} ${quote.asset} al precio de mercado.`,
+    `Retiras los ${quote.asset} a tu wallet personal.`,
+  ] : [
+    `Vas a ${quote.providerName} y creas una cuenta.`,
+    `Depositas ${amount} ${quote.asset} desde tu wallet.`,
+    `Vendes al precio de mercado.`,
+    `Recibes ${totalCostHuman} (después de comisiones).`,
+    `Retiras el dinero a tu banco.`,
+  ];
+
   return {
-    rank: 0, // se asigna después
+    rank: 0,
     provider: quote.provider,
     providerName: quote.providerName,
     operation,
@@ -77,14 +121,55 @@ export function calculateQuoteResult(quote: MarketQuote, operation: "BUY" | "SEL
     source: `${quote.providerName} API`,
     latencyMs: quote.latencyMs,
     status: quote.status,
+    youPay,
+    youReceive,
+    feeHuman,
+    totalCostHuman,
+    exchangeRateHuman,
+    explanation,
+    warnings,
+    steps,
   };
 }
 
 export function calculateP2PResult(offer: P2POffer, amount: number): RankedResult {
-  // P2P: el advertiser fija el precio. Sin comisión de exchange (Binance no cobra P2P).
   const grossCost = offer.price * amount;
-  const fee = 0; // Binance P2P no cobra al usuario (es advertiser quien paga eventualmente)
-  const networkCost = 0; // off-blockchain hasta que retiren, el usuario paga gas local luego
+  const fee = 0;
+  const networkCost = 0;
+  const currency = offer.fiat;
+  const isBuy = offer.tradeType === "BUY";
+
+  const totalCostHuman = `${grossCost.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${currency}`;
+  const feeHuman = `0 ${currency} (gratis)`;
+  const exchangeRateHuman = `1 ${offer.asset} ≈ ${offer.price.toFixed(4)} ${currency}`;
+
+  let explanation = "";
+  if (isBuy) {
+    explanation = `Pagas ${totalCostHuman} directamente al vendedor y recibes ${amount} ${offer.asset}. Sin comisión de exchange. `;
+    explanation += `No necesitas KYC — el vendedor ya está verificado por ${offer.providerName}. `;
+    if (offer.completionRate && offer.completionRate >= 0.95) explanation += `Vendedor con ${(offer.completionRate * 100).toFixed(0)}% de completion rate. `;
+  } else {
+    explanation = `Entregas ${amount} ${offer.asset} y recibes ${totalCostHuman}. Sin comisión. `;
+    explanation += `El comprador te paga por tu método de pago preferido. `;
+  }
+
+  const warnings: string[] = [];
+  warnings.push("El precio puede cambiar entre que inicias y completas la transacción.");
+  if (offer.completionRate && offer.completionRate < 0.9) warnings.push(`Vendedor con completion rate bajo (${(offer.completionRate * 100).toFixed(0)}%).`);
+  if (offer.tradeCount < 100) warnings.push("Vendedor con pocas órdenes completadas.");
+
+  const steps = isBuy ? [
+    `Seleccionas esta oferta en ${offer.providerName} P2P.`,
+    `El vendedor te da sus datos bancarios (${offer.paymentMethods.join(", ")}).`,
+    `Haces la transferencia de ${totalCostHuman}.`,
+    `Marcas "ya pagé" en la plataforma.`,
+    `El vendedor confirma y libera los ${offer.asset} a tu wallet.`,
+  ] : [
+    `Publicas tu oferta de venta en ${offer.providerName} P2P.`,
+    `Un comprador la acepta y te transfiere ${totalCostHuman}.`,
+    `Confirmas receipt del pago.`,
+    `Liberas los ${offer.asset} al comprador.`,
+  ];
 
   return {
     rank: 0,
@@ -103,15 +188,23 @@ export function calculateP2PResult(offer: P2POffer, amount: number): RankedResul
     totalCostCurrency: offer.fiat,
     effectivePrice: offer.price,
     paymentMethods: offer.paymentMethods,
-    estimatedTime: "15-60 min (negociación con advertiser)",
-    kycRequired: false, // P2P: el advertiser está verificado, tú no necesitas KYC
-    kycLevel: "NO_KYC", // P2P desde la perspectiva del usuario final
-    kycNote: "P2P: el advertiser está verificado por Binance. Tú no necesitas KYC de Binance.",
-    liquidityTier: "MEDIUM", // Binance P2P tiene alta liquidez
+    estimatedTime: "15-60 min (negociación P2P)",
+    kycRequired: false,
+    kycLevel: "NO_KYC",
+    kycNote: "P2P: el advertiser está verificado. Tú no necesitas KYC.",
+    liquidityTier: "MEDIUM",
     timestamp: offer.timestamp,
     source: `${offer.providerName} P2P API`,
     latencyMs: offer.latencyMs,
     status: offer.status,
+    youPay: isBuy ? grossCost : amount,
+    youReceive: isBuy ? amount : grossCost,
+    feeHuman,
+    totalCostHuman,
+    exchangeRateHuman,
+    explanation,
+    warnings,
+    steps,
   };
 }
 

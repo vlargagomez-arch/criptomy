@@ -24,6 +24,8 @@ const COUNTRY_CURRENCY: Record<string, string> = {
   chile: "CL", chileno: "CL", "pesos chilenos": "CL", clp: "CL",
   peru: "PE", peruano: "PE", soles: "PE", pen: "PE",
   ecuador: "EC", venezuela: "VE", dominicana: "DO",
+  europa: "EU", europe: "EU", "unión europea": "EU", "union europea": "EU",
+  "estados unidos": "US", usa: "US", "united states": "US", eeaa: "US",
 };
 
 const CURRENCIES = ["USDT", "USDC", "BTC", "ETH", "SOL", "BNB", "XRP", "ADA", "DOT", "LINK", "MATIC", "AVAX"];
@@ -157,8 +159,25 @@ export function interpretQuery(raw: string): SearchIntent {
   if (!intent.fiat && intent.country) {
     const countryToFiat: Record<string, string> = {
       CO: "COP", MX: "MXN", AR: "ARS", BR: "BRL", CL: "CLP", PE: "PEN", VE: "VES", EC: "USD", DO: "DOP",
+      EU: "EUR", US: "USD",
     };
     intent.fiat = countryToFiat[intent.country] || "USD";
+  }
+
+  // 6.5) Detectar región (Europa, LATAM, US)
+  if (intent.country === "EU") intent.region = "EU";
+  else if (["CO", "MX", "AR", "BR", "CL", "PE", "EC", "VE", "DO"].includes(intent.country || "")) intent.region = "LATAM";
+  else if (intent.country === "US") intent.region = "US";
+
+  // 6.6) Detectar prioridad del usuario
+  if (/\b(m[áa]s barato|barato|menor costo|menor comisi[óo]n|m[áa]s econ[óo]mico|ahorrar|cheap)\b/i.test(query)) {
+    intent.priority = "CHEAPEST";
+  } else if (/\b(r[áa]pido|menor tiempo|inmediato|ya|fast|quick|velocidad)\b/i.test(query)) {
+    intent.priority = "FASTEST";
+  } else if (/\b(sin kyc|sin verificaci[óo]n|an[óo]nimo|no kyc|without kyc)\b/i.test(query)) {
+    intent.priority = "NO_KYC";
+  } else if (/\b(mejor (tipo de cambio|rate|cambio)|mejor precio)\b/i.test(query)) {
+    intent.priority = "BEST_RATE";
   }
 
   // 7) Default asset si operation es SEND o ARBITRAGE

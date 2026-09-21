@@ -12,7 +12,9 @@ export interface SearchIntent {
   amount?: number;          // 1000
   fiat?: string;            // "COP", "MXN", "USD"
   country?: string;         // "CO", "MX"
+  region?: string;          // "EU", "LATAM", "US"
   paymentMethod?: string;   // "PSE", "BANK_TRANSFER"
+  priority?: "CHEAPEST" | "FASTEST" | "NO_KYC" | "BEST_RATE" | "NONE";
   mode?: ScanMode;          // Si usuario lo especifica
   raw: string;              // query original
 }
@@ -100,6 +102,16 @@ export interface RankedResult {
   source: string;            // "Binance API"
   latencyMs: number;
   status: ProviderStatus;
+  // --- Campos nuevos para presentación humana ---
+  youPay?: number;           // lo que el usuario paga (totalCost para BUY, grossCost para SELL)
+  youReceive?: number;       // lo que el usuario recibe (amount para BUY, totalCost para SELL)
+  feeHuman?: string;         // "€20,73" (comisión en formato humano)
+  totalCostHuman?: string;   // "€1.850,00" (costo total en formato humano)
+  exchangeRateHuman?: string;// "1 USDT ≈ €0,93"
+  explanation?: string;      // explicación humana de por qué es buena opción
+  network?: string;          // "Tron (TRC20)" explicado
+  warnings?: string[];       // advertencias contextuales
+  steps?: string[];          // pasos para completar la operación
 }
 
 export type ProviderStatus = "ONLINE" | "OFFLINE" | "RATE_LIMITED" | "ERROR" | "DISABLED" | "REQUIRES_API_KEY";
