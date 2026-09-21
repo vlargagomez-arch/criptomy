@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getFundingMulti } from "@/lib/earn/services/funding.service";
+import { getBasisMulti } from "@/lib/earn/services/basis.service";
 
 // ============================================================
-// API: /api/earn/funding?symbol=BTCUSDT
-// Devuelve funding multi-exchange: Binance → Bybit → OKX → Gate.io
-// Siempre responde (aunque todos fallen, devuelve la lista de fallos).
+// API: /api/earn/basis?symbol=BTCUSDT
+// Devuelve basis multi-exchange: Binance COIN-M → Bybit (cálculo)
 // ============================================================
 
 export async function GET(req: NextRequest) {
@@ -12,15 +11,14 @@ export async function GET(req: NextRequest) {
   const symbol = (searchParams.get("symbol") || "BTCUSDT").toUpperCase();
 
   try {
-    const result = await getFundingMulti(symbol);
+    const result = await getBasisMulti(symbol);
     return NextResponse.json(result);
   } catch (err: any) {
     return NextResponse.json({
-      symbol,
       primary: null,
       fallbacks: [],
       failed: [{ exchange: "ALL", reason: err?.message || "Error interno" }],
       updatedAt: Date.now(),
-    }, { status: 200 }); // 200 para que la UI pueda mostrar mensaje amable
+    }, { status: 200 });
   }
 }
