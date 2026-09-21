@@ -219,15 +219,20 @@ export default function SmartSearchView() {
         {response && !loading && !hasResults && (
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 sm:p-12 text-center">
             <AlertCircle className="w-10 h-10 mx-auto text-slate-600 mb-3" />
-            <p className="text-sm text-slate-300 font-medium">No encontramos resultados</p>
+            <p className="text-sm text-slate-300 font-medium">No encontramos una oferta que coincida exactamente con tus parámetros</p>
             <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
-              No se detectaron ofertas para tu búsqueda. Prueba con otros términos.
+              Podemos ampliar la búsqueda a otras opciones:
             </p>
-            <div className="mt-4 flex flex-wrap gap-2 justify-center">
-              {QUICK_SEARCHES.slice(0, 4).map((q) => (
-                <button key={q.query} onClick={() => { setQuery(q.query); search(q.query); }}
-                  className="text-xs px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition">
-                  {q.icon} {q.label}
+            <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-md mx-auto">
+              {[
+                { label: "🔄 Otra moneda", q: `Quiero comprar ${intent?.asset || "USDT"} con USD` },
+                { label: "💳 Otro método de pago", q: `Quiero comprar ${intent?.amount || 100} ${intent?.asset || "USDT"} con tarjeta` },
+                { label: "🌍 Otro país/región", q: `Quiero comprar ${intent?.amount || 100} ${intent?.asset || "USDT"} en USA` },
+                { label: "📊 Mostrar todas las opciones", q: `Comparar ${intent?.asset || "USDT"}` },
+              ].map((s) => (
+                <button key={s.label} onClick={() => { setQuery(s.q); search(s.q); }}
+                  className="text-xs px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition text-left">
+                  {s.label}
                 </button>
               ))}
             </div>
@@ -310,9 +315,59 @@ function ResultsView({ response, onlineResults, sortBy, setSortBy, advancedMode,
     ? onlineResults.reduce((s, r) => s + r.totalCost, 0) / onlineResults.length
     : 0;
   const savingsVsAvg = avgCost > 0 ? ((avgCost - cheapestCost) / avgCost) * 100 : 0;
+  const worstCost = onlineResults.length > 1 ? onlineResults[onlineResults.length - 1].totalCost : 0;
+  const savingsVsWorst = worstCost > 0 ? worstCost - cheapestCost : 0;
+
+  // Detectar info faltante
+  const missingPaymentMethod = !intent.paymentMethod && (intent.operation === "BUY" || intent.operation === "SELL");
+  const missingFiat = !intent.fiat;
+
+  // "Por cada €1 recibes X" calculation
+  const perUnit = best && best.totalCost > 0 && amount > 0 ? amount / best.totalCost : 0;
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      {/* ===== MISSING INFO DETECTION ===== */}
+      {(missingPaymentMethod || missingFiat) && (
+        <div className="bg-amber-950/30 border border-amber-700/40 rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-xs text-amber-300 font-medium mb-2">
+                Para darte una comparación más precisa necesitamos saber cómo quieres pagar.
+              </p>
+              <div className="flex items-center gap-2 flex-wrap">
+                {missingFiat && (
+                  <>
+                    <span className="text-[10px] text-amber-400">Moneda:</span>
+                    {["EUR", "USD", "GBP", "COP"].map((c) => (
+                      <button key={c} onClick={() => { const nq = `${intent.raw} con ${c}`; search(nq); }}
+                        className="text-[11px] px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded transition">
+                        {c}
+                      </button>
+                    ))}
+                  </>
+                )}
+                {missingPaymentMethod && (
+                  <>
+                    <span className="text-[10px] text-amber-400 ml-2">Método:</span>
+                    {["Transferencia bancaria", "Tarjeta", "Otro"].map((m) => (
+                      <button key={m} onClick={() => { const nq = `${intent.raw} con ${m}`; search(nq); }}
+                        className="text-[11px] px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded transition">
+                        {m}
+                      </button>
+                    ))}
+                  </>
+                )}
+                <button onClick={() => {}} className="text-[11px] px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded transition ml-1">
+                  Mostrar todas las opciones
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ===== HUMAN SUMMARY ===== */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-5">
         <div className="flex items-start justify-between gap-4 flex-wrap mb-3">
@@ -324,6 +379,7 @@ function ResultsView({ response, onlineResults, sortBy, setSortBy, advancedMode,
             <p className="text-sm text-slate-400 mt-1">
               Encontramos <b className="text-emerald-400">{onlineResults.length}</b> opciones disponibles
               {p2pOffers.length > 0 && <>, más <b className="text-pink-400">{p2pOffers.length}</b> ofertas P2P</>}.
+              {best && <span className="text-slate-300"> Necesitas desde <b className="text-emerald-400">{best.totalCostHuman || fmtCurrency(best.totalCost, fiat)}</b>.</span>}
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs">
@@ -345,9 +401,17 @@ function ResultsView({ response, onlineResults, sortBy, setSortBy, advancedMode,
             <p className="text-sm text-slate-200 leading-relaxed">
               {best.explanation || `La mejor opción es ${best.providerName} con un costo total de ${best.totalCostHuman || fmtCurrency(best.totalCost, fiat)}.`}
             </p>
+            {/* Por cada €1 recibes X */}
+            {perUnit > 0 && fiat && (
+              <p className="text-xs text-slate-400 mt-2">
+                Por cada {fiat === "EUR" ? "€1" : fiat === "USD" ? "$1" : `1 ${fiat}`} recibirías aproximadamente <b className="text-emerald-400">{perUnit.toFixed(4)} {asset}</b> {best.fee > 0 ? "después de comisiones" : "sin comisión"}.
+              </p>
+            )}
+            {/* Savings */}
             {savingsVsAvg > 0.5 && (
               <p className="text-xs text-emerald-400 mt-2 flex items-center gap-1">
-                <Award className="w-3 h-3" /> Ahorras aproximadamente {savingsVsAvg.toFixed(1)}% vs el promedio.
+                <Award className="w-3 h-3" /> Ahorras aproximadamente {savingsVsAvg.toFixed(1)}% vs el promedio
+                {savingsVsWorst > 0 && <span className="text-slate-500"> ({fmtCurrency(savingsVsWorst, fiat)} vs la opción más cara)</span>}.
               </p>
             )}
             <div className="mt-3 flex items-center gap-2 flex-wrap text-[11px]">
@@ -648,7 +712,38 @@ function ResultCard({ result, rank, fiat, onSelect, expanded, advancedMode }: {
               <div><div className="text-slate-500 text-[10px]">Comisiones</div><div className="text-amber-400 font-mono">{result.feeHuman || fmtCurrency(result.fee, fiat)}</div></div>
               <div><div className="text-slate-500 text-[10px]">Tipo de cambio</div><div className="text-slate-300 font-mono">{result.exchangeRateHuman || "—"}</div></div>
             </div>
+            {/* Price explanation */}
+            {result.effectivePrice > 0 && result.asset && fiat && (
+              <div className="mt-2 pt-2 border-t border-slate-800 text-[11px] text-slate-400">
+                Por cada {fiat === "EUR" ? "€1" : fiat === "USD" ? "$1" : `1 ${fiat}`} recibirías aproximadamente <b className="text-emerald-400">{(1 / result.effectivePrice).toFixed(6)} {result.asset}</b> {result.fee > 0 ? "después de comisiones" : "sin comisión"}.
+              </div>
+            )}
           </div>
+          {/* Network explanation */}
+          {result.asset === "USDT" && (
+            <div className="bg-blue-950/20 border border-blue-800/30 rounded-lg p-3 text-[11px]">
+              <div className="text-blue-400 font-semibold mb-1 flex items-center gap-1"><Globe2 className="w-3 h-3" /> Red de envío</div>
+              <p className="text-slate-400">
+                Los {result.asset} se envían por una red blockchain (Tron/TRC20, Ethereum/ERC20, o Polygon).
+                La red más común y económica es <b className="text-slate-300">Tron (TRC20)</b> — fee de retiro ~1 USDT.
+              </p>
+              <p className="text-amber-400 mt-1.5 flex items-start gap-1">
+                <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+                <span>La red de envío debe coincidir con la red compatible con tu wallet receptora. Si envías por la red equivocada, puedes perder los fondos.</span>
+              </p>
+            </div>
+          )}
+          {/* Payment methods */}
+          {result.paymentMethods && result.paymentMethods.length > 0 && (
+            <div className="bg-slate-900 rounded-lg p-3">
+              <div className="text-xs text-slate-400 font-medium mb-2 flex items-center gap-1"><CreditCard className="w-3 h-3" /> Métodos de pago disponibles</div>
+              <div className="flex flex-wrap gap-1.5">
+                {result.paymentMethods.map((m) => (
+                  <span key={m} className="text-[11px] px-2 py-1 bg-slate-800 text-slate-300 rounded">{m}</span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

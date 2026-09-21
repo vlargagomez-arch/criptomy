@@ -209,14 +209,14 @@ export function interpretQuery(raw: string): SearchIntent {
 
 // Sugerencias rápidas para el UI
 export const QUICK_SEARCHES = [
+  { label: "Comprar 2000 USDT en Europa", query: "Quiero comprar 2000 USDT en Europa", icon: "🇪🇺" },
   { label: "Comprar 1000 USDT con COP", query: "Quiero comprar 1000 USDT con COP", icon: "🛒" },
+  { label: "Comprar 500 USDT con euros", query: "Quiero comprar 500 USDT con euros", icon: "€" },
   { label: "Comprar BTC sin KYC", query: "Quiero comprar 0.01 BTC sin KYC", icon: "🔓" },
-  { label: "Vender 500 USDT", query: "Quiero vender 500 USDT", icon: "💸" },
+  { label: "Vender 3000 USDT y recibir EUR", query: "Quiero vender 3000 USDT y recibir EUR", icon: "💸" },
+  { label: "Convertir 1000 euros a USDT", query: "Quiero convertir 1000 euros a USDT", icon: "🔄" },
+  { label: "Forma más barata de comprar USDT", query: "Cuál es la forma más barata de comprar USDT", icon: "💰" },
+  { label: "Comprar USDT que lleguen rápido", query: "Quiero comprar 2000 USDT y necesito que lleguen rápido", icon: "⚡" },
+  { label: "Comprar BTC con tarjeta en Colombia", query: "Quiero comprar bitcoin con tarjeta en Colombia", icon: "💳" },
   { label: "Enviar 500.000 COP a México", query: "Quiero enviar 500.000 COP a México", icon: "🌐" },
-  { label: "Mejor oferta P2P de USDT", query: "Quiero encontrar la mejor oferta P2P de USDT", icon: "🤝" },
-  { label: "Arbitraje de USDT", query: "Quiero encontrar una oportunidad de arbitraje de USDT", icon: "📊" },
-  { label: "Mejor precio de BTC", query: "Quiero el mejor precio para BTC", icon: "₿" },
-  { label: "Cambiar USDT por BTC", query: "Quiero cambiar USDT por BTC", icon: "🔄" },
-  { label: "Comprar ETH en Argentina", query: "Quiero comprar 0.5 ETH en Argentina", icon: "Ξ" },
-  { label: "Comprar SOL sin KYC", query: "Quiero comprar 10 SOL sin KYC", icon: "🌞" },
 ];
