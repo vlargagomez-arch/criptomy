@@ -17,28 +17,24 @@ export interface CurrentUser {
 }
 
 // Tabs del header (top level). Mercado P2P tiene sub-tabs internos.
+// Limpieza: se eliminaron proveedores, scanner-admin, admin (no aportan
+// al usuario final). Escrow se mueve dentro de Mercado P2P.
 export type TabKey =
   | "inicio"
-  | "buscador"
-  | "dashboard"
   | "earn"
   | "enviar-recibir"
   | "mercado-p2p"
   | "retos"
-  | "escrow"
   | "educacion"
   | "alertas"
   | "oportunidades"
-  | "proveedores"
   | "comparador"
-  | "scanner-admin"
   | "compliance"
-  | "admin"
   | "billetera"
   | "reputacion";
 
-// Sub-tabs dentro de mercado-p2p
-export type P2PSubTab = "explorar" | "crear" | "mis-trades" | "disputas";
+// Sub-tabs dentro de mercado-p2p (escrow integrado aquí)
+export type P2PSubTab = "explorar" | "crear" | "mis-trades" | "disputas" | "escrow";
 
 interface AppState {
   user: CurrentUser | null;
@@ -58,7 +54,7 @@ interface AppState {
   logout: () => void;
 }
 
-const STORAGE_VERSION = 22;
+const STORAGE_VERSION = 23;
 
 function isValidUser(user: unknown): user is CurrentUser {
   if (!user || typeof user !== "object") return false;
@@ -89,7 +85,7 @@ export const useApp = create<AppState>()(
         // Sincronizar URL con history API (sin recargar)
         if (typeof window !== "undefined") {
           const url = new URL(window.location.href);
-          if (t === "inicio" || t === "dashboard") {
+          if (t === "inicio") {
             url.searchParams.delete("tab");
           } else {
             url.searchParams.set("tab", t);
@@ -122,28 +118,28 @@ export const useApp = create<AppState>()(
         if (state.user && !isValidUser(state.user)) state.user = null;
         const validTabs: TabKey[] = [
           "inicio",
-          "buscador",
-          "dashboard",
           "earn",
           "enviar-recibir",
           "mercado-p2p",
           "retos",
-          "escrow",
           "educacion",
           "alertas",
           "oportunidades",
-          "proveedores",
           "comparador",
-          "scanner-admin",
           "compliance",
-          "admin",
           "billetera",
           "reputacion",
         ];
-        // Migrar tabs viejos a los nuevos
+        // Migrar tabs viejos a los nuevos (después de la limpieza de menús)
         const tabAliases: Record<string, TabKey> = {
           enviar: "enviar-recibir",
           recibir: "enviar-recibir",
+          buscador: "inicio",        // SmartSearch ahora vive dentro de Inicio
+          dashboard: "inicio",
+          escrow: "mercado-p2p",     // Escrow ahora es sub-tab de Mercado P2P
+          proveedores: "inicio",
+          "scanner-admin": "inicio",
+          admin: "inicio",
         };
         if (state.tab) {
           const t = state.tab as string;

@@ -4,30 +4,22 @@ import { useEffect } from "react";
 import { useApp, TabKey } from "@/lib/store";
 import Header from "@/components/marketplace/Header";
 import HomeView from "@/components/marketplace/HomeView";
-import SmartSearchView from "@/components/marketplace/SmartSearchView";
 import EnviarRecibirView from "@/components/marketplace/EnviarRecibirView";
-import RemesasView from "@/components/marketplace/RemesasView";
-import TarjetaView from "@/components/marketplace/TarjetaView";
 import MercadoP2PUnifiedView from "@/components/marketplace/MercadoP2PUnifiedView";
 import RetosP2PView from "@/components/marketplace/RetosP2PView";
 import PriceAlertsView from "@/components/marketplace/PriceAlertsView";
 import OportunidadesView from "@/components/marketplace/OportunidadesView";
-import ProveedoresView from "@/components/marketplace/ProveedoresView";
 import ComparadorView from "@/components/marketplace/ComparadorView";
 import ComplianceView from "@/components/marketplace/ComplianceView";
-import AdminView from "@/components/marketplace/AdminView";
-import ScannerAdminView from "@/components/marketplace/ScannerAdminView";
 import WalletView from "@/components/marketplace/WalletView";
 import ReputationView from "@/components/marketplace/ReputationView";
 import EducacionView from "@/components/marketplace/EducacionView";
 import EarnView from "@/components/marketplace/EarnView";
-import EscrowMarketplaceView from "@/components/marketplace/EscrowMarketplaceView";
 
 const VALID_TABS: TabKey[] = [
-  "inicio", "buscador", "dashboard", "earn", "enviar-recibir",
-  "mercado-p2p", "retos", "escrow", "educacion", "alertas",
-  "oportunidades", "proveedores", "comparador",
-  "scanner-admin", "compliance", "admin", "billetera", "reputacion",
+  "inicio", "earn", "enviar-recibir",
+  "mercado-p2p", "retos", "educacion", "alertas",
+  "oportunidades", "comparador", "compliance", "billetera", "reputacion",
 ];
 
 export default function Home() {
@@ -62,21 +54,15 @@ export default function Home() {
       <Header />
       <main className="flex-1">
         {tab === "inicio" && <HomeView />}
-        {tab === "buscador" && <SmartSearchView />}
-        {tab === "dashboard" && <HomeView />}
         {tab === "earn" && <EarnView />}
         {tab === "enviar-recibir" && <EnviarRecibirView />}
         {tab === "mercado-p2p" && <MercadoP2PUnifiedView />}
         {tab === "retos" && <RetosP2PView />}
-        {tab === "escrow" && <EscrowMarketplaceView />}
         {tab === "educacion" && <EducacionView />}
         {tab === "alertas" && <PriceAlertsView />}
         {tab === "oportunidades" && <OportunidadesView />}
-        {tab === "proveedores" && <ProveedoresView />}
         {tab === "comparador" && <ComparadorView />}
-        {tab === "scanner-admin" && <ScannerAdminView />}
         {tab === "compliance" && <ComplianceView />}
-        {tab === "admin" && <AdminView />}
         {tab === "billetera" && <WalletView />}
         {tab === "reputacion" && <ReputationView />}
       </main>

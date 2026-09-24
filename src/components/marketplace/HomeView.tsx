@@ -3,16 +3,17 @@
 import { useApp } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import {
-  Shield, Lock, Wallet, ArrowRight, Store, Trophy, Image as ImageIcon,
-  ShoppingBag, TrendingDown, ArrowLeftRight, Sparkles, Bell,
+  Shield, Lock, Wallet, ArrowRight, Store, Trophy,
+  ShoppingBag, ArrowLeftRight, Sparkles, Bell,
   Zap, Globe2, Coins, LineChart, Search, TrendingUp,
 } from "lucide-react";
+import SmartSearchView from "./SmartSearchView";
 
 export default function HomeView() {
-  const { user, setTab } = useApp();
+  const { user } = useApp();
 
-  // Si hay usuario logueado → mostrar dashboard
-  // Si no → landing page
+  // Si hay usuario logueado → mostrar dashboard + buscador integrado
+  // Si no → landing con explicación + buscador
   if (user) {
     return <Dashboard />;
   }
@@ -44,8 +45,9 @@ function Landing() {
               </span>
             </h1>
             <p className="text-base sm:text-lg text-slate-400 mb-8 max-w-2xl mx-auto">
-              Compra, vende, envía, recibe, reta en juegos y descubre oportunidades Web3. Conecta tu
-              MetaMask y mantén el control de tus fondos. Sin KYC forzado, sin custodia, sin claves privadas.
+              Compra, vende, envía, recibe, reta en juegos y descubre oportunidades Web3.
+              Conecta tu MetaMask y mantén el control de tus fondos. Sin KYC forzado, sin custodia,
+              sin claves privadas.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button
@@ -88,6 +90,9 @@ function Landing() {
         </div>
       </section>
 
+      {/* ====== BUSCADOR WEB3 (integrado en Inicio) ====== */}
+      <SmartSearchView />
+
       {/* Features grid */}
       <section className="max-w-6xl mx-auto px-4 sm:px-6 py-16">
         <div className="text-center mb-12">
@@ -103,8 +108,8 @@ function Landing() {
           {[
             {
               icon: Store,
-              title: "Mercado P2P",
-              desc: "Compra y vende cripto persona-a-persona sin KYC, como LocalBitcoins.",
+              title: "Mercado P2P + Escrow",
+              desc: "Compra y vende cripto persona-a-persona sin KYC, como LocalBitcoins. Incluye escrow digital para productos digitales.",
               tab: "mercado-p2p",
               color: "text-purple-400",
             },
@@ -117,10 +122,17 @@ function Landing() {
             },
             {
               icon: ArrowLeftRight,
-              title: "Enviar / Recibir",
-              desc: "Transfiere cripto a cualquier wallet. QR + dirección + warning de red.",
+              title: "Enviar / Recibir anónimo",
+              desc: "Transfiere o recibe cripto a cualquier wallet. Sin KYC, sin datos personales, 100% non-custodial.",
               tab: "enviar-recibir",
               color: "text-cyan-400",
+            },
+            {
+              icon: TrendingUp,
+              title: "Earn",
+              desc: "Pon tu cripto a trabajar: DeFi real (Aave, Lido, Morpho), P2P y arbitraje, funding & basis.",
+              tab: "earn",
+              color: "text-emerald-400",
             },
             {
               icon: Sparkles,
@@ -135,13 +147,6 @@ function Landing() {
               desc: "Te avisamos cuando BTC/ETH cae a tu precio objetivo o hay un dip.",
               tab: "alertas",
               color: "text-orange-400",
-            },
-            {
-              icon: LineChart,
-              title: "Comparador",
-              desc: "Compara comisiones, tiempo y KYC entre todos los providers disponibles.",
-              tab: "comparador",
-              color: "text-teal-400",
             },
           ].map((f) => {
             const Icon = f.icon;
@@ -217,13 +222,15 @@ function Landing() {
 // ============================================================
 function Dashboard() {
   const { user, setTab } = useApp();
+  if (!user) return null;
+  const u = user;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
       {/* Saludo */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-100">
-          Hola, <span className="text-emerald-400">@{user.alias}</span>
+          Hola, <span className="text-emerald-400">@{u.alias}</span>
         </h1>
         <p className="text-sm text-slate-400 mt-1">
           Tu plataforma Web3 todo-en-uno. Sin custodia, sin KYC forzado.
@@ -231,14 +238,13 @@ function Dashboard() {
       </div>
 
       {/* Quick actions */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-2 mb-8">
         {[
           { icon: Store, label: "Mercado P2P", tab: "mercado-p2p", color: "bg-slate-700" },
           { icon: Trophy, label: "Retos", tab: "retos", color: "bg-blue-600" },
           { icon: ArrowLeftRight, label: "Enviar/Recibir", tab: "enviar-recibir", color: "bg-cyan-600" },
           { icon: TrendingUp, label: "Earn", tab: "earn", color: "bg-emerald-600" },
           { icon: Sparkles, label: "Oportunidades", tab: "oportunidades", color: "bg-yellow-600" },
-          { icon: Search, label: "Buscador", tab: "buscador", color: "bg-emerald-600" },
         ].map((a) => {
           const Icon = a.icon;
           return (
@@ -273,13 +279,13 @@ function Dashboard() {
             Conecta tu wallet para ver tu portafolio
           </p>
           <p className="text-sm text-slate-400 font-mono">
-            {user.walletAddress.slice(0, 8)}…{user.walletAddress.slice(-6)}
+            {u.walletAddress.slice(0, 8)}…{u.walletAddress.slice(-6)}
           </p>
         </div>
       </div>
 
       {/* Accesos rápidos secundarios */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
         <button
           onClick={() => setTab("alertas")}
           className="text-left bg-slate-900 border border-slate-800 rounded-xl p-4 hover:border-emerald-600/50 transition"
@@ -291,15 +297,20 @@ function Dashboard() {
           </p>
         </button>
         <button
-          onClick={() => setTab("proveedores")}
+          onClick={() => setTab("comparador")}
           className="text-left bg-slate-900 border border-slate-800 rounded-xl p-4 hover:border-emerald-600/50 transition"
         >
-          <Globe2 className="w-5 h-5 text-cyan-400 mb-2" />
-          <h3 className="text-sm font-semibold text-slate-100">Directorio de proveedores</h3>
+          <LineChart className="w-5 h-5 text-teal-400 mb-2" />
+          <h3 className="text-sm font-semibold text-slate-100">Comparador de proveedores</h3>
           <p className="text-xs text-slate-400 mt-1">
-            Wallets, on-ramps, off-ramps, tarjetas, remesas.
+            Compara comisiones, tiempo y KYC entre proveedores.
           </p>
         </button>
+      </div>
+
+      {/* ====== BUSCADOR WEB3 (integrado en Inicio) ====== */}
+      <div className="mt-8">
+        <SmartSearchView />
       </div>
     </div>
   );

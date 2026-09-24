@@ -1,25 +1,29 @@
 "use client";
 
 import { useApp, P2PSubTab } from "@/lib/store";
-import { Store, PlusCircle, ArrowLeftRight, Shield } from "lucide-react";
+import { Store, PlusCircle, ArrowLeftRight, Shield, Boxes } from "lucide-react";
 import MarketplaceView from "./MarketplaceView";
 import CreateOfferView from "./CreateOfferView";
 import MyTradesView from "./MyTradesView";
 import DisputesView from "./DisputesView";
+import EscrowMarketplaceView from "./EscrowMarketplaceView";
 
 // Mercado P2P unificado — combina en UN solo menu:
-//  - Explorar ofertas (antes "Mercado")
-//  - Crear oferta (antes "Crear oferta")
-//  - Mis trades (antes "Mis trades")
-//  - Disputas (vista nueva para revisar disputas)
+//  - Explorar ofertas (compra/venta P2P BTC, ETH, USDT…)
+//  - Crear oferta
+//  - Mis trades (seguimiento del ciclo de escrow)
+//  - Disputas
+//  - Escrow Digital (EscrowBot para productos digitales: software,
+//    cuentas, NFTs, gift cards, suscripciones, etc.)
 //
-// Esto responde al requerimiento del usuario de fusionar el menu P2P.
+// Toda la actividad comercial de la plataforma vive aquí.
 
 const SUBTABS: { id: P2PSubTab; label: string; icon: React.ElementType }[] = [
   { id: "explorar", label: "Explorar ofertas", icon: Store },
   { id: "crear", label: "Crear oferta", icon: PlusCircle },
   { id: "mis-trades", label: "Mis trades", icon: ArrowLeftRight },
   { id: "disputas", label: "Disputas", icon: Shield },
+  { id: "escrow", label: "Escrow digital", icon: Boxes },
 ];
 
 export default function MercadoP2PUnifiedView() {
@@ -58,6 +62,7 @@ export default function MercadoP2PUnifiedView() {
       {p2pSubTab === "crear" && <CreateOfferView />}
       {p2pSubTab === "mis-trades" && <MyTradesView />}
       {p2pSubTab === "disputas" && <DisputesView />}
+      {p2pSubTab === "escrow" && <EscrowMarketplaceView />}
     </div>
   );
 }

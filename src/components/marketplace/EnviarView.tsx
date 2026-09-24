@@ -179,6 +179,15 @@ export default function EnviarView() {
         </div>
       </div>
 
+      {/* Banner anónimo */}
+      <div className="mb-4 bg-emerald-950/20 border border-emerald-700/30 rounded-lg p-3 text-[11px] text-emerald-300 flex items-start gap-2">
+        <ShieldCheck className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+        <span>
+          <b>Envío anónimo, sin KYC.</b> No pedimos nombre, email ni motivo. Solo necesitas la dirección
+          destino y tu wallet. Para privacidad máxima usa una wallet nueva y considera Monero (XMR).
+        </span>
+      </div>
+
       {!user && null}
 
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">

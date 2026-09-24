@@ -28,23 +28,21 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   {
     title: "Inicio",
     items: [
-      { key: "dashboard", label: "Inicio", icon: Home, desc: "Dashboard principal" },
-      { key: "buscador", label: "Buscador Web3", icon: Search, desc: "Busca, escanea y compara en todos los proveedores" },
-      { key: "earn", label: "Earn", icon: TrendingUp, desc: "Gana interés con Aave V3 — banca sin banco" },
+      { key: "inicio", label: "Inicio", icon: Home, desc: "Dashboard + buscador Web3 integrado" },
+      { key: "earn", label: "Earn", icon: TrendingUp, desc: "Pon tu cripto a trabajar, P2P y arbitraje, funding & basis" },
     ],
   },
   {
     title: "Cripto",
     items: [
-      { key: "enviar-recibir", label: "Enviar / Recibir", icon: ArrowLeftRight, desc: "Transfiere o recibe cripto — unificado" },
+      { key: "enviar-recibir", label: "Enviar / Recibir", icon: ArrowLeftRight, desc: "Transfiere o recibe cripto anónimo, sin KYC" },
     ],
   },
   {
     title: "Mercado",
     items: [
-      { key: "mercado-p2p", label: "Mercado P2P", icon: Store, desc: "Compra/venta persona a persona" },
+      { key: "mercado-p2p", label: "Mercado P2P + Escrow", icon: Store, desc: "Compra/venta persona a persona + escrow digital" },
       { key: "retos", label: "Retos gaming", icon: Trophy, desc: "Apuestas 1v1 con verificación" },
-      { key: "escrow", label: "Escrow Digital", icon: Shield, desc: "Gift cards, productos digitales, suscripciones con escrow" },
     ],
   },
   {
@@ -59,8 +57,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
 
 // Compact nav (iconos + labels cortos) para barra superior
 const COMPACT_NAV: TabKey[] = [
-  "buscador",
-  "dashboard",
+  "inicio",
   "earn",
   "enviar-recibir",
   "mercado-p2p",
@@ -156,13 +153,6 @@ export default function Header() {
                 </div>
                 <DropdownMenuItem
                   className="text-xs cursor-pointer px-2 py-1.5 hover:bg-slate-800 rounded"
-                  onClick={() => setTab("proveedores")}
-                >
-                  <Grid3x3 className="w-3.5 h-3.5 mr-2 text-slate-400" />
-                  Directorio proveedores
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="text-xs cursor-pointer px-2 py-1.5 hover:bg-slate-800 rounded"
                   onClick={() => setTab("alertas")}
                 >
                   <Bell className="w-3.5 h-3.5 mr-2 text-slate-400" />
@@ -174,20 +164,6 @@ export default function Header() {
                 >
                   <ShieldAlert className="w-3.5 h-3.5 mr-2 text-slate-400" />
                   Compliance y regulación
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="text-xs cursor-pointer px-2 py-1.5 hover:bg-slate-800 rounded"
-                  onClick={() => setTab("scanner-admin")}
-                >
-                  <Activity className="w-3.5 h-3.5 mr-2 text-slate-400" />
-                  Estado de proveedores
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="text-xs cursor-pointer px-2 py-1.5 hover:bg-slate-800 rounded"
-                  onClick={() => setTab("admin")}
-                >
-                  <Settings className="w-3.5 h-3.5 mr-2 text-slate-400" />
-                  Panel admin
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -312,10 +288,8 @@ export default function Header() {
                 Sistema
               </div>
               {[
-                { key: "proveedores" as TabKey, label: "Directorio proveedores", icon: Grid3x3 },
                 { key: "alertas" as TabKey, label: "Alertas de precio", icon: Bell },
                 { key: "compliance" as TabKey, label: "Compliance", icon: ShieldAlert },
-                { key: "admin" as TabKey, label: "Panel admin", icon: Settings },
               ].map((item) => {
                 const Icon = item.icon;
                 return (

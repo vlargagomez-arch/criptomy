@@ -124,9 +124,9 @@ export default function SmartSearchView() {
   const bestOption = onlineResults[0];
 
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="bg-slate-950">
       {/* ===== HERO ===== */}
-      <div className="relative overflow-hidden border-b border-slate-800">
+      <div className="relative overflow-hidden border-y border-slate-800">
         <div className="absolute inset-0 bg-gradient-to-br from-emerald-950/30 via-slate-950 to-slate-950" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(16,185,129,0.08),transparent_50%)]" />
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-8 sm:pt-12 pb-6 sm:pb-8">
