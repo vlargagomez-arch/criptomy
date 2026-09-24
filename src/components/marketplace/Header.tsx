@@ -42,7 +42,6 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     title: "Mercado",
     items: [
       { key: "mercado-p2p", label: "Mercado P2P + Escrow", icon: Store, desc: "Compra/venta persona a persona + escrow digital" },
-      { key: "retos", label: "Retos gaming", icon: Trophy, desc: "Apuestas 1v1 con verificación" },
     ],
   },
   {
@@ -61,7 +60,6 @@ const COMPACT_NAV: TabKey[] = [
   "earn",
   "enviar-recibir",
   "mercado-p2p",
-  "retos",
 ];
 
 export default function Header() {

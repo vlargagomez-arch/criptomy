@@ -17,14 +17,13 @@ export interface CurrentUser {
 }
 
 // Tabs del header (top level). Mercado P2P tiene sub-tabs internos.
-// Limpieza: se eliminaron proveedores, scanner-admin, admin (no aportan
-// al usuario final). Escrow se mueve dentro de Mercado P2P.
+// Limpieza: se eliminaron proveedores, scanner-admin, admin, retos
+// (no aportan al usuario final). Escrow se mueve dentro de Mercado P2P.
 export type TabKey =
   | "inicio"
   | "earn"
   | "enviar-recibir"
   | "mercado-p2p"
-  | "retos"
   | "educacion"
   | "alertas"
   | "oportunidades"
@@ -54,7 +53,7 @@ interface AppState {
   logout: () => void;
 }
 
-const STORAGE_VERSION = 23;
+const STORAGE_VERSION = 24;
 
 function isValidUser(user: unknown): user is CurrentUser {
   if (!user || typeof user !== "object") return false;
@@ -121,7 +120,6 @@ export const useApp = create<AppState>()(
           "earn",
           "enviar-recibir",
           "mercado-p2p",
-          "retos",
           "educacion",
           "alertas",
           "oportunidades",
@@ -137,6 +135,7 @@ export const useApp = create<AppState>()(
           buscador: "inicio",        // SmartSearch ahora vive dentro de Inicio
           dashboard: "inicio",
           escrow: "mercado-p2p",     // Escrow ahora es sub-tab de Mercado P2P
+          retos: "mercado-p2p",      // Retos eliminado → redirige a Mercado P2P
           proveedores: "inicio",
           "scanner-admin": "inicio",
           admin: "inicio",

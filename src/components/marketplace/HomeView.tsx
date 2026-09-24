@@ -114,13 +114,6 @@ function Landing() {
               color: "text-purple-400",
             },
             {
-              icon: Trophy,
-              title: "Retos gaming",
-              desc: "Apuesta USDT en 1v1 de LoL, Valorant, FIFA. Verificación con APIs reales.",
-              tab: "retos",
-              color: "text-blue-400",
-            },
-            {
               icon: ArrowLeftRight,
               title: "Enviar / Recibir anónimo",
               desc: "Transfiere o recibe cripto a cualquier wallet. Sin KYC, sin datos personales, 100% non-custodial.",
@@ -238,10 +231,9 @@ function Dashboard() {
       </div>
 
       {/* Quick actions */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-2 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-2 mb-8">
         {[
           { icon: Store, label: "Mercado P2P", tab: "mercado-p2p", color: "bg-slate-700" },
-          { icon: Trophy, label: "Retos", tab: "retos", color: "bg-blue-600" },
           { icon: ArrowLeftRight, label: "Enviar/Recibir", tab: "enviar-recibir", color: "bg-cyan-600" },
           { icon: TrendingUp, label: "Earn", tab: "earn", color: "bg-emerald-600" },
           { icon: Sparkles, label: "Oportunidades", tab: "oportunidades", color: "bg-yellow-600" },
