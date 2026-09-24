@@ -66,11 +66,28 @@ export async function convertUsdToFiat(
   return usdAmount / price.price;
 }
 
-// Calcula precio de mercado cripto → fiat usando Chainlink
+// Calcula precio de mercado cripto → fiat
+// Prioridad: /api/market-price (CoinGecko multi-currency) > Chainlink directo
 export async function getMarketPrice(
   cryptoSymbol: string,
   fiatCurrency: string
 ): Promise<{ price: number; source: string; updatedAt: number } | null> {
+  // 1. Intentar /api/market-price (CoinGecko con fallback Chainlink)
+  try {
+    const res = await fetch(`/api/market-price?asset=${encodeURIComponent(cryptoSymbol)}&currency=${encodeURIComponent(fiatCurrency)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.price && data.price > 0) {
+        return {
+          price: data.price,
+          source: data.source || "CoinGecko",
+          updatedAt: data.updatedAt || Math.floor(Date.now() / 1000),
+        };
+      }
+    }
+  } catch {}
+
+  // 2. Fallback a Chainlink directo
   const cryptoPair = `${cryptoSymbol}/USD`;
   const cryptoUsd = await fetchChainlinkPrice(cryptoPair);
   if (!cryptoUsd) return null;
