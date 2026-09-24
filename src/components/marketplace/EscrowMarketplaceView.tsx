@@ -102,6 +102,9 @@ export default function EscrowMarketplaceView() {
   const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeDeal, setActiveDeal] = useState<Deal | null>(null);
+  const [migrationNeeded, setMigrationNeeded] = useState(false);
+  const [migrating, setMigrating] = useState(false);
+  const [migrationResult, setMigrationResult] = useState<string | null>(null);
 
   const wallet = user?.walletAddress || "";
   const alias = user?.alias || "anónimo";
@@ -112,12 +115,47 @@ export default function EscrowMarketplaceView() {
     try {
       const res = await fetch(`/api/escrow?wallet=${encodeURIComponent(wallet)}&filter=active`);
       const data = await res.json();
-      setDeals(data.deals || []);
-    } catch {}
+      if (data.migrationNeeded) {
+        setMigrationNeeded(true);
+        setDeals([]);
+      } else if (data.deals) {
+        setDeals(data.deals);
+        setMigrationNeeded(false);
+      } else if (data.error) {
+        console.error("Escrow error:", data.error);
+        setDeals([]);
+      }
+    } catch (e) {
+      console.error("Escrow load failed:", e);
+    }
     setLoading(false);
   }, [wallet]);
 
   useEffect(() => { load(); }, [load]);
+
+  const migrate = async () => {
+    if (!wallet) return;
+    setMigrating(true);
+    setMigrationResult(null);
+    try {
+      const res = await fetch("/api/escrow/migrate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wallet }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setMigrationResult("✅ Migración ejecutada: " + (data.results || []).join(" | "));
+        setMigrationNeeded(false);
+        load();
+      } else {
+        setMigrationResult("❌ " + (data.error || "Error desconocido"));
+      }
+    } catch (e: any) {
+      setMigrationResult("❌ " + e.message);
+    }
+    setMigrating(false);
+  };
 
   const openDeal = async (deal: Deal) => {
     setActiveDeal(deal);
@@ -171,6 +209,40 @@ export default function EscrowMarketplaceView() {
           </button>
         </div>
       </div>
+
+      {/* Migration banner */}
+      {migrationNeeded && view === "list" && (
+        <div className="bg-amber-950/30 border border-amber-700/40 rounded-xl p-4 space-y-3">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <h3 className="text-sm font-bold text-amber-300">Base de datos necesita migración</h3>
+              <p className="text-xs text-amber-200/80 mt-1">
+                Las tablas <code className="bg-amber-950/50 px-1 rounded">EscrowDeal</code> y{" "}
+                <code className="bg-amber-950/50 px-1 rounded">EscrowMessage</code> no existen todavía en la base de datos de producción.
+              </p>
+              <p className="text-xs text-amber-200/80 mt-1">
+                Solo el <b>admin</b> (wallet configurada en <code className="bg-amber-950/50 px-1 rounded">ADMIN_WALLET</code>) puede ejecutar la migración.
+              </p>
+            </div>
+          </div>
+          {migrationResult && (
+            <div className="bg-slate-950/60 border border-slate-700 rounded p-2 text-[10px] text-slate-300 font-mono break-all">
+              {migrationResult}
+            </div>
+          )}
+          <button
+            onClick={migrate}
+            disabled={migrating}
+            className="w-full bg-amber-600 hover:bg-amber-500 disabled:bg-slate-700 disabled:text-slate-500 text-white py-2 rounded text-xs font-medium flex items-center justify-center gap-2 transition"
+          >
+            {migrating ? <><Loader2 className="w-4 h-4 animate-spin" /> Migrando…</> : "Ejecutar migración"}
+          </button>
+          <p className="text-[10px] text-amber-200/60 text-center">
+            Tu wallet: <code className="text-amber-300">{wallet.slice(0, 10)}...{wallet.slice(-6)}</code>
+          </p>
+        </div>
+      )}
 
       {/* Body */}
       {view === "list" && (
