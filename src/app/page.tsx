@@ -7,18 +7,12 @@ import HomeView from "@/components/marketplace/HomeView";
 import EnviarRecibirView from "@/components/marketplace/EnviarRecibirView";
 import MercadoP2PUnifiedView from "@/components/marketplace/MercadoP2PUnifiedView";
 import PriceAlertsView from "@/components/marketplace/PriceAlertsView";
-import OportunidadesView from "@/components/marketplace/OportunidadesView";
-import ComparadorView from "@/components/marketplace/ComparadorView";
-import ComplianceView from "@/components/marketplace/ComplianceView";
-import WalletView from "@/components/marketplace/WalletView";
-import ReputationView from "@/components/marketplace/ReputationView";
-import EducacionView from "@/components/marketplace/EducacionView";
 import EarnView from "@/components/marketplace/EarnView";
+import EscrowMarketplaceView from "@/components/marketplace/EscrowMarketplaceView";
 
 const VALID_TABS: TabKey[] = [
   "inicio", "earn", "enviar-recibir",
-  "mercado-p2p", "educacion", "alertas",
-  "oportunidades", "comparador", "compliance", "billetera", "reputacion",
+  "mercado-p2p", "escrow", "alertas",
 ];
 
 export default function Home() {
@@ -56,13 +50,8 @@ export default function Home() {
         {tab === "earn" && <EarnView />}
         {tab === "enviar-recibir" && <EnviarRecibirView />}
         {tab === "mercado-p2p" && <MercadoP2PUnifiedView />}
-        {tab === "educacion" && <EducacionView />}
+        {tab === "escrow" && <EscrowMarketplaceView />}
         {tab === "alertas" && <PriceAlertsView />}
-        {tab === "oportunidades" && <OportunidadesView />}
-        {tab === "comparador" && <ComparadorView />}
-        {tab === "compliance" && <ComplianceView />}
-        {tab === "billetera" && <WalletView />}
-        {tab === "reputacion" && <ReputationView />}
       </main>
       <footer className="mt-auto border-t border-slate-800 bg-slate-950">
         <div className="max-w-7xl mx-auto px-4 py-6 text-xs text-slate-600 text-center">

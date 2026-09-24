@@ -3,18 +3,25 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Loader2, RefreshCw, Shield, MessageSquare, Send, AlertTriangle,
-  Plus, Search, Wallet, ChevronDown, ChevronUp, Hash, Clock,
+  Plus, Wallet, ChevronDown, ChevronUp, Hash, Clock,
   CheckCircle2, XCircle, Lock, FileText, Cpu, Gamepad2, PaintBucket,
-  Bitcoin, Bell, Scale, History, FileCheck, Info,
+  Bitcoin, Bell, Scale, History, FileCheck, Info, ArrowRight, Copy,
 } from "lucide-react";
 import { useApp } from "@/lib/store";
-import {
-  EscrowTx, ProductType, PHASE_LABELS, PRODUCT_TYPE_LABELS, EscrowMessage,
-} from "@/lib/escrow/types";
 
 // ============================================================
-// EscrowMarketplaceView — EscrowBot chat-driven escrow
+// EscrowMarketplaceView — Escrow digital con MetaMask
 // ============================================================
+//
+// Flujo:
+//   1. Vendedor crea deal (CREATED)
+//   2. Comprador se une con código (JOINED)
+//   3. Comprador firma acuerdo con MetaMask + bloquea fondos (FUNDED)
+//   4. Vendedor entrega producto (DELIVERED)
+//   5. Comprador confirma (COMPLETED) → fondos al vendedor
+//   6. Cualquiera abre disputa → admin resuelve
+
+type ProductType = "SOFTWARE" | "CUENTA_DIGITAL" | "CONTENIDO_CREATIVO" | "CRIPTO" | "SERVICIO";
 
 const TYPE_ICONS: Record<ProductType, any> = {
   SOFTWARE: Cpu,
@@ -24,65 +31,110 @@ const TYPE_ICONS: Record<ProductType, any> = {
   SERVICIO: Bell,
 };
 
+const TYPE_LABELS: Record<ProductType, { label: string; emoji: string }> = {
+  SOFTWARE: { label: "Software / Licencia / Código", emoji: "💻" },
+  CUENTA_DIGITAL: { label: "Cuenta Digital (streaming, juegos, redes)", emoji: "🎮" },
+  CONTENIDO_CREATIVO: { label: "Contenido Creativo (diseño, video, audio, docs)", emoji: "🎨" },
+  CRIPTO: { label: "Criptoactivo / NFT / Dominio", emoji: "⛓️" },
+  SERVICIO: { label: "Servicio / Suscripción / Créditos", emoji: "🔔" },
+};
+
+const STATUS_LABELS: Record<string, { label: string; color: string }> = {
+  CREATED: { label: "Esperando comprador", color: "text-slate-300 bg-slate-700/30 border-slate-600/30" },
+  JOINED: { label: "Listo para firmar", color: "text-amber-400 bg-amber-500/10 border-amber-500/30" },
+  FUNDED: { label: "Fondos bloqueados", color: "text-blue-400 bg-blue-500/10 border-blue-500/30" },
+  DELIVERED: { label: "Producto entregado", color: "text-cyan-400 bg-cyan-500/10 border-cyan-500/30" },
+  COMPLETED: { label: "Completado", color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30" },
+  DISPUTED: { label: "En disputa", color: "text-rose-400 bg-rose-500/10 border-rose-500/30" },
+  CANCELLED: { label: "Cancelado", color: "text-slate-500 bg-slate-700/30 border-slate-600/30" },
+};
+
+interface Deal {
+  id: string;
+  code: string;
+  productType: string;
+  title: string;
+  description: string;
+  category: string;
+  amount: number;
+  currency: string;
+  commissionPct: number;
+  buyerId?: string;
+  buyerAlias?: string;
+  buyer?: { alias: string; walletAddress: string };
+  sellerId?: string;
+  sellerAlias?: string;
+  seller?: { alias: string; walletAddress: string };
+  agreement?: string;
+  status: string;
+  deliveryDescription?: string;
+  deliveryCode?: string;
+  deliveryCredentials?: string;
+  deliveryLink?: string;
+  deliveryInstructions?: string;
+  deliveredAt?: string;
+  fundedAt?: string;
+  releasedAt?: string;
+  completedAt?: string;
+  disputedAt?: string;
+  disputeReason?: string;
+  disputeResolution?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface Message {
+  id: string;
+  dealId: string;
+  senderWallet: string;
+  senderAlias: string;
+  senderRole: string;
+  text: string;
+  ts: string;
+  hash: string;
+  immutable: boolean;
+  tag?: string;
+}
+
 export default function EscrowMarketplaceView() {
   const { user } = useApp();
-  const [view, setView] = useState<"list" | "chat">("list");
-  const [txs, setTxs] = useState<EscrowTx[]>([]);
+  const [view, setView] = useState<"list" | "chat" | "create" | "join">("list");
+  const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTx, setActiveTx] = useState<EscrowTx | null>(null);
-  const [showNew, setShowNew] = useState(false);
+  const [activeDeal, setActiveDeal] = useState<Deal | null>(null);
 
-  const wallet = user?.walletAddress || "0xDemo...1234";
-  const alias = user?.alias || "demo_user";
+  const wallet = user?.walletAddress || "";
+  const alias = user?.alias || "anónimo";
 
   const load = useCallback(async () => {
+    if (!wallet) return;
     setLoading(true);
     try {
       const res = await fetch(`/api/escrow?wallet=${encodeURIComponent(wallet)}&filter=active`);
       const data = await res.json();
-      setTxs(data.txs || []);
+      setDeals(data.deals || []);
     } catch {}
     setLoading(false);
   }, [wallet]);
 
   useEffect(() => { load(); }, [load]);
 
-  const openTx = async (tx: EscrowTx) => {
-    setActiveTx(tx);
+  const openDeal = async (deal: Deal) => {
+    setActiveDeal(deal);
     setView("chat");
   };
 
-  const startNew = (type: ProductType) => {
-    setShowNew(false);
-    // Crea TX nueva con slash command
-    sendCommand(`/nueva_transaccion ${type}`, null);
-  };
-
-  const sendCommand = async (text: string, txId: string | null) => {
-    try {
-      const res = await fetch("/api/escrow", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "command",
-          wallet,
-          alias,
-          txId,
-          text,
-        }),
-      });
-      const data = await res.json();
-      if (data.ok && data.tx) {
-        setActiveTx(data.tx);
-        setView("chat");
-        // Recargar lista
-        load();
-      }
-      return data;
-    } catch (e) {
-      return { ok: false, error: "Error de red" };
-    }
-  };
+  if (!user) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-12 text-center">
+        <Shield className="w-12 h-12 mx-auto text-slate-600 mb-3" />
+        <p className="text-slate-300 font-medium">Conecta tu wallet para usar el escrow</p>
+        <p className="text-xs text-slate-500 mt-1">
+          Sin KYC, sin email. Tu wallet es tu identidad. Las dos partes firman con MetaMask.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-4">
@@ -90,10 +142,11 @@ export default function EscrowMarketplaceView() {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-slate-100 flex items-center gap-2">
-            <Shield className="w-6 h-6 text-emerald-400" /> EscrowBot P2P
+            <Shield className="w-6 h-6 text-emerald-400" /> Escrow Digital
           </h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Custodia neutral para transacciones P2P de productos digitales. Mensajería inmutable y verificación técnica por tipo de producto.
+          <p className="text-sm text-slate-400 mt-1 max-w-2xl">
+            Custodia neutral para compra/venta de productos digitales. Las dos partes firman con MetaMask.
+            Si hay conflicto, el admin revisa la evidencia y resuelve.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -105,71 +158,57 @@ export default function EscrowMarketplaceView() {
             <RefreshCw className="w-4 h-4" />
           </button>
           <button
-            onClick={() => setShowNew(!showNew)}
+            onClick={() => setView("create")}
             className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition"
           >
-            <Plus className="w-4 h-4" /> Nueva transacción
+            <Plus className="w-4 h-4" /> Crear deal
+          </button>
+          <button
+            onClick={() => setView("join")}
+            className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium flex items-center gap-1.5 transition"
+          >
+            Unirse con código
           </button>
         </div>
       </div>
 
-      {/* New TX picker */}
-      {showNew && (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-          <div className="text-xs text-slate-400 uppercase tracking-wide font-semibold mb-3">
-            ¿Qué tipo de producto vas a escrow?
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-            {(Object.keys(PRODUCT_TYPE_LABELS) as ProductType[]).map(t => {
-              const Icon = TYPE_ICONS[t];
-              return (
-                <button
-                  key={t}
-                  onClick={() => startNew(t)}
-                  className="text-left p-3 bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 hover:border-slate-600 transition"
-                >
-                  <Icon className="w-5 h-5 text-emerald-400 mb-1" />
-                  <div className="text-xs font-bold text-slate-100">
-                    {PRODUCT_TYPE_LABELS[t].emoji} {PRODUCT_TYPE_LABELS[t].label.split("(")[0].trim()}
-                  </div>
-                  <div className="text-[10px] text-slate-500 mt-0.5">
-                    {PRODUCT_TYPE_LABELS[t].label.split("(")[1]?.replace(")", "") || ""}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {/* Body */}
       {view === "list" && (
-        <ListView
-          txs={txs}
-          loading={loading}
+        <ListView deals={deals} loading={loading} onOpen={openDeal} />
+      )}
+
+      {view === "create" && (
+        <CreateDealView
           wallet={wallet}
-          onOpen={openTx}
-          onJoin={(code) => sendCommand(`/unirse ${code}`, null)}
+          alias={alias}
+          onCreated={(deal) => {
+            setActiveDeal(deal);
+            setView("chat");
+            load();
+          }}
+          onBack={() => setView("list")}
         />
       )}
 
-      {view === "chat" && activeTx && (
-        <ChatView
-          tx={activeTx}
+      {view === "join" && (
+        <JoinDealView
           wallet={wallet}
           alias={alias}
-          onBack={() => { setView("list"); setActiveTx(null); }}
-          onCommand={(text) => sendCommand(text, activeTx.id)}
-          onRefresh={async () => {
-            // Refrescar tx activo
-            const res = await fetch("/api/escrow", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ action: "get", txId: activeTx.id, wallet }),
-            });
-            const data = await res.json();
-            if (data.tx) setActiveTx(data.tx);
+          onJoined={(deal) => {
+            setActiveDeal(deal);
+            setView("chat");
+            load();
           }}
+          onBack={() => setView("list")}
+        />
+      )}
+
+      {view === "chat" && activeDeal && (
+        <ChatView
+          deal={activeDeal}
+          wallet={wallet}
+          alias={alias}
+          onBack={() => { setView("list"); setActiveDeal(null); load(); }}
         />
       )}
     </div>
@@ -180,355 +219,640 @@ export default function EscrowMarketplaceView() {
 // LIST VIEW
 // ============================================================
 function ListView({
-  txs, loading, wallet, onOpen, onJoin,
+  deals, loading, onOpen,
 }: {
-  txs: EscrowTx[];
+  deals: Deal[];
   loading: boolean;
-  wallet: string;
-  onOpen: (tx: EscrowTx) => void;
-  onJoin: (code: string) => void;
+  onOpen: (deal: Deal) => void;
 }) {
-  const [joinCode, setJoinCode] = useState("");
-
   if (loading) {
     return (
       <div className="flex flex-col items-center py-12">
         <Loader2 className="w-6 h-6 animate-spin text-emerald-400 mb-2" />
-        <p className="text-xs text-slate-400">Cargando transacciones…</p>
+        <p className="text-xs text-slate-400">Cargando deals…</p>
       </div>
     );
   }
-
-  return (
-    <div className="space-y-4">
-      {/* Join existing TX */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
-        <div className="text-xs text-slate-400 uppercase tracking-wide font-semibold mb-2">
-          ¿Tienes un código de transacción?
-        </div>
-        <div className="flex items-center gap-2">
-          <input
-            value={joinCode}
-            onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-            placeholder="ESC-2025-12345"
-            className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-sm font-mono focus:outline-none focus:border-emerald-500"
-          />
-          <button
-            onClick={() => { if (joinCode) { onJoin(joinCode); setJoinCode(""); } }}
-            className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-xs font-medium transition"
-          >
-            Unirse
-          </button>
-        </div>
-        <p className="mt-2 text-[10px] text-slate-500">
-          Si un comprador te compartió un código, ingrésalo aquí para unirte como vendedor.
+  if (deals.length === 0) {
+    return (
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center">
+        <Shield className="w-10 h-10 mx-auto text-slate-700 mb-3" />
+        <p className="text-sm text-slate-400">No tienes deals activos.</p>
+        <p className="text-xs text-slate-500 mt-1">
+          Crea un deal como vendedor o únete a uno con código.
         </p>
       </div>
-
-      {/* TX list */}
-      {txs.length === 0 ? (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center">
-          <Shield className="w-10 h-10 mx-auto text-slate-700 mb-2" />
-          <p className="text-sm text-slate-400">No tienes transacciones activas.</p>
-          <p className="text-xs text-slate-500 mt-1">Crea una nueva con el botón de arriba.</p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {txs.map(tx => {
-            const Icon = TYPE_ICONS[tx.productType];
-            const role = tx.buyer === wallet ? "Comprador" : "Vendedor";
-            const phase = PHASE_LABELS[tx.phase];
-            return (
-              <button
-                key={tx.id}
-                onClick={() => onOpen(tx)}
-                className="w-full text-left p-4 bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-xl transition"
-              >
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center shrink-0">
-                      <Icon className="w-5 h-5 text-emerald-400" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-bold text-slate-100 font-mono">{tx.id}</span>
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded border ${phase.color}`}>
-                          {phase.label}
-                        </span>
-                        <span className="text-[10px] text-slate-500">· {role}</span>
-                      </div>
-                      <div className="text-xs text-slate-400 mt-0.5 truncate">
-                        {tx.title || PRODUCT_TYPE_LABELS[tx.productType].label.split("(")[0].trim()} · {tx.amount || 0} USDT
-                      </div>
-                    </div>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      {deals.map(deal => {
+        const Icon = TYPE_ICONS[deal.productType as ProductType] || Shield;
+        const status = STATUS_LABELS[deal.status] || STATUS_LABELS.CREATED;
+        return (
+          <button
+            key={deal.id}
+            onClick={() => onOpen(deal)}
+            className="w-full text-left p-4 bg-slate-900 border border-slate-800 hover:border-emerald-700/40 rounded-xl transition"
+          >
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center shrink-0">
+                  <Icon className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-bold text-slate-100 font-mono">{deal.code}</span>
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded border ${status.color}`}>
+                      {status.label}
+                    </span>
                   </div>
-                  <div className="text-right shrink-0">
-                    <div className="text-[10px] text-slate-500">Actualizado</div>
-                    <div className="text-[11px] text-slate-400">
-                      {new Date(tx.updatedAt).toLocaleDateString()} {new Date(tx.updatedAt).toLocaleTimeString().slice(0, 5)}
-                    </div>
+                  <div className="text-xs text-slate-400 mt-0.5 truncate">
+                    {deal.title} · {deal.amount} {deal.currency}
                   </div>
                 </div>
-              </button>
-            );
-          })}
-        </div>
-      )}
+              </div>
+              <div className="text-right shrink-0">
+                <div className="text-[10px] text-slate-500">Actualizado</div>
+                <div className="text-[11px] text-slate-400">
+                  {new Date(deal.updatedAt).toLocaleDateString()} {new Date(deal.updatedAt).toLocaleTimeString().slice(0, 5)}
+                </div>
+              </div>
+            </div>
+          </button>
+        );
+      })}
     </div>
   );
 }
 
 // ============================================================
-// CHAT VIEW — Command-driven escrow conversation
+// CREATE DEAL VIEW
 // ============================================================
-function ChatView({
-  tx, wallet, alias, onBack, onCommand, onRefresh,
+function CreateDealView({
+  wallet, alias, onCreated, onBack,
 }: {
-  tx: EscrowTx;
   wallet: string;
   alias: string;
+  onCreated: (deal: Deal) => void;
   onBack: () => void;
-  onCommand: (text: string) => Promise<any>;
-  onRefresh: () => Promise<void>;
 }) {
-  const [messages, setMessages] = useState<EscrowMessage[]>([]);
-  const [input, setInput] = useState("");
+  const [productType, setProductType] = useState<ProductType>("SOFTWARE");
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("");
+  const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
-  const [showContract, setShowContract] = useState(false);
-  const [showChecklist, setShowChecklist] = useState(false);
-  const [integrityOk, setIntegrityOk] = useState(true);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [error, setError] = useState("");
 
-  const loadMsgs = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/escrow/messages?escrowId=${tx.id}`);
-      const d = await res.json();
-      setMessages(d.messages || []);
-      setIntegrityOk(d.integrity?.ok !== false);
-    } catch {}
-  }, [tx.id]);
-
-  useEffect(() => { loadMsgs(); }, [loadMsgs]);
-  useEffect(() => {
-    const i = setInterval(loadMsgs, 5000);
-    return () => clearInterval(i);
-  }, [loadMsgs]);
-  useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [messages]);
-
-  const send = async () => {
-    if (!input.trim()) return;
-    const text = input.trim();
-    setInput("");
+  const submit = async () => {
+    setError("");
+    if (!title || title.length < 3) { setError("Título muy corto"); return; }
+    if (!description || description.length < 10) { setError("Descripción muy corta"); return; }
+    const amt = parseFloat(amount);
+    if (!amt || amt <= 0) { setError("Monto inválido"); return; }
     setLoading(true);
-
-    if (text.startsWith("/")) {
-      const result = await onCommand(text);
-      if (!result.ok && result.error) {
-        // Mostrar error como mensaje local
-        setMessages(prev => [...prev, {
-          id: `local_${Date.now()}`,
-          escrowId: tx.id,
-          sender: "ESCROW_BOT",
-          senderAlias: "EscrowBot",
-          senderRole: "BOT",
-          text: `⚠️ ${result.error}`,
-          ts: Date.now(),
-          hash: "—",
-          immutable: true,
-          tag: "SISTEMA",
-        }]);
+    try {
+      const res = await fetch("/api/escrow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create",
+          wallet, alias,
+          productType, title, description, category,
+          amount,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setError(data.error || "Error");
+      } else {
+        onCreated(data.deal);
       }
-      await loadMsgs();
-      await onRefresh();
-    } else {
-      // Mensaje libre
-      try {
-        const res = await fetch("/api/escrow", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "message",
-            wallet,
-            alias,
-            txId: tx.id,
-            text,
-          }),
-        });
-        const data = await res.json();
-        if (data.warning) {
-          // Bot warning se carga solo con reload
-        }
-        await loadMsgs();
-        await onRefresh();
-      } catch {}
+    } catch (e: any) {
+      setError(e.message);
     }
     setLoading(false);
   };
 
-  const role = tx.buyer === wallet ? "Comprador" : tx.seller === wallet ? "Vendedor" : "Observador";
-  const phase = PHASE_LABELS[tx.phase];
-  const immutable = tx.phase !== "NEGOCIANDO";
+  return (
+    <div className="max-w-2xl mx-auto space-y-4">
+      <button onClick={onBack} className="text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1">
+        ← Volver
+      </button>
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
+        <div>
+          <h2 className="text-lg font-bold text-slate-100">Crear deal como vendedor</h2>
+          <p className="text-xs text-slate-400 mt-1">
+            Vas a vender un producto digital. El comprador deberá firmar el acuerdo con MetaMask
+            y bloquear los fondos antes de que entregues el producto.
+          </p>
+        </div>
+
+        <div>
+          <label className="text-[11px] text-slate-400 uppercase font-semibold">Tipo de producto</label>
+          <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+            {(Object.keys(TYPE_LABELS) as ProductType[]).map(t => {
+              const Icon = TYPE_ICONS[t];
+              return (
+                <button
+                  key={t}
+                  onClick={() => setProductType(t)}
+                  className={`flex items-center gap-2 px-2.5 py-2 rounded-lg text-[11px] transition border ${
+                    productType === t
+                      ? "bg-slate-800 border-slate-600 text-slate-100"
+                      : "bg-slate-950/50 border-slate-800 text-slate-400 hover:border-slate-700"
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span className="flex-1 text-left">{TYPE_LABELS[t].label.split("(")[0].trim()}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <label className="text-[11px] text-slate-400 uppercase font-semibold">Título</label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Ej: Licencia Photoshop CC 2024"
+            className="mt-1 w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-slate-100 text-sm focus:outline-none focus:border-emerald-500"
+          />
+        </div>
+
+        <div>
+          <label className="text-[11px] text-slate-400 uppercase font-semibold">Descripción del producto</label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Describe qué incluye, formato de entrega, garantía, etc."
+            rows={3}
+            className="mt-1 w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-slate-100 text-sm focus:outline-none focus:border-emerald-500"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-[11px] text-slate-400 uppercase font-semibold">Categoría</label>
+            <input
+              type="text"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              placeholder="Ej: Software"
+              className="mt-1 w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-slate-100 text-sm focus:outline-none focus:border-emerald-500"
+            />
+          </div>
+          <div>
+            <label className="text-[11px] text-slate-400 uppercase font-semibold">Precio (USDT)</label>
+            <input
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="80"
+              className="mt-1 w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-slate-100 text-sm focus:outline-none focus:border-emerald-500"
+            />
+          </div>
+        </div>
+
+        {error && (
+          <div className="bg-rose-950/30 border border-rose-700/30 rounded p-2 text-xs text-rose-300 flex items-center gap-2">
+            <AlertTriangle className="w-3.5 h-3.5" /> {error}
+          </div>
+        )}
+
+        <button
+          onClick={submit}
+          disabled={loading}
+          className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white py-2.5 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition"
+        >
+          {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Creando…</> : <><Plus className="w-4 h-4" /> Crear deal</>}
+        </button>
+
+        <div className="bg-slate-950/40 rounded p-3 text-[10px] text-slate-500">
+          <b>Comisión:</b> 2% sobre el monto. <b>Custodia:</b> el monto se bloquea cuando el comprador firma con MetaMask.
+          <br />
+          <b>Disputas:</b> si hay conflicto, el admin revisa la evidencia y decide (liberar / reembolsar / división parcial).
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// JOIN DEAL VIEW
+// ============================================================
+function JoinDealView({
+  wallet, alias, onJoined, onBack,
+}: {
+  wallet: string;
+  alias: string;
+  onJoined: (deal: Deal) => void;
+  onBack: () => void;
+}) {
+  const [code, setCode] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = async () => {
+    setError("");
+    if (!code) { setError("Ingresa el código"); return; }
+    setLoading(true);
+    try {
+      const res = await fetch("/api/escrow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "join", wallet, alias, code }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) setError(data.error || "Error");
+      else onJoined(data.deal);
+    } catch (e: any) { setError(e.message); }
+    setLoading(false);
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto space-y-4">
+      <button onClick={onBack} className="text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1">
+        ← Volver
+      </button>
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
+        <div>
+          <h2 className="text-lg font-bold text-slate-100">Unirse como comprador</h2>
+          <p className="text-xs text-slate-400 mt-1">
+            Pega el código que te compartió el vendedor. Te vas a convertir en comprador del deal.
+          </p>
+        </div>
+        <div>
+          <label className="text-[11px] text-slate-400 uppercase font-semibold">Código del deal</label>
+          <input
+            type="text"
+            value={code}
+            onChange={(e) => setCode(e.target.value.toUpperCase())}
+            placeholder="ESC-2025-12345"
+            className="mt-1 w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-slate-100 text-sm font-mono focus:outline-none focus:border-emerald-500"
+          />
+        </div>
+        {error && (
+          <div className="bg-rose-950/30 border border-rose-700/30 rounded p-2 text-xs text-rose-300 flex items-center gap-2">
+            <AlertTriangle className="w-3.5 h-3.5" /> {error}
+          </div>
+        )}
+        <button
+          onClick={submit}
+          disabled={loading}
+          className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white py-2.5 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition"
+        >
+          {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Uniéndose…</> : <>Unirme como comprador</>}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// CHAT VIEW — seguimiento + acciones del deal
+// ============================================================
+function ChatView({
+  deal, wallet, alias, onBack,
+}: {
+  deal: Deal;
+  wallet: string;
+  alias: string;
+  onBack: () => void;
+}) {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [currentDeal, setCurrentDeal] = useState(deal);
+  const [showDeliver, setShowDeliver] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const isBuyer = (currentDeal.buyer?.walletAddress || "").toLowerCase() === wallet.toLowerCase();
+  const isSeller = (currentDeal.seller?.walletAddress || "").toLowerCase() === wallet.toLowerCase();
+  const role = isBuyer ? "Comprador" : isSeller ? "Vendedor" : "Observador";
+  const status = STATUS_LABELS[currentDeal.status] || STATUS_LABELS.CREATED;
+  const immutable = ["FUNDED", "DELIVERED", "DISPUTED", "COMPLETED"].includes(currentDeal.status);
+
+  const loadMsgs = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/escrow/messages?dealId=${currentDeal.id}`);
+      const d = await res.json();
+      setMessages(d.messages || []);
+    } catch {}
+  }, [currentDeal.id]);
+
+  const refreshDeal = useCallback(async () => {
+    try {
+      const res = await fetch("/api/escrow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "get", dealId: currentDeal.id }),
+      });
+      const d = await res.json();
+      if (d.deal) setCurrentDeal(d.deal);
+    } catch {}
+  }, [currentDeal.id]);
+
+  useEffect(() => { loadMsgs(); }, [loadMsgs]);
+  useEffect(() => {
+    const i = setInterval(() => { loadMsgs(); refreshDeal(); }, 5000);
+    return () => clearInterval(i);
+  }, [loadMsgs, refreshDeal]);
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages]);
+
+  const callApi = async (body: any) => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/escrow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...body, wallet, alias, dealId: currentDeal.id }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        alert(data.error || "Error");
+      } else {
+        await loadMsgs();
+        await refreshDeal();
+      }
+      return data;
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Firmar acuerdo con MetaMask
+  const signAgreement = async () => {
+    const agreement = prompt(
+      "Escribe el acuerdo mutuo que vas a firmar con MetaMask:\n\nEj: 'Vendo licencia Photoshop CC 2024 por 80 USDT, entrega por chat con código de activación.'",
+      currentDeal.agreement || `${currentDeal.title} por ${currentDeal.amount} USDT`
+    );
+    if (!agreement) return;
+
+    const eth = (window as any).ethereum;
+    if (!eth) {
+      alert("MetaMask no está instalado");
+      return;
+    }
+    try {
+      // Pedir firma de mensaje
+      const msg = `CriptoMy Escrow - Acuerdo de deal ${currentDeal.code}\n\n${agreement}\n\nFirmo este acuerdo como COMPRADOR.`;
+      const signature = await eth.request({
+        method: "personal_sign",
+        params: [msg, wallet],
+      });
+      await callApi({
+        action: "sign",
+        agreement,
+        signature,
+      });
+    } catch (e: any) {
+      alert("Firma cancelada: " + e.message);
+    }
+  };
+
+  // Bloquear fondos (simulado con firma MetaMask)
+  const fund = async () => {
+    const eth = (window as any).ethereum;
+    if (!eth) {
+      alert("MetaMask no está instalado");
+      return;
+    }
+    if (!confirm(`Vas a bloquear ${currentDeal.amount} USDT en escrow. Confirmas?`)) return;
+    try {
+      // En una implementación completa esto enviaría una tx a un smart contract.
+      // Aquí simulamos el "bloqueo" con una firma MetaMask que atestigua el acuerdo.
+      const msg = `Bloqueo ${currentDeal.amount} USDT en escrow para deal ${currentDeal.code}`;
+      const fundTxHash = await eth.request({
+        method: "personal_sign",
+        params: [msg, wallet],
+      });
+      await callApi({
+        action: "fund",
+        fundTxHash,
+      });
+    } catch (e: any) {
+      alert("Bloqueo cancelado: " + e.message);
+    }
+  };
+
+  const deliver = async (formData: any) => {
+    await callApi({
+      action: "deliver",
+      ...formData,
+    });
+    setShowDeliver(false);
+  };
+
+  const release = async () => {
+    if (!confirm("Confirmas liberar los fondos al vendedor? Esta acción es irreversible.")) return;
+    await callApi({ action: "release" });
+  };
+
+  const dispute = async () => {
+    const reason = prompt("Describe el motivo de la disputa (mín 10 caracteres):");
+    if (!reason) return;
+    await callApi({ action: "dispute", reason });
+  };
+
+  const sendMessage = async () => {
+    if (!input.trim()) return;
+    setLoading(true);
+    try {
+      await fetch("/api/escrow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "message",
+          wallet, alias, dealId: currentDeal.id,
+          text: input,
+        }),
+      });
+      setInput("");
+      await loadMsgs();
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-3">
       {/* Top bar */}
       <div className="flex items-center justify-between gap-2 flex-wrap bg-slate-900 border border-slate-800 rounded-xl p-3">
         <div className="flex items-center gap-3">
-          <button
-            onClick={onBack}
-            className="text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1"
-          >
+          <button onClick={onBack} className="text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1">
             ← Volver
           </button>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-bold text-slate-100 font-mono">{tx.id}</span>
-              <span className={`text-[9px] px-1.5 py-0.5 rounded border ${phase.color}`}>{phase.label}</span>
+              <span className="text-sm font-bold text-slate-100 font-mono">{currentDeal.code}</span>
+              <span className={`text-[9px] px-1.5 py-0.5 rounded border ${status.color}`}>{status.label}</span>
               <span className="text-[10px] text-slate-500">· {role}</span>
             </div>
             <div className="text-[10px] text-slate-500 mt-0.5">
-              {PRODUCT_TYPE_LABELS[tx.productType].emoji} {PRODUCT_TYPE_LABELS[tx.productType].label.split("(")[0].trim()} · {tx.amount || 0} USDT
+              {currentDeal.title} · {currentDeal.amount} USDT
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => setShowContract(!showContract)}
-            className={`p-1.5 rounded transition ${showContract ? "bg-slate-700 text-slate-200" : "bg-slate-800 text-slate-400 hover:bg-slate-700"}`}
-            title="Contrato"
-          ><FileText className="w-3.5 h-3.5" /></button>
-          <button
-            onClick={() => setShowChecklist(!showChecklist)}
-            className={`p-1.5 rounded transition ${showChecklist ? "bg-slate-700 text-slate-200" : "bg-slate-800 text-slate-400 hover:bg-slate-700"}`}
-            title="Checklist"
-          ><FileCheck className="w-3.5 h-3.5" /></button>
-          <button
-            onClick={() => onCommand("/estado")}
-            className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-400 transition"
-            title="Estado"
-          ><Info className="w-3.5 h-3.5" /></button>
-          <button
-            onClick={() => onCommand("/historial")}
-            className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-400 transition"
-            title="Historial"
-          ><History className="w-3.5 h-3.5" /></button>
-          <button
-            onClick={() => { loadMsgs(); onRefresh(); }}
-            className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-400 transition"
-            title="Refrescar"
-          ><RefreshCw className="w-3.5 h-3.5" /></button>
+      </div>
+
+      {/* Step indicator */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-3">
+        <div className="flex items-center justify-between gap-2 text-[10px] flex-wrap">
+          {[
+            { key: "CREATED", label: "Deal creado", icon: Plus },
+            { key: "JOINED", label: "Comprador unido", icon: Wallet },
+            { key: "FUNDED", label: "Fondos bloqueados", icon: Lock },
+            { key: "DELIVERED", label: "Producto entregado", icon: CheckCircle2 },
+            { key: "COMPLETED", label: "Completado", icon: Shield },
+          ].map((step, i, arr) => {
+            const order = ["CREATED", "JOINED", "FUNDED", "DELIVERED", "COMPLETED", "DISPUTED", "CANCELLED"];
+            const currentIdx = order.indexOf(currentDeal.status);
+            const stepIdx = order.indexOf(step.key);
+            const done = stepIdx <= currentIdx;
+            const Icon = step.icon;
+            return (
+              <div key={step.key} className="flex items-center gap-1">
+                <div className={`flex items-center gap-1 ${done ? "text-emerald-400" : "text-slate-600"}`}>
+                  <Icon className="w-3 h-3" />
+                  <span className="hidden sm:inline">{step.label}</span>
+                </div>
+                {i < arr.length - 1 && <div className={`w-4 h-px ${done ? "bg-emerald-600" : "bg-slate-700"}`} />}
+              </div>
+            );
+          })}
         </div>
       </div>
+
+      {/* Action buttons según estado */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 flex items-center gap-2 flex-wrap">
+        {currentDeal.status === "JOINED" && isBuyer && (
+          <>
+            <button
+              onClick={signAgreement}
+              disabled={loading}
+              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded text-xs font-medium flex items-center gap-1.5 transition"
+            >
+              <Wallet className="w-3.5 h-3.5" /> Firmar acuerdo con MetaMask
+            </button>
+            {currentDeal.agreement && (
+              <button
+                onClick={fund}
+                disabled={loading}
+                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-medium flex items-center gap-1.5 transition"
+              >
+                <Lock className="w-3.5 h-3.5" /> Bloquear {currentDeal.amount} USDT
+              </button>
+            )}
+          </>
+        )}
+        {currentDeal.status === "FUNDED" && isSeller && (
+          <button
+            onClick={() => setShowDeliver(!showDeliver)}
+            disabled={loading}
+            className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded text-xs font-medium flex items-center gap-1.5 transition"
+          >
+            <CheckCircle2 className="w-3.5 h-3.5" /> Entregar producto
+          </button>
+        )}
+        {currentDeal.status === "DELIVERED" && isBuyer && (
+          <>
+            <button
+              onClick={release}
+              disabled={loading}
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-medium flex items-center gap-1.5 transition"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" /> Liberar fondos al vendedor
+            </button>
+            <button
+              onClick={dispute}
+              disabled={loading}
+              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded text-xs font-medium flex items-center gap-1.5 transition"
+            >
+              <AlertTriangle className="w-3.5 h-3.5" /> Abrir disputa
+            </button>
+          </>
+        )}
+        {currentDeal.status === "DISPUTED" && (
+          <div className="text-[11px] text-rose-300 flex items-center gap-1.5">
+            <Scale className="w-3.5 h-3.5" /> Disputa abierta — el admin revisará la evidencia
+          </div>
+        )}
+        {["FUNDED", "DELIVERED"].includes(currentDeal.status) && !isBuyer && (
+          <button
+            onClick={dispute}
+            disabled={loading}
+            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded text-xs font-medium flex items-center gap-1.5 transition"
+          >
+            <AlertTriangle className="w-3.5 h-3.5" /> Abrir disputa
+          </button>
+        )}
+      </div>
+
+      {/* Deliver form */}
+      {showDeliver && isSeller && currentDeal.status === "FUNDED" && (
+        <DeliverForm onSubmit={deliver} onCancel={() => setShowDeliver(false)} />
+      )}
+
+      {/* Datos del deal (entrega) */}
+      {currentDeal.status === "DELIVERED" && currentDeal.deliveryDescription && (
+        <div className="bg-cyan-950/20 border border-cyan-700/30 rounded-lg p-3">
+          <div className="text-[10px] uppercase text-cyan-400 font-semibold mb-2">📦 Producto entregado</div>
+          <div className="text-xs text-slate-200 space-y-1">
+            <div>{currentDeal.deliveryDescription}</div>
+            {currentDeal.deliveryCode && <div><b>Código:</b> <code className="text-cyan-300">{currentDeal.deliveryCode}</code></div>}
+            {currentDeal.deliveryLink && <div><b>Link:</b> <a href={currentDeal.deliveryLink} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">{currentDeal.deliveryLink}</a></div>}
+            {currentDeal.deliveryInstructions && <div className="text-slate-400 text-[11px] mt-1">{currentDeal.deliveryInstructions}</div>}
+          </div>
+        </div>
+      )}
+
+      {/* Disputa info */}
+      {currentDeal.status === "DISPUTED" && currentDeal.disputeReason && (
+        <div className="bg-rose-950/20 border border-rose-700/30 rounded-lg p-3">
+          <div className="text-[10px] uppercase text-rose-400 font-semibold mb-1">🚨 Motivo de la disputa</div>
+          <div className="text-xs text-slate-200">{currentDeal.disputeReason}</div>
+        </div>
+      )}
 
       {/* Immutable banner */}
       {immutable && (
         <div className="bg-amber-950/20 border border-amber-700/30 rounded-lg p-2 text-[11px] text-amber-300 flex items-center gap-2">
           <Lock className="w-3 h-3 shrink-0" />
-          <span>Mensajería inmutable activa. Cada mensaje tiene hash criptográfico y es evidencia legal en disputas.</span>
-          {!integrityOk && <span className="ml-auto text-rose-400 font-bold">⚠ Integridad comprometida</span>}
-          {integrityOk && <span className="ml-auto text-emerald-400/70">✓ Cadena verificada</span>}
+          <span>Mensajería inmutable activa. Cada mensaje es evidencia con hash criptográfico.</span>
         </div>
       )}
 
-      {/* Contract panel */}
-      {showContract && (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="text-xs font-bold text-slate-100 flex items-center gap-1.5">
-              <FileText className="w-3.5 h-3.5 text-emerald-400" /> Contrato
+      {/* Acuerdo */}
+      {currentDeal.agreement && (
+        <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
+          <div className="text-[10px] uppercase text-emerald-400 font-semibold mb-1">📝 Acuerdo firmado</div>
+          <div className="text-xs text-slate-200">{currentDeal.agreement}</div>
+          {currentDeal.buyerSignature && (
+            <div className="mt-2 text-[10px] text-slate-500">
+              Firma MetaMask: <code className="text-emerald-400">{currentDeal.buyerSignature.slice(0, 30)}...</code>
             </div>
-            <button onClick={() => setShowContract(false)} className="text-slate-500 hover:text-slate-300"><ChevronUp className="w-3.5 h-3.5" /></button>
-          </div>
-          <div className="text-[11px] text-slate-300">
-            <div className="grid grid-cols-2 gap-2 mb-2">
-              <div><span className="text-slate-500">Comprador:</span> {tx.buyerAlias || "—"}</div>
-              <div><span className="text-slate-500">Vendedor:</span> {tx.sellerAlias || "—"}</div>
-              <div><span className="text-slate-500">Monto:</span> {tx.amount} {tx.currency}</div>
-              <div><span className="text-slate-500">Comisión:</span> {tx.commissionPct}%</div>
-            </div>
-            <div className="text-slate-500 uppercase text-[9px] mb-1">Acuerdo mutuo</div>
-            <div className="bg-slate-950/50 p-2 rounded text-slate-200 text-xs">
-              {tx.agreement || "(sin acuerdo fijado aún — usa /acuerdo \"texto\" para fijarlo)"}
-            </div>
-          </div>
-          <button
-            onClick={() => onCommand("/contrato")}
-            className="text-[11px] text-emerald-400 hover:text-emerald-300"
-          >Ver contrato completo en chat →</button>
-        </div>
-      )}
-
-      {/* Checklist panel */}
-      {showChecklist && (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="text-xs font-bold text-slate-100 flex items-center gap-1.5">
-              <FileCheck className="w-3.5 h-3.5 text-emerald-400" /> Checklist de verificación
-            </div>
-            <button onClick={() => setShowChecklist(false)} className="text-slate-500 hover:text-slate-300"><ChevronUp className="w-3.5 h-3.5" /></button>
-          </div>
-          <div className="space-y-1">
-            {tx.checklist.map(item => (
-              <button
-                key={item.id}
-                onClick={() => onCommand(`/checklist ${item.id}`)}
-                className={`w-full text-left flex items-center gap-2 p-2 rounded text-xs transition ${
-                  item.done
-                    ? "bg-emerald-950/30 text-emerald-300"
-                    : "bg-slate-800/50 text-slate-300 hover:bg-slate-800"
-                }`}
-              >
-                {item.done ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <XCircle className="w-3.5 h-3.5 text-slate-600" />}
-                <span className="flex-1">{item.label}</span>
-                <span className="text-[9px] text-slate-500 font-mono">{item.id}</span>
-              </button>
-            ))}
-          </div>
-          <div className="text-[10px] text-slate-500 pt-1">
-            Click en cada item para marcarlo/desmarcarlo. Solo el comprador puede marcar.
-          </div>
+          )}
         </div>
       )}
 
       {/* Messages */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl flex flex-col" style={{ height: "60vh", minHeight: "400px" }}>
+      <div className="bg-slate-900 border border-slate-800 rounded-xl flex flex-col" style={{ height: "50vh", minHeight: "350px" }}>
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-2">
           {messages.length === 0 && (
             <div className="text-center py-8">
               <MessageSquare className="w-8 h-8 mx-auto text-slate-700 mb-2" />
               <p className="text-xs text-slate-500">No hay mensajes todavía.</p>
-              <p className="text-[10px] text-slate-600 mt-1">Empieza con /ayuda para ver comandos.</p>
             </div>
           )}
-          {messages.map(m => (
-            <MessageBubble key={m.id} m={m} wallet={wallet} />
-          ))}
-        </div>
-
-        {/* Quick commands */}
-        <div className="border-t border-slate-800 p-2 flex items-center gap-1 overflow-x-auto scrollbar-hide">
-          <QuickCmd label="Estado" cmd="/estado" onClick={onCommand} />
-          <QuickCmd label="Tiempo" cmd="/tiempo_restante" onClick={onCommand} />
-          <QuickCmd label="Contrato" cmd="/contrato" onClick={onCommand} />
-          <QuickCmd label="Historial" cmd="/historial" onClick={onCommand} />
-          <QuickCmd label="Ayuda" cmd="/ayuda" onClick={onCommand} />
-          {tx.phase === "NEGOCIANDO" && tx.seller && (
-            <QuickCmd label="Acuerdo" cmd='/acuerdo "Acuerdo mutuo: producto X por Y USDT, entrega por chat"' onClick={onCommand} />
-          )}
-          {tx.phase === "NEGOCIANDO" && tx.agreement && tx.buyer === wallet && (
-            <QuickCmd label="Bloquear" cmd={`/bloquear ${tx.amount || 100}`} onClick={onCommand} />
-          )}
-          {tx.phase === "FONDOS_BLOQUEADOS" && tx.seller === wallet && (
-            <QuickCmd label="Entregar" cmd='/entregar "Producto entregado según acuerdo"' onClick={onCommand} />
-          )}
-          {tx.phase === "EN_VERIFICACION" && (
-            <QuickCmd label="Liberar" cmd="/liberar" onClick={onCommand} />
-          )}
-          {tx.phase === "EN_VERIFICACION" && (
-            <QuickCmd label="Disputar" cmd='/disputar "Motivo de la disputa"' onClick={onCommand} />
-          )}
+          {messages.map(m => <MessageBubble key={m.id} m={m} wallet={wallet} />)}
         </div>
 
         {/* Input */}
@@ -536,12 +860,12 @@ function ChatView({
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !loading) send(); }}
-            placeholder={immutable ? "Mensaje (inmutable) o /comando…" : "Mensaje o /comando…"}
-            className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-sm font-mono focus:outline-none focus:border-emerald-500"
+            onKeyDown={(e) => { if (e.key === "Enter" && !loading) sendMessage(); }}
+            placeholder={immutable ? "Mensaje (inmutable)…" : "Mensaje…"}
+            className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-sm focus:outline-none focus:border-emerald-500"
           />
           <button
-            onClick={send}
+            onClick={sendMessage}
             disabled={loading || !input.trim()}
             className="p-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg transition"
           >
@@ -549,37 +873,13 @@ function ChatView({
           </button>
         </div>
       </div>
-
-      {/* Command help */}
-      <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-3">
-        <div className="text-[10px] uppercase text-slate-500 font-semibold mb-1">Comandos rápidos</div>
-        <div className="text-[11px] text-slate-400 leading-relaxed">
-          <span className="font-mono text-emerald-400">/nueva_transaccion</span> ·{" "}
-          <span className="font-mono text-emerald-400">/unirse</span> ·{" "}
-          <span className="font-mono text-emerald-400">/acuerdo</span> ·{" "}
-          <span className="font-mono text-emerald-400">/bloquear</span> ·{" "}
-          <span className="font-mono text-emerald-400">/entregar</span> ·{" "}
-          <span className="font-mono text-emerald-400">/checklist</span> ·{" "}
-          <span className="font-mono text-emerald-400">/liberar</span> ·{" "}
-          <span className="font-mono text-emerald-400">/disputar</span> ·{" "}
-          <span className="font-mono text-emerald-400">/evidencia_disputa</span> ·{" "}
-          <span className="font-mono text-emerald-400">/acuerdo_parcial</span> ·{" "}
-          <span className="font-mono text-emerald-400">/aceptar_resolucion</span> ·{" "}
-          <span className="font-mono text-emerald-400">/cancelar_mutuo</span> ·{" "}
-          <span className="font-mono text-emerald-400">/estado</span> ·{" "}
-          <span className="font-mono text-emerald-400">/tiempo_restante</span> ·{" "}
-          <span className="font-mono text-emerald-400">/contrato</span> ·{" "}
-          <span className="font-mono text-emerald-400">/historial</span> ·{" "}
-          <span className="font-mono text-emerald-400">/ayuda</span>
-        </div>
-      </div>
     </div>
   );
 }
 
-function MessageBubble({ m, wallet }: { m: EscrowMessage; wallet: string }) {
+function MessageBubble({ m, wallet }: { m: Message; wallet: string }) {
   const isBot = m.senderRole === "BOT";
-  const isMine = m.sender === wallet;
+  const isMine = m.senderWallet.toLowerCase() === wallet.toLowerCase();
   const time = new Date(m.ts).toLocaleTimeString().slice(0, 8);
   const isMultiline = m.text.includes("\n");
 
@@ -600,19 +900,10 @@ function MessageBubble({ m, wallet }: { m: EscrowMessage; wallet: string }) {
           <div className="flex items-center gap-2 mt-0.5 text-[9px] text-slate-500">
             <span>{m.senderAlias}</span>
             <span>·</span>
-            <Clock className="w-2.5 h-2.5" />
             <span>{time}</span>
-            {m.immutable && (
-              <>
-                <span>·</span>
-                <Hash className="w-2.5 h-2.5" />
-                <span className="font-mono">{m.hash}</span>
-              </>
-            )}
+            {m.immutable && <><span>·</span><Hash className="w-2.5 h-2.5" /><span className="font-mono">{m.hash}</span></>}
             {m.tag && m.tag !== "SISTEMA" && (
-              <span className="px-1 py-0 bg-amber-950/30 border border-amber-700/30 text-amber-400 rounded text-[8px]">
-                {m.tag}
-              </span>
+              <span className="px-1 py-0 bg-amber-950/30 border border-amber-700/30 text-amber-400 rounded text-[8px]">{m.tag}</span>
             )}
           </div>
         </div>
@@ -632,28 +923,64 @@ function MessageBubble({ m, wallet }: { m: EscrowMessage; wallet: string }) {
         <div className={`flex items-center gap-2 mt-0.5 text-[9px] text-slate-500 ${isMine ? "justify-end" : ""}`}>
           <span>{m.senderAlias}</span>
           <span>·</span>
-          <Clock className="w-2.5 h-2.5" />
           <span>{time}</span>
-          {m.immutable && (
-            <>
-              <span>·</span>
-              <Hash className="w-2.5 h-2.5" />
-              <span className="font-mono">{m.hash}</span>
-            </>
-          )}
+          {m.immutable && <><span>·</span><Hash className="w-2.5 h-2.5" /><span className="font-mono">{m.hash}</span></>}
         </div>
       </div>
     </div>
   );
 }
 
-function QuickCmd({ label, cmd, onClick }: { label: string; cmd: string; onClick: (cmd: string) => void }) {
+function DeliverForm({ onSubmit, onCancel }: { onSubmit: (data: any) => void; onCancel: () => void }) {
+  const [description, setDescription] = useState("");
+  const [code, setCode] = useState("");
+  const [credentials, setCredentials] = useState("");
+  const [link, setLink] = useState("");
+  const [instructions, setInstructions] = useState("");
+
   return (
-    <button
-      onClick={() => onClick(cmd)}
-      className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 rounded whitespace-nowrap transition shrink-0"
-    >
-      {label}
-    </button>
+    <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-bold text-slate-100">Entregar producto</h3>
+        <button onClick={onCancel} className="text-slate-500 hover:text-slate-300">✕</button>
+      </div>
+      <div>
+        <label className="text-[10px] text-slate-500 uppercase">Descripción*</label>
+        <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ej: Licencia Photoshop CC 2024 entregada"
+          className="mt-1 w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-slate-100 text-xs" />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-[10px] text-slate-500 uppercase">Código / Key</label>
+          <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="XXXX-XXXX-XXXX"
+            className="mt-1 w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-slate-100 text-xs font-mono" />
+        </div>
+        <div>
+          <label className="text-[10px] text-slate-500 uppercase">Credenciales</label>
+          <input value={credentials} onChange={(e) => setCredentials(e.target.value)} placeholder="user:password"
+            className="mt-1 w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-slate-100 text-xs font-mono" />
+        </div>
+      </div>
+      <div>
+        <label className="text-[10px] text-slate-500 uppercase">Link de descarga</label>
+        <input value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://..."
+          className="mt-1 w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-slate-100 text-xs" />
+      </div>
+      <div>
+        <label className="text-[10px] text-slate-500 uppercase">Instrucciones</label>
+        <textarea value={instructions} onChange={(e) => setInstructions(e.target.value)} rows={2}
+          placeholder="Instrucciones de uso, activación, etc."
+          className="mt-1 w-full px-2 py-1.5 bg-slate-800 border border-slate-700 rounded text-slate-100 text-xs" />
+      </div>
+      <button
+        onClick={() => {
+          if (!description) { alert("Descripción requerida"); return; }
+          onSubmit({ deliveryDescription: description, deliveryCode: code, deliveryCredentials: credentials, deliveryLink: link, deliveryInstructions: instructions });
+        }}
+        className="w-full bg-cyan-600 hover:bg-cyan-500 text-white py-2 rounded text-xs font-medium"
+      >
+        Entregar producto
+      </button>
+    </div>
   );
 }

@@ -56,6 +56,11 @@ model User {
 
   // Educación
   courseEnrollments  CourseEnrollment[]
+
+  // Escrow digital
+  escrowBuyerDeals   EscrowDeal[] @relation("EscrowBuyer")
+  escrowSellerDeals  EscrowDeal[] @relation("EscrowSeller")
+  escrowMessagesSent EscrowMessage[] @relation("EscrowMsgSender")
 }
 
 // Oferta P2P: "vendo X BTC por Y COP vía Nequi"
@@ -587,4 +592,107 @@ model CourseEnrollment {
 
   @@unique([userId, courseId])
   @@index([userId])
+}
+
+// ============================================================
+// ESCROW DIGITAL — Productos digitales con custodia neutral
+// ============================================================
+// Flujos:
+//   1. Vendedor crea deal (CREATED)
+//   2. Comprador se une (JOINED) → ambas partes firman
+//   3. Comprador bloquea fondos via MetaMask (FUNDED)
+//   4. Vendedor entrega producto (DELIVERED)
+//   5. Comprador confirma (COMPLETED) → fondos al vendedor
+//   6. Cualquiera abre disputa (DISPUTED) → admin resuelve
+//
+// El admin (wallet configurada) puede liberar o reembolsar.
+
+model EscrowDeal {
+  id              String   @id @default(cuid())
+  // Código corto tipo ESC-2025-12345 para compartir
+  code            String   @unique
+  
+  // Tipo de producto digital
+  productType     String   // SOFTWARE | CUENTA_DIGITAL | CONTENIDO_CREATIVO | CRIPTO | SERVICIO
+  title           String
+  description     String
+  category        String
+  
+  // Monto en USDT
+  amount          Float
+  currency        String   @default("USDT")
+  commissionPct   Float    @default(2)
+  
+  // Partes (wallets)
+  buyerId         String?
+  buyer           User?    @relation("EscrowBuyer", fields: [buyerId], references: [id])
+  buyerAlias      String?
+  sellerId        String?
+  seller          User?    @relation("EscrowSeller", fields: [sellerId], references: [id])
+  sellerAlias     String?
+  
+  // Acuerdo mutuo
+  agreement       String?
+  agreementLockedAt DateTime?
+  
+  // Estado del ciclo de vida
+  status          String   @default("CREATED")
+  // CREATED → JOINED → FUNDED → DELIVERED → COMPLETED | DISPUTED | CANCELLED
+  
+  // Datos de entrega (visibles solo después de FUNDED)
+  deliveryDescription String?
+  deliveryCode        String?
+  deliveryCredentials String?
+  deliveryLink        String?
+  deliveryInstructions String?
+  deliveredAt         DateTime?
+  
+  // Firma MetaMask
+  buyerSignature      String?
+  sellerSignature     String?
+  fundedAt            DateTime?
+  fundTxHash          String?
+  
+  // Liberación
+  releasedAt          DateTime?
+  releaseTxHash       String?
+  completedAt         DateTime?
+  cancelledAt         DateTime?
+  
+  // Disputa
+  disputedAt          DateTime?
+  disputeReason       String?
+  disputeResolvedBy   String?   // wallet del admin
+  disputeResolution   String?   // RELEASE | REFUND | PARTIAL
+  disputePartialSeller Float?
+  disputePartialRefund Float?
+  disputeResolvedAt   DateTime?
+  
+  // Timestamps
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  messages            EscrowMessage[]
+  
+  @@index([status])
+  @@index([buyerId])
+  @@index([sellerId])
+}
+
+model EscrowMessage {
+  id              String   @id @default(cuid())
+  dealId          String
+  deal            EscrowDeal @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  senderId        String?
+  sender          User?    @relation("EscrowMsgSender", fields: [senderId], references: [id])
+  senderWallet    String
+  senderAlias     String
+  senderRole      String   // BUYER | SELLER | BOT | ADMIN
+  text            String
+  ts              DateTime @default(now())
+  hash            String   // primeros 16 chars del SHA-256 chain
+  immutable       Boolean  @default(false)
+  tag             String?  // ACUERDO | EVIDENCIA | URGENTE | SISTEMA
+  
+  @@index([dealId, ts])
 }

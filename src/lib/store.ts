@@ -17,23 +17,18 @@ export interface CurrentUser {
 }
 
 // Tabs del header (top level). Mercado P2P tiene sub-tabs internos.
-// Limpieza: se eliminaron proveedores, scanner-admin, admin, retos
-// (no aportan al usuario final). Escrow se mueve dentro de Mercado P2P.
+// Limpieza definitiva: solo lo esencial. Escrow vuelve a ser top-level
+// porque es un flujo totalmente distinto a compra/venta P2P de cripto.
 export type TabKey =
   | "inicio"
   | "earn"
   | "enviar-recibir"
   | "mercado-p2p"
-  | "educacion"
-  | "alertas"
-  | "oportunidades"
-  | "comparador"
-  | "compliance"
-  | "billetera"
-  | "reputacion";
+  | "escrow"
+  | "alertas";
 
-// Sub-tabs dentro de mercado-p2p (escrow integrado aquí)
-export type P2PSubTab = "explorar" | "crear" | "mis-trades" | "disputas" | "escrow";
+// Sub-tabs dentro de mercado-p2p (sin escrow, que ahora es top-level)
+export type P2PSubTab = "explorar" | "crear" | "mis-trades" | "disputas";
 
 interface AppState {
   user: CurrentUser | null;
@@ -53,7 +48,7 @@ interface AppState {
   logout: () => void;
 }
 
-const STORAGE_VERSION = 24;
+const STORAGE_VERSION = 25;
 
 function isValidUser(user: unknown): user is CurrentUser {
   if (!user || typeof user !== "object") return false;
@@ -120,25 +115,25 @@ export const useApp = create<AppState>()(
           "earn",
           "enviar-recibir",
           "mercado-p2p",
-          "educacion",
+          "escrow",
           "alertas",
-          "oportunidades",
-          "comparador",
-          "compliance",
-          "billetera",
-          "reputacion",
         ];
-        // Migrar tabs viejos a los nuevos (después de la limpieza de menús)
+        // Migrar tabs viejos a los nuevos (después de la limpieza definitiva de menús)
         const tabAliases: Record<string, TabKey> = {
           enviar: "enviar-recibir",
           recibir: "enviar-recibir",
           buscador: "inicio",        // SmartSearch ahora vive dentro de Inicio
           dashboard: "inicio",
-          escrow: "mercado-p2p",     // Escrow ahora es sub-tab de Mercado P2P
-          retos: "mercado-p2p",      // Retos eliminado → redirige a Mercado P2P
+          retos: "mercado-p2p",
           proveedores: "inicio",
           "scanner-admin": "inicio",
           admin: "inicio",
+          educacion: "inicio",
+          oportunidades: "inicio",
+          comparador: "inicio",
+          compliance: "inicio",
+          billetera: "inicio",
+          reputacion: "inicio",
         };
         if (state.tab) {
           const t = state.tab as string;

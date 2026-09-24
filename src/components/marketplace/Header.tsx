@@ -23,43 +23,37 @@ import NotificationBell from "./NotificationBell";
 
 type NavItem = { key: TabKey; label: string; icon: React.ElementType; desc: string };
 
-// Agrupación profesional: 3 categorías claras + sección de cuenta aparte
+// Agrupación profesional: 5 categorías claras (sin menú "Más")
 const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
   {
     title: "Inicio",
     items: [
       { key: "inicio", label: "Inicio", icon: Home, desc: "Dashboard + buscador Web3 integrado" },
-      { key: "earn", label: "Earn", icon: TrendingUp, desc: "Pon tu cripto a trabajar, P2P y arbitraje, funding & basis" },
     ],
   },
   {
     title: "Cripto",
     items: [
+      { key: "earn", label: "Earn", icon: TrendingUp, desc: "Pon tu cripto a trabajar: DeFi, funding, basis" },
       { key: "enviar-recibir", label: "Enviar / Recibir", icon: ArrowLeftRight, desc: "Transfiere o recibe cripto anónimo, sin KYC" },
     ],
   },
   {
     title: "Mercado",
     items: [
-      { key: "mercado-p2p", label: "Mercado P2P + Escrow", icon: Store, desc: "Compra/venta persona a persona + escrow digital" },
-    ],
-  },
-  {
-    title: "Servicios",
-    items: [
-      { key: "educacion", label: "Educación", icon: BookOpen, desc: "Aprende cripto gratis en español" },
-      { key: "oportunidades", label: "Oportunidades", icon: Sparkles, desc: "Learn&Earn, airdrops, staking" },
-      { key: "comparador", label: "Comparador", icon: ShoppingBag, desc: "Compara fees entre providers" },
+      { key: "mercado-p2p", label: "Mercado P2P", icon: Store, desc: "Compra/venta persona a persona de cripto" },
+      { key: "escrow", label: "Escrow Digital", icon: Shield, desc: "Custodia neutral para productos digitales con MetaMask" },
     ],
   },
 ];
 
-// Compact nav (iconos + labels cortos) para barra superior
+// Nav principal: 5 botones directos, sin dropdown "Más"
 const COMPACT_NAV: TabKey[] = [
   "inicio",
   "earn",
   "enviar-recibir",
   "mercado-p2p",
+  "escrow",
 ];
 
 export default function Header() {
@@ -89,7 +83,7 @@ export default function Header() {
             </div>
           </button>
 
-          {/* Nav desktop — accesos rápidos principales */}
+          {/* Nav desktop — 5 botones directos, sin dropdown */}
           <nav className="hidden lg:flex items-center gap-0.5 flex-1 justify-center">
             {COMPACT_NAV.map((key) => {
               const item = NAV_GROUPS.flatMap((g) => g.items).find((i) => i.key === key)!;
@@ -112,59 +106,6 @@ export default function Header() {
                 </button>
               );
             })}
-
-            {/* More menu — items secundarios */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-md text-slate-300 hover:text-slate-100 hover:bg-slate-800 transition">
-                  Más
-                  <ChevronRight className="w-3 h-3" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="end"
-                className="bg-slate-900 border-slate-800 text-slate-100 w-64 p-2"
-              >
-                {/* Servicios */}
-                <div className="px-2 py-1 text-[10px] uppercase text-slate-500 font-semibold">
-                  Servicios
-                </div>
-                {NAV_GROUPS[2].items.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <DropdownMenuItem
-                      key={item.key}
-                      className="text-xs cursor-pointer px-2 py-1.5 hover:bg-slate-800 rounded"
-                      onClick={() => setTab(item.key)}
-                    >
-                      <Icon className="w-3.5 h-3.5 mr-2 text-slate-400" />
-                      <div>
-                        <div>{item.label}</div>
-                        <div className="text-[10px] text-slate-500">{item.desc}</div>
-                      </div>
-                    </DropdownMenuItem>
-                  );
-                })}
-                <DropdownMenuSeparator className="bg-slate-800 my-2" />
-                <div className="px-2 py-1 text-[10px] uppercase text-slate-500 font-semibold">
-                  Sistema
-                </div>
-                <DropdownMenuItem
-                  className="text-xs cursor-pointer px-2 py-1.5 hover:bg-slate-800 rounded"
-                  onClick={() => setTab("alertas")}
-                >
-                  <Bell className="w-3.5 h-3.5 mr-2 text-slate-400" />
-                  Alertas de precio
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="text-xs cursor-pointer px-2 py-1.5 hover:bg-slate-800 rounded"
-                  onClick={() => setTab("compliance")}
-                >
-                  <ShieldAlert className="w-3.5 h-3.5 mr-2 text-slate-400" />
-                  Compliance y regulación
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
           </nav>
 
           {/* Auth */}
@@ -212,15 +153,9 @@ export default function Header() {
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     className="text-xs cursor-pointer"
-                    onClick={() => setTab("billetera")}
+                    onClick={() => setTab("inicio")}
                   >
-                    <Wallet className="w-3 h-3 mr-2" /> Mi billetera
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="text-xs cursor-pointer"
-                    onClick={() => setTab("reputacion")}
-                  >
-                    <Star className="w-3 h-3 mr-2" /> Mi reputación
+                    <Wallet className="w-3 h-3 mr-2" /> Mi portafolio
                   </DropdownMenuItem>
                   <DropdownMenuSeparator className="bg-slate-800" />
                   <DropdownMenuItem
@@ -280,31 +215,6 @@ export default function Header() {
                 })}
               </div>
             ))}
-            {/* Sistema */}
-            <div className="mb-4">
-              <div className="px-2 mb-1 text-[10px] uppercase text-slate-500 font-semibold">
-                Sistema
-              </div>
-              {[
-                { key: "alertas" as TabKey, label: "Alertas de precio", icon: Bell },
-                { key: "compliance" as TabKey, label: "Compliance", icon: ShieldAlert },
-              ].map((item) => {
-                const Icon = item.icon;
-                return (
-                  <button
-                    key={item.key}
-                    onClick={() => {
-                      setTab(item.key);
-                      setMobileMenuOpen(false);
-                    }}
-                    className="w-full flex items-center gap-3 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800 rounded-md"
-                  >
-                    <Icon className="w-4 h-4" />
-                    {item.label}
-                  </button>
-                );
-              })}
-            </div>
           </div>
         )}
       </div>
