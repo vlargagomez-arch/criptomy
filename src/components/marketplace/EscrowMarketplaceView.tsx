@@ -1,487 +1,659 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  Loader2, RefreshCw, ExternalLink, Gift, FileText, Gamepad2, Tv,
-  Check, X, Shield, MessageSquare, Send, AlertTriangle, ArrowLeftRight,
-  Package, Coins, User, Lock, Key, FileCheck, Zap, Plus, Search, Wallet,
+  Loader2, RefreshCw, Shield, MessageSquare, Send, AlertTriangle,
+  Plus, Search, Wallet, ChevronDown, ChevronUp, Hash, Clock,
+  CheckCircle2, XCircle, Lock, FileText, Cpu, Gamepad2, PaintBucket,
+  Bitcoin, Bell, Scale, History, FileCheck, Info,
 } from "lucide-react";
 import { useApp } from "@/lib/store";
+import {
+  EscrowTx, ProductType, PHASE_LABELS, PRODUCT_TYPE_LABELS, EscrowMessage,
+} from "@/lib/escrow/types";
 
 // ============================================================
-// EscrowMarketplaceView — Responsive + Verificación REAL
+// EscrowMarketplaceView — EscrowBot chat-driven escrow
 // ============================================================
 
-const PRODUCT_TYPES = [
-  { id: "GIFT_CARD", label: "Gift Card", shortLabel: "Gift Card", icon: Gift, color: "text-purple-400", bg: "bg-purple-500/10", border: "border-purple-500/30" },
-  { id: "DIGITAL_PRODUCT", label: "Producto Digital", shortLabel: "Digital", icon: FileText, color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/30" },
-  { id: "SUBSCRIPTION", label: "Suscripción", shortLabel: "Subscr.", icon: Tv, color: "text-cyan-400", bg: "bg-cyan-500/10", border: "border-cyan-500/30" },
-  { id: "GAME_ACCOUNT", label: "Cuenta de Juego", shortLabel: "Juego", icon: Gamepad2, color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/30" },
-];
-
-const CATEGORIES: Record<string, string[]> = {
-  GIFT_CARD: ["Amazon", "Steam", "Google Play", "Apple Store", "Netflix", "Spotify", "PlayStation", "Xbox", "Disney+", "Riot Points", "Free Fire", "Otra"],
-  DIGITAL_PRODUCT: ["Curso", "Ebook", "Software", "Licencia", "Plantilla", "Otra"],
-  SUBSCRIPTION: ["Netflix", "Spotify", "Disney+", "HBO Max", "YouTube Premium", "Crunchyroll", "Otra"],
-  GAME_ACCOUNT: ["Steam", "Epic Games", "Riot (LoL/Valorant)", "PUBG", "Fortnite", "Free Fire", "Otra"],
+const TYPE_ICONS: Record<ProductType, any> = {
+  SOFTWARE: Cpu,
+  CUENTA_DIGITAL: Gamepad2,
+  CONTENIDO_CREATIVO: PaintBucket,
+  CRIPTO: Bitcoin,
+  SERVICIO: Bell,
 };
-
-const STATUS: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  CREATED: { label: "Disponible", color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/30" },
-  FUNDED: { label: "Pagado", color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/30" },
-  DELIVERED: { label: "Entregado", color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/30" },
-  COMPLETED: { label: "Completado", color: "text-cyan-400", bg: "bg-cyan-500/10", border: "border-cyan-500/30" },
-  DISPUTED: { label: "Disputa", color: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/30" },
-  CANCELLED: { label: "Cancelado", color: "text-slate-500", bg: "bg-slate-700/30", border: "border-slate-600/30" },
-};
-
-interface Offer {
-  id: string; type: string; title: string; description: string; category: string;
-  price: number; seller: string; sellerAlias: string; buyer?: string; buyerAlias?: string;
-  status: string; productData?: { code?: string; credentials?: string; link?: string; instructions?: string; };
-  validationStatus: string; validationNote?: string; escrowAmount: number; createdAt: number; updatedAt: number;
-}
-interface Message { id: string; escrowId: string; sender: string; senderAlias: string; text: string; timestamp: number; }
 
 export default function EscrowMarketplaceView() {
   const { user } = useApp();
-  const [tab, setTab] = useState<"explorar" | "crear" | "mis-trades">("explorar");
-  const [offers, setOffers] = useState<Offer[]>([]);
+  const [view, setView] = useState<"list" | "chat">("list");
+  const [txs, setTxs] = useState<EscrowTx[]>([]);
   const [loading, setLoading] = useState(false);
-  const [filterType, setFilterType] = useState("");
-  const [selectedOffer, setSelectedOffer] = useState<Offer | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [messageText, setMessageText] = useState("");
+  const [activeTx, setActiveTx] = useState<EscrowTx | null>(null);
+  const [showNew, setShowNew] = useState(false);
+
+  const wallet = user?.walletAddress || "0xDemo...1234";
+  const alias = user?.alias || "demo_user";
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      let filter = "created";
-      if (tab === "mis-trades") filter = "mine";
-      const params = new URLSearchParams({ filter });
-      if (user) params.set("wallet", user.walletAddress);
-      const res = await fetch(`/api/escrow?${params}`);
+      const res = await fetch(`/api/escrow?wallet=${encodeURIComponent(wallet)}&filter=active`);
       const data = await res.json();
-      setOffers(data.offers || []);
+      setTxs(data.txs || []);
     } catch {}
     setLoading(false);
-  }, [tab, user]);
+  }, [wallet]);
 
   useEffect(() => { load(); }, [load]);
-  const loadMessages = useCallback(async (id: string) => {
-    try { const res = await fetch(`/api/escrow/messages?escrowId=${id}`); const d = await res.json(); setMessages(d.messages || []); } catch {}
-  }, []);
 
-  const sendMessage = async () => {
-    if (!messageText.trim() || !selectedOffer || !user) return;
+  const openTx = async (tx: EscrowTx) => {
+    setActiveTx(tx);
+    setView("chat");
+  };
+
+  const startNew = (type: ProductType) => {
+    setShowNew(false);
+    // Crea TX nueva con slash command
+    sendCommand(`/nueva_transaccion ${type}`, null);
+  };
+
+  const sendCommand = async (text: string, txId: string | null) => {
     try {
-      await fetch("/api/escrow/messages", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ escrowId: selectedOffer.id, sender: user.walletAddress, senderAlias: user.alias, text: messageText }) });
-      setMessageText(""); loadMessages(selectedOffer.id);
-    } catch {}
-  };
-
-  const handleAction = async (action: string, id: string, extra?: any) => {
-    try {
-      const res = await fetch("/api/escrow", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, offerId: id, seller: user?.walletAddress, buyer: user?.walletAddress, wallet: user?.walletAddress, sellerAlias: user?.alias, buyerAlias: user?.alias, ...extra }) });
-      const d = await res.json();
-      if (d.success) { load(); if (selectedOffer) setSelectedOffer(d.offer); }
-    } catch {}
-  };
-
-  const stats = {
-    active: offers.filter(o => o.status === "CREATED").length,
-    escrow: offers.filter(o => ["FUNDED", "DELIVERED"].includes(o.status)).length,
-    done: offers.filter(o => o.status === "COMPLETED").length,
-    disputed: offers.filter(o => o.status === "DISPUTED").length,
+      const res = await fetch("/api/escrow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "command",
+          wallet,
+          alias,
+          txId,
+          text,
+        }),
+      });
+      const data = await res.json();
+      if (data.ok && data.tx) {
+        setActiveTx(data.tx);
+        setView("chat");
+        // Recargar lista
+        load();
+      }
+      return data;
+    } catch (e) {
+      return { ok: false, error: "Error de red" };
+    }
   };
 
   return (
-    <div className="space-y-3 sm:space-y-4 text-slate-100">
-      {/* HEADER */}
-      <div>
-        <h2 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
-          <Shield className="w-5 h-5 sm:w-6 sm:h-6 text-amber-400" />
-          Escrow Digital
-        </h2>
-        <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-3xl">
-          Compra y vende gift cards, productos digitales, suscripciones y cuentas de juego con protección de escrow y verificación real.
-        </p>
-      </div>
-
-      {/* STATS — responsive grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-        <StatCard label="Disponibles" value={stats.active} icon={Package} color="text-emerald-400" />
-        <StatCard label="En escrow" value={stats.escrow} icon={Lock} color="text-amber-400" />
-        <StatCard label="Completados" value={stats.done} icon={Check} color="text-cyan-400" />
-        <StatCard label="Disputas" value={stats.disputed} icon={AlertTriangle} color="text-red-400" />
-      </div>
-
-      {/* SUB-TABS */}
-      <div className="flex gap-1 bg-slate-900 border border-slate-800 rounded-xl p-1 max-w-lg">
-        {[
-          { id: "explorar", label: "Explorar", icon: Search },
-          { id: "crear", label: "Crear oferta", icon: Plus },
-          { id: "mis-trades", label: "Mis trades", icon: ArrowLeftRight },
-        ].map((s) => {
-          const Icon = s.icon;
-          return (
-            <button key={s.id} onClick={() => { setTab(s.id as never); setSelectedOffer(null); }}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-2 sm:px-3 py-2 text-[11px] sm:text-xs font-medium rounded-lg transition ${tab === s.id ? "bg-amber-500 text-black" : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"}`}>
-              <Icon className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">{s.label}</span>
-              <span className="sm:hidden">{s.label.split(" ")[0]}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* FILTROS */}
-      {tab === "explorar" && (
-        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-          <button onClick={() => setFilterType("")} className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs transition ${!filterType ? "bg-amber-500 text-black font-medium" : "bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700"}`}>Todos</button>
-          {PRODUCT_TYPES.map((t) => {
-            const Icon = t.icon;
-            return (
-              <button key={t.id} onClick={() => setFilterType(t.id)} className={`flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs transition ${filterType === t.id ? "bg-amber-500 text-black font-medium" : "bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700"}`}>
-                <Icon className={`w-3 h-3 ${filterType === t.id ? "text-black" : t.color}`} />
-                <span className="hidden sm:inline">{t.label}</span>
-                <span className="sm:hidden">{t.shortLabel}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* LOADING */}
-      {loading && <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-amber-400" /></div>}
-
-      {/* EXPLORAR */}
-      {tab === "explorar" && !loading && (
-        offers.length === 0 ? (
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 sm:p-12 text-center">
-            <Package className="w-10 h-10 mx-auto text-slate-700 mb-3" />
-            <p className="text-sm text-slate-400 font-medium">No hay ofertas disponibles</p>
-            <button onClick={() => setTab("crear")} className="mt-4 flex items-center gap-1.5 text-xs px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black rounded-lg transition font-semibold mx-auto"><Plus className="w-3.5 h-3.5" /> Crear oferta</button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
-            {offers.map((o) => <OfferCard key={o.id} offer={o} user={user} onAction={handleAction} />)}
-          </div>
-        )
-      )}
-
-      {/* CREAR */}
-      {tab === "crear" && <CreateOfferForm user={user} onCreated={() => { setTab("explorar"); load(); }} />}
-
-      {/* MIS TRADES */}
-      {tab === "mis-trades" && !loading && (
-        offers.length === 0 ? (
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 sm:p-12 text-center">
-            <ArrowLeftRight className="w-10 h-10 mx-auto text-slate-700 mb-3" />
-            <p className="text-sm text-slate-400 font-medium">No tienes trades activos</p>
-          </div>
-        ) : (
-          <div className="space-y-3">{offers.map((o) => <TradeDetailCard key={o.id} offer={o} user={user} onAction={handleAction} messages={messages} onSendMessage={sendMessage} messageText={messageText} setMessageText={setMessageText} onLoadMessages={loadMessages} onSelect={setSelectedOffer} />)}</div>
-        )
-      )}
-    </div>
-  );
-}
-
-function StatCard({ label, value, icon: Icon, color }: { label: string; value: number; icon: any; color: string }) {
-  return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-2.5 sm:p-3 flex items-center gap-2.5 sm:gap-3">
-      <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-slate-800 flex items-center justify-center ${color}`}><Icon className="w-4 h-4" /></div>
-      <div>
-        <div className="text-[9px] sm:text-[10px] text-slate-500 uppercase tracking-wide">{label}</div>
-        <div className={`text-lg sm:text-xl font-bold ${color}`}>{value}</div>
-      </div>
-    </div>
-  );
-}
-
-function OfferCard({ offer, user, onAction }: { offer: Offer; user: any; onAction: (a: string, id: string, e?: any) => void }) {
-  const tc = PRODUCT_TYPES.find(t => t.id === offer.type) || PRODUCT_TYPES[0];
-  const Icon = tc.icon;
-  const st = STATUS[offer.status] || STATUS.CREATED;
-  return (
-    <div className={`bg-slate-900 border ${tc.border} rounded-xl p-3 sm:p-4 hover:border-opacity-60 transition`}>
-      <div className="flex items-start justify-between gap-2 mb-2 sm:mb-3">
-        <div className="flex items-center gap-2 sm:gap-3">
-          <div className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl ${tc.bg} flex items-center justify-center shrink-0`}><Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${tc.color}`} /></div>
-          <div className="min-w-0">
-            <h3 className="text-xs sm:text-sm font-bold text-white leading-tight truncate">{offer.title}</h3>
-            <p className="text-[10px] text-slate-500 mt-0.5">{offer.category} · {tc.shortLabel}</p>
-          </div>
-        </div>
-        <span className={`text-[8px] sm:text-[9px] px-1.5 sm:px-2 py-0.5 rounded border ${st.bg} ${st.border} ${st.color} font-medium shrink-0`}>{st.label}</span>
-      </div>
-      <p className="text-[11px] sm:text-xs text-slate-400 mb-2 sm:mb-3 line-clamp-2">{offer.description}</p>
-      <div className="flex items-center justify-between mb-2 sm:mb-3">
-        <div className="flex items-center gap-1.5 text-[11px] sm:text-xs">
-          <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-gradient-to-br from-slate-600 to-slate-700 flex items-center justify-center text-[9px] sm:text-[10px] text-white font-bold">{offer.sellerAlias.slice(0, 2).toUpperCase()}</div>
-          <span className="text-slate-400 truncate">@{offer.sellerAlias}</span>
-        </div>
-        <div className="flex items-center gap-1"><Coins className="w-3.5 h-3.5 text-amber-400" /><span className="text-amber-400 font-bold text-sm sm:text-base">{offer.price}</span><span className="text-[10px] text-slate-500">USDT</span></div>
-      </div>
-      {offer.status === "CREATED" && user && offer.seller !== user.walletAddress && (
-        <button onClick={() => onAction("fund", offer.id)} className="w-full flex items-center justify-center gap-1.5 text-[11px] sm:text-xs px-3 py-2 sm:py-2.5 bg-amber-500 hover:bg-amber-400 text-black rounded-lg transition font-bold"><Lock className="w-3.5 h-3.5" /> Comprar · {offer.price} USDT</button>
-      )}
-      {offer.status === "CREATED" && user && offer.seller === user.walletAddress && (
-        <button onClick={() => onAction("cancel", offer.id)} className="w-full text-[11px] sm:text-xs px-3 py-2 bg-slate-800 hover:bg-red-900/30 text-slate-400 hover:text-red-400 rounded-lg transition">Cancelar</button>
-      )}
-      {!user && <p className="text-[11px] text-slate-500 text-center py-2">Conecta tu wallet</p>}
-    </div>
-  );
-}
-
-function CreateOfferForm({ user, onCreated }: { user: any; onCreated: () => void }) {
-  const [type, setType] = useState("GIFT_CARD");
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [category, setCategory] = useState("");
-  const [price, setPrice] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [error, setError] = useState("");
-  const categories = CATEGORIES[type] || [];
-
-  const handleSubmit = async () => {
-    if (!user) { setError("Conecta tu wallet"); return; }
-    if (!title || !description || !category || !price) { setError("Completa todos los campos"); return; }
-    if (parseFloat(price) <= 0) { setError("Precio inválido"); return; }
-    setCreating(true); setError("");
-    try {
-      const res = await fetch("/api/escrow", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "create", type, title, description, category, price, seller: user.walletAddress, sellerAlias: user.alias }) });
-      const d = await res.json();
-      if (d.success) { setTitle(""); setDescription(""); setCategory(""); setPrice(""); onCreated(); } else setError(d.error || "Error");
-    } catch (e) { setError((e as Error).message); }
-    setCreating(false);
-  };
-
-  if (!user) {
-    // Mostrar formulario igual pero con banner arriba pidiendo wallet
-    return (
-      <div className="space-y-3">
-        <div className="bg-amber-950/30 border border-amber-700/40 rounded-xl p-3 flex items-center gap-3 flex-wrap">
-          <Lock className="w-5 h-5 text-amber-400 shrink-0" />
-          <p className="text-xs text-amber-300 flex-1 min-w-0">Necesitas conectar tu wallet para publicar la oferta. Puedes llenar el formulario ahora y conectar al final.</p>
-          <button onClick={() => window.dispatchEvent(new CustomEvent("open-onboarding"))} className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black rounded-lg transition font-semibold shrink-0"><Wallet className="w-3.5 h-3.5" /> Conectar wallet</button>
-        </div>
-        <CreateOfferFormContent type={type} setType={setType} title={title} setTitle={setTitle} description={description} setDescription={setDescription} category={category} setCategory={setCategory} price={price} setPrice={setPrice} categories={categories} creating={creating} error={error} onSubmit={handleSubmit} disabled={true} submitLabel="Conectar wallet para publicar" />
-      </div>
-    );
-  }
-
-  return <CreateOfferFormContent type={type} setType={setType} title={title} setTitle={setTitle} description={description} setDescription={setDescription} category={category} setCategory={setCategory} price={price} setPrice={setPrice} categories={categories} creating={creating} error={error} onSubmit={handleSubmit} disabled={false} submitLabel="Publicar oferta" />;
-}
-
-// ============================================================
-// FORM CONTENT — Contenido del formulario (reutilizable)
-// ============================================================
-function CreateOfferFormContent({ type, setType, title, setTitle, description, setDescription, category, setCategory, price, setPrice, categories, creating, error, onSubmit, disabled, submitLabel }: any) {
-  return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 sm:p-6 w-full max-w-2xl">
-      <h3 className="text-base font-bold text-white mb-4 sm:mb-5 flex items-center gap-2"><Plus className="w-4 h-4 text-amber-400" /> Nueva oferta de escrow</h3>
-      <div className="space-y-3 sm:space-y-4">
-        {/* Tipo */}
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <label className="text-[11px] text-slate-400 uppercase tracking-wide font-semibold">Tipo de producto</label>
-          <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {PRODUCT_TYPES.map((t) => {
-              const Icon = t.icon; const active = type === t.id;
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-100 flex items-center gap-2">
+            <Shield className="w-6 h-6 text-emerald-400" /> EscrowBot P2P
+          </h1>
+          <p className="text-sm text-slate-400 mt-1">
+            Custodia neutral para transacciones P2P de productos digitales. Mensajería inmutable y verificación técnica por tipo de producto.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={load}
+            className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-400 transition"
+            title="Refrescar"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setShowNew(!showNew)}
+            className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium flex items-center gap-1.5 transition"
+          >
+            <Plus className="w-4 h-4" /> Nueva transacción
+          </button>
+        </div>
+      </div>
+
+      {/* New TX picker */}
+      {showNew && (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <div className="text-xs text-slate-400 uppercase tracking-wide font-semibold mb-3">
+            ¿Qué tipo de producto vas a escrow?
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {(Object.keys(PRODUCT_TYPE_LABELS) as ProductType[]).map(t => {
+              const Icon = TYPE_ICONS[t];
               return (
-                <button key={t.id} onClick={() => { setType(t.id); setCategory(""); }} className={`flex flex-col items-center gap-1 px-2 py-2.5 sm:px-3 sm:py-3 rounded-xl border transition ${active ? `${t.bg} ${t.border}` : "bg-slate-800 border-slate-700 hover:border-slate-600"}`}>
-                  <Icon className={`w-4 h-4 sm:w-5 sm:h-5 ${active ? t.color : "text-slate-500"}`} />
-                  <span className={`text-[9px] sm:text-[10px] font-medium ${active ? t.color : "text-slate-400"}`}>{t.label}</span>
+                <button
+                  key={t}
+                  onClick={() => startNew(t)}
+                  className="text-left p-3 bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 hover:border-slate-600 transition"
+                >
+                  <Icon className="w-5 h-5 text-emerald-400 mb-1" />
+                  <div className="text-xs font-bold text-slate-100">
+                    {PRODUCT_TYPE_LABELS[t].emoji} {PRODUCT_TYPE_LABELS[t].label.split("(")[0].trim()}
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">
+                    {PRODUCT_TYPE_LABELS[t].label.split("(")[1]?.replace(")", "") || ""}
+                  </div>
                 </button>
               );
             })}
           </div>
         </div>
-        {/* Categoría */}
-        <div>
-          <label className="text-[11px] text-slate-400 uppercase tracking-wide font-semibold">Categoría</label>
-          <select value={category} onChange={(e) => setCategory(e.target.value)} className="mt-2 w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-sm focus:outline-none focus:border-amber-500 transition">
-            <option value="">Selecciona...</option>
-            {categories.map((c: string) => <option key={c} value={c} className="bg-slate-900">{c}</option>)}
-          </select>
+      )}
+
+      {/* Body */}
+      {view === "list" && (
+        <ListView
+          txs={txs}
+          loading={loading}
+          wallet={wallet}
+          onOpen={openTx}
+          onJoin={(code) => sendCommand(`/unirse ${code}`, null)}
+        />
+      )}
+
+      {view === "chat" && activeTx && (
+        <ChatView
+          tx={activeTx}
+          wallet={wallet}
+          alias={alias}
+          onBack={() => { setView("list"); setActiveTx(null); }}
+          onCommand={(text) => sendCommand(text, activeTx.id)}
+          onRefresh={async () => {
+            // Refrescar tx activo
+            const res = await fetch("/api/escrow", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "get", txId: activeTx.id, wallet }),
+            });
+            const data = await res.json();
+            if (data.tx) setActiveTx(data.tx);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// LIST VIEW
+// ============================================================
+function ListView({
+  txs, loading, wallet, onOpen, onJoin,
+}: {
+  txs: EscrowTx[];
+  loading: boolean;
+  wallet: string;
+  onOpen: (tx: EscrowTx) => void;
+  onJoin: (code: string) => void;
+}) {
+  const [joinCode, setJoinCode] = useState("");
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center py-12">
+        <Loader2 className="w-6 h-6 animate-spin text-emerald-400 mb-2" />
+        <p className="text-xs text-slate-400">Cargando transacciones…</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Join existing TX */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div className="text-xs text-slate-400 uppercase tracking-wide font-semibold mb-2">
+          ¿Tienes un código de transacción?
         </div>
-        {/* Título */}
-        <div>
-          <label className="text-[11px] text-slate-400 uppercase tracking-wide font-semibold">Título</label>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={`Ej: Gift Card ${categories[0] || ""} $50...`} className="mt-2 w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-sm focus:outline-none focus:border-amber-500 transition" />
+        <div className="flex items-center gap-2">
+          <input
+            value={joinCode}
+            onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+            placeholder="ESC-2025-12345"
+            className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-sm font-mono focus:outline-none focus:border-emerald-500"
+          />
+          <button
+            onClick={() => { if (joinCode) { onJoin(joinCode); setJoinCode(""); } }}
+            className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-xs font-medium transition"
+          >
+            Unirse
+          </button>
         </div>
-        {/* Descripción */}
-        <div>
-          <label className="text-[11px] text-slate-400 uppercase tracking-wide font-semibold">Descripción</label>
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe: saldo, región, validez, condiciones..." rows={3} className="mt-2 w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-sm focus:outline-none focus:border-amber-500 transition resize-none" />
+        <p className="mt-2 text-[10px] text-slate-500">
+          Si un comprador te compartió un código, ingrésalo aquí para unirte como vendedor.
+        </p>
+      </div>
+
+      {/* TX list */}
+      {txs.length === 0 ? (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 text-center">
+          <Shield className="w-10 h-10 mx-auto text-slate-700 mb-2" />
+          <p className="text-sm text-slate-400">No tienes transacciones activas.</p>
+          <p className="text-xs text-slate-500 mt-1">Crea una nueva con el botón de arriba.</p>
         </div>
-        {/* Precio */}
-        <div>
-          <label className="text-[11px] text-slate-400 uppercase tracking-wide font-semibold">Precio (USDT)</label>
-          <div className="mt-2 relative">
-            <Coins className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-400" />
-            <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="50" className="w-full pl-10 pr-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-sm focus:outline-none focus:border-amber-500 transition" />
+      ) : (
+        <div className="space-y-2">
+          {txs.map(tx => {
+            const Icon = TYPE_ICONS[tx.productType];
+            const role = tx.buyer === wallet ? "Comprador" : "Vendedor";
+            const phase = PHASE_LABELS[tx.phase];
+            return (
+              <button
+                key={tx.id}
+                onClick={() => onOpen(tx)}
+                className="w-full text-left p-4 bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-xl transition"
+              >
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center shrink-0">
+                      <Icon className="w-5 h-5 text-emerald-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-bold text-slate-100 font-mono">{tx.id}</span>
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded border ${phase.color}`}>
+                          {phase.label}
+                        </span>
+                        <span className="text-[10px] text-slate-500">· {role}</span>
+                      </div>
+                      <div className="text-xs text-slate-400 mt-0.5 truncate">
+                        {tx.title || PRODUCT_TYPE_LABELS[tx.productType].label.split("(")[0].trim()} · {tx.amount || 0} USDT
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="text-[10px] text-slate-500">Actualizado</div>
+                    <div className="text-[11px] text-slate-400">
+                      {new Date(tx.updatedAt).toLocaleDateString()} {new Date(tx.updatedAt).toLocaleTimeString().slice(0, 5)}
+                    </div>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// CHAT VIEW — Command-driven escrow conversation
+// ============================================================
+function ChatView({
+  tx, wallet, alias, onBack, onCommand, onRefresh,
+}: {
+  tx: EscrowTx;
+  wallet: string;
+  alias: string;
+  onBack: () => void;
+  onCommand: (text: string) => Promise<any>;
+  onRefresh: () => Promise<void>;
+}) {
+  const [messages, setMessages] = useState<EscrowMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [showContract, setShowContract] = useState(false);
+  const [showChecklist, setShowChecklist] = useState(false);
+  const [integrityOk, setIntegrityOk] = useState(true);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const loadMsgs = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/escrow/messages?escrowId=${tx.id}`);
+      const d = await res.json();
+      setMessages(d.messages || []);
+      setIntegrityOk(d.integrity?.ok !== false);
+    } catch {}
+  }, [tx.id]);
+
+  useEffect(() => { loadMsgs(); }, [loadMsgs]);
+  useEffect(() => {
+    const i = setInterval(loadMsgs, 5000);
+    return () => clearInterval(i);
+  }, [loadMsgs]);
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages]);
+
+  const send = async () => {
+    if (!input.trim()) return;
+    const text = input.trim();
+    setInput("");
+    setLoading(true);
+
+    if (text.startsWith("/")) {
+      const result = await onCommand(text);
+      if (!result.ok && result.error) {
+        // Mostrar error como mensaje local
+        setMessages(prev => [...prev, {
+          id: `local_${Date.now()}`,
+          escrowId: tx.id,
+          sender: "ESCROW_BOT",
+          senderAlias: "EscrowBot",
+          senderRole: "BOT",
+          text: `⚠️ ${result.error}`,
+          ts: Date.now(),
+          hash: "—",
+          immutable: true,
+          tag: "SISTEMA",
+        }]);
+      }
+      await loadMsgs();
+      await onRefresh();
+    } else {
+      // Mensaje libre
+      try {
+        const res = await fetch("/api/escrow", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "message",
+            wallet,
+            alias,
+            txId: tx.id,
+            text,
+          }),
+        });
+        const data = await res.json();
+        if (data.warning) {
+          // Bot warning se carga solo con reload
+        }
+        await loadMsgs();
+        await onRefresh();
+      } catch {}
+    }
+    setLoading(false);
+  };
+
+  const role = tx.buyer === wallet ? "Comprador" : tx.seller === wallet ? "Vendedor" : "Observador";
+  const phase = PHASE_LABELS[tx.phase];
+  const immutable = tx.phase !== "NEGOCIANDO";
+
+  return (
+    <div className="space-y-3">
+      {/* Top bar */}
+      <div className="flex items-center justify-between gap-2 flex-wrap bg-slate-900 border border-slate-800 rounded-xl p-3">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onBack}
+            className="text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1"
+          >
+            ← Volver
+          </button>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-bold text-slate-100 font-mono">{tx.id}</span>
+              <span className={`text-[9px] px-1.5 py-0.5 rounded border ${phase.color}`}>{phase.label}</span>
+              <span className="text-[10px] text-slate-500">· {role}</span>
+            </div>
+            <div className="text-[10px] text-slate-500 mt-0.5">
+              {PRODUCT_TYPE_LABELS[tx.productType].emoji} {PRODUCT_TYPE_LABELS[tx.productType].label.split("(")[0].trim()} · {tx.amount || 0} USDT
+            </div>
           </div>
-          {price && parseFloat(price) > 0 && (
-            <div className="mt-2 flex items-center gap-2 sm:gap-3 text-[11px] flex-wrap">
-              <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1.5 rounded-lg"><span className="text-slate-500">Comisión (2%):</span><b className="text-amber-400">{(parseFloat(price) * 0.02).toFixed(2)} USDT</b></div>
-              <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1.5 rounded-lg"><span className="text-slate-500">Recibes:</span><b className="text-emerald-400">{(parseFloat(price) * 0.98).toFixed(2)} USDT</b></div>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setShowContract(!showContract)}
+            className={`p-1.5 rounded transition ${showContract ? "bg-slate-700 text-slate-200" : "bg-slate-800 text-slate-400 hover:bg-slate-700"}`}
+            title="Contrato"
+          ><FileText className="w-3.5 h-3.5" /></button>
+          <button
+            onClick={() => setShowChecklist(!showChecklist)}
+            className={`p-1.5 rounded transition ${showChecklist ? "bg-slate-700 text-slate-200" : "bg-slate-800 text-slate-400 hover:bg-slate-700"}`}
+            title="Checklist"
+          ><FileCheck className="w-3.5 h-3.5" /></button>
+          <button
+            onClick={() => onCommand("/estado")}
+            className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-400 transition"
+            title="Estado"
+          ><Info className="w-3.5 h-3.5" /></button>
+          <button
+            onClick={() => onCommand("/historial")}
+            className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-400 transition"
+            title="Historial"
+          ><History className="w-3.5 h-3.5" /></button>
+          <button
+            onClick={() => { loadMsgs(); onRefresh(); }}
+            className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-400 transition"
+            title="Refrescar"
+          ><RefreshCw className="w-3.5 h-3.5" /></button>
+        </div>
+      </div>
+
+      {/* Immutable banner */}
+      {immutable && (
+        <div className="bg-amber-950/20 border border-amber-700/30 rounded-lg p-2 text-[11px] text-amber-300 flex items-center gap-2">
+          <Lock className="w-3 h-3 shrink-0" />
+          <span>Mensajería inmutable activa. Cada mensaje tiene hash criptográfico y es evidencia legal en disputas.</span>
+          {!integrityOk && <span className="ml-auto text-rose-400 font-bold">⚠ Integridad comprometida</span>}
+          {integrityOk && <span className="ml-auto text-emerald-400/70">✓ Cadena verificada</span>}
+        </div>
+      )}
+
+      {/* Contract panel */}
+      {showContract && (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="text-xs font-bold text-slate-100 flex items-center gap-1.5">
+              <FileText className="w-3.5 h-3.5 text-emerald-400" /> Contrato
+            </div>
+            <button onClick={() => setShowContract(false)} className="text-slate-500 hover:text-slate-300"><ChevronUp className="w-3.5 h-3.5" /></button>
+          </div>
+          <div className="text-[11px] text-slate-300">
+            <div className="grid grid-cols-2 gap-2 mb-2">
+              <div><span className="text-slate-500">Comprador:</span> {tx.buyerAlias || "—"}</div>
+              <div><span className="text-slate-500">Vendedor:</span> {tx.sellerAlias || "—"}</div>
+              <div><span className="text-slate-500">Monto:</span> {tx.amount} {tx.currency}</div>
+              <div><span className="text-slate-500">Comisión:</span> {tx.commissionPct}%</div>
+            </div>
+            <div className="text-slate-500 uppercase text-[9px] mb-1">Acuerdo mutuo</div>
+            <div className="bg-slate-950/50 p-2 rounded text-slate-200 text-xs">
+              {tx.agreement || "(sin acuerdo fijado aún — usa /acuerdo \"texto\" para fijarlo)"}
+            </div>
+          </div>
+          <button
+            onClick={() => onCommand("/contrato")}
+            className="text-[11px] text-emerald-400 hover:text-emerald-300"
+          >Ver contrato completo en chat →</button>
+        </div>
+      )}
+
+      {/* Checklist panel */}
+      {showChecklist && (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="text-xs font-bold text-slate-100 flex items-center gap-1.5">
+              <FileCheck className="w-3.5 h-3.5 text-emerald-400" /> Checklist de verificación
+            </div>
+            <button onClick={() => setShowChecklist(false)} className="text-slate-500 hover:text-slate-300"><ChevronUp className="w-3.5 h-3.5" /></button>
+          </div>
+          <div className="space-y-1">
+            {tx.checklist.map(item => (
+              <button
+                key={item.id}
+                onClick={() => onCommand(`/checklist ${item.id}`)}
+                className={`w-full text-left flex items-center gap-2 p-2 rounded text-xs transition ${
+                  item.done
+                    ? "bg-emerald-950/30 text-emerald-300"
+                    : "bg-slate-800/50 text-slate-300 hover:bg-slate-800"
+                }`}
+              >
+                {item.done ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <XCircle className="w-3.5 h-3.5 text-slate-600" />}
+                <span className="flex-1">{item.label}</span>
+                <span className="text-[9px] text-slate-500 font-mono">{item.id}</span>
+              </button>
+            ))}
+          </div>
+          <div className="text-[10px] text-slate-500 pt-1">
+            Click en cada item para marcarlo/desmarcarlo. Solo el comprador puede marcar.
+          </div>
+        </div>
+      )}
+
+      {/* Messages */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl flex flex-col" style={{ height: "60vh", minHeight: "400px" }}>
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-2">
+          {messages.length === 0 && (
+            <div className="text-center py-8">
+              <MessageSquare className="w-8 h-8 mx-auto text-slate-700 mb-2" />
+              <p className="text-xs text-slate-500">No hay mensajes todavía.</p>
+              <p className="text-[10px] text-slate-600 mt-1">Empieza con /ayuda para ver comandos.</p>
             </div>
           )}
+          {messages.map(m => (
+            <MessageBubble key={m.id} m={m} wallet={wallet} />
+          ))}
         </div>
-        {/* Tiempo inspección */}
-        <div>
-          <label className="text-[11px] text-slate-400 uppercase tracking-wide font-semibold">Tiempo de inspección</label>
-          <select defaultValue="24h" className="mt-2 w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-sm focus:outline-none focus:border-amber-500 transition">
-            <option value="1h" className="bg-slate-900">1 hora</option>
-            <option value="6h" className="bg-slate-900">6 horas</option>
-            <option value="12h" className="bg-slate-900">12 horas</option>
-            <option value="24h" className="bg-slate-900">24 horas (recomendado)</option>
-            <option value="48h" className="bg-slate-900">48 horas</option>
-            <option value="7d" className="bg-slate-900">7 días</option>
-          </select>
-          <p className="text-[10px] text-slate-500 mt-1">Tiempo del comprador para verificar antes de liberar fondos.</p>
+
+        {/* Quick commands */}
+        <div className="border-t border-slate-800 p-2 flex items-center gap-1 overflow-x-auto scrollbar-hide">
+          <QuickCmd label="Estado" cmd="/estado" onClick={onCommand} />
+          <QuickCmd label="Tiempo" cmd="/tiempo_restante" onClick={onCommand} />
+          <QuickCmd label="Contrato" cmd="/contrato" onClick={onCommand} />
+          <QuickCmd label="Historial" cmd="/historial" onClick={onCommand} />
+          <QuickCmd label="Ayuda" cmd="/ayuda" onClick={onCommand} />
+          {tx.phase === "NEGOCIANDO" && tx.seller && (
+            <QuickCmd label="Acuerdo" cmd='/acuerdo "Acuerdo mutuo: producto X por Y USDT, entrega por chat"' onClick={onCommand} />
+          )}
+          {tx.phase === "NEGOCIANDO" && tx.agreement && tx.buyer === wallet && (
+            <QuickCmd label="Bloquear" cmd={`/bloquear ${tx.amount || 100}`} onClick={onCommand} />
+          )}
+          {tx.phase === "FONDOS_BLOQUEADOS" && tx.seller === wallet && (
+            <QuickCmd label="Entregar" cmd='/entregar "Producto entregado según acuerdo"' onClick={onCommand} />
+          )}
+          {tx.phase === "EN_VERIFICACION" && (
+            <QuickCmd label="Liberar" cmd="/liberar" onClick={onCommand} />
+          )}
+          {tx.phase === "EN_VERIFICACION" && (
+            <QuickCmd label="Disputar" cmd='/disputar "Motivo de la disputa"' onClick={onCommand} />
+          )}
         </div>
-        {/* Términos */}
-        <div className="flex items-start gap-2 bg-slate-950/50 border border-slate-700/50 rounded-lg p-3">
-          <input type="checkbox" defaultChecked className="mt-0.5 accent-amber-500" />
-          <p className="text-[11px] text-slate-400">Acepto los <b className="text-slate-300">términos del escrow</b>: fondos retenidos hasta confirmación. Comisión 2% al liberar. Disputas con arbitraje.</p>
+
+        {/* Input */}
+        <div className="border-t border-slate-800 p-2 flex items-center gap-2">
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && !loading) send(); }}
+            placeholder={immutable ? "Mensaje (inmutable) o /comando…" : "Mensaje o /comando…"}
+            className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 text-sm font-mono focus:outline-none focus:border-emerald-500"
+          />
+          <button
+            onClick={send}
+            disabled={loading || !input.trim()}
+            className="p-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg transition"
+          >
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+          </button>
         </div>
-        {error && <div className="text-xs text-red-400 bg-red-950/30 border border-red-800/50 p-2.5 rounded-lg">{error}</div>}
-        <button onClick={onSubmit} disabled={creating || disabled} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-amber-500 hover:bg-amber-400 text-black rounded-lg transition font-bold disabled:opacity-50">
-          {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : disabled ? <Lock className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-          {creating ? "Publicando..." : submitLabel}
-        </button>
-        <div className="bg-slate-950/50 border border-slate-700/50 rounded-lg p-3 text-[11px] text-slate-400 flex items-start gap-2">
-          <Shield className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
-          <span><b className="text-slate-300">Cómo funciona:</b> Comprador paga USDT (retenido). Tú entregas el producto. Sistema verifica el formato del código/credenciales. Comprador confirma. Fondos liberados a tu wallet.</span>
+      </div>
+
+      {/* Command help */}
+      <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-3">
+        <div className="text-[10px] uppercase text-slate-500 font-semibold mb-1">Comandos rápidos</div>
+        <div className="text-[11px] text-slate-400 leading-relaxed">
+          <span className="font-mono text-emerald-400">/nueva_transaccion</span> ·{" "}
+          <span className="font-mono text-emerald-400">/unirse</span> ·{" "}
+          <span className="font-mono text-emerald-400">/acuerdo</span> ·{" "}
+          <span className="font-mono text-emerald-400">/bloquear</span> ·{" "}
+          <span className="font-mono text-emerald-400">/entregar</span> ·{" "}
+          <span className="font-mono text-emerald-400">/checklist</span> ·{" "}
+          <span className="font-mono text-emerald-400">/liberar</span> ·{" "}
+          <span className="font-mono text-emerald-400">/disputar</span> ·{" "}
+          <span className="font-mono text-emerald-400">/evidencia_disputa</span> ·{" "}
+          <span className="font-mono text-emerald-400">/acuerdo_parcial</span> ·{" "}
+          <span className="font-mono text-emerald-400">/aceptar_resolucion</span> ·{" "}
+          <span className="font-mono text-emerald-400">/cancelar_mutuo</span> ·{" "}
+          <span className="font-mono text-emerald-400">/estado</span> ·{" "}
+          <span className="font-mono text-emerald-400">/tiempo_restante</span> ·{" "}
+          <span className="font-mono text-emerald-400">/contrato</span> ·{" "}
+          <span className="font-mono text-emerald-400">/historial</span> ·{" "}
+          <span className="font-mono text-emerald-400">/ayuda</span>
         </div>
       </div>
     </div>
   );
 }
 
-function TradeDetailCard({ offer, user, onAction, messages, onSendMessage, messageText, setMessageText, onLoadMessages, onSelect }: any) {
-  const tc = PRODUCT_TYPES.find(t => t.id === offer.type) || PRODUCT_TYPES[0];
-  const Icon = tc.icon;
-  const st = STATUS[offer.status] || STATUS.CREATED;
-  const isSeller = user?.walletAddress === offer.seller;
-  const isBuyer = user?.walletAddress === offer.buyer;
-  const canDeliver = isSeller && offer.status === "FUNDED";
-  const canConfirm = isBuyer && offer.status === "DELIVERED";
-  const canDispute = (isSeller || isBuyer) && ["FUNDED", "DELIVERED"].includes(offer.status);
-  const [showDeliver, setShowDeliver] = useState(false);
-  const [code, setCode] = useState("");
-  const [credentials, setCredentials] = useState("");
-  const [link, setLink] = useState("");
-  const [instructions, setInstructions] = useState("");
-  const [verifying, setVerifying] = useState(false);
-  const [verifyResult, setVerifyResult] = useState<any>(null);
+function MessageBubble({ m, wallet }: { m: EscrowMessage; wallet: string }) {
+  const isBot = m.senderRole === "BOT";
+  const isMine = m.sender === wallet;
+  const time = new Date(m.ts).toLocaleTimeString().slice(0, 8);
+  const isMultiline = m.text.includes("\n");
 
-  const verify = async () => {
-    setVerifying(true); setVerifyResult(null);
-    try {
-      const res = await fetch("/api/escrow/verify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: offer.type, category: offer.category, code, credentials, link }) });
-      const d = await res.json();
-      setVerifyResult(d);
-    } catch { setVerifyResult({ valid: false, status: "INVALID", message: "Error al verificar" }); }
-    setVerifying(false);
-  };
-
-  const deliver = async () => {
-    onAction("deliver", offer.id, { code, credentials, link, instructions });
-    setShowDeliver(false);
-  };
-
-  return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-      <div className="bg-black px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2 sm:gap-3">
-          <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg ${tc.bg} flex items-center justify-center`}><Icon className={`w-4 h-4 ${tc.color}`} /></div>
-          <div><h3 className="text-xs sm:text-sm font-bold text-white">{offer.title}</h3><p className="text-[10px] text-slate-500">{offer.category} · {offer.price} USDT</p></div>
+  if (isBot) {
+    return (
+      <div className="flex items-start gap-2 max-w-[95%]">
+        <div className="w-7 h-7 rounded-full bg-emerald-600/20 border border-emerald-600/40 flex items-center justify-center shrink-0 mt-1">
+          <Shield className="w-3.5 h-3.5 text-emerald-400" />
         </div>
-        <span className={`text-[9px] px-2 py-0.5 rounded border ${st.bg} ${st.border} ${st.color} font-medium`}>{st.label}</span>
-      </div>
-      <div className="p-3 sm:p-4 space-y-3">
-        <p className="text-xs text-slate-400">{offer.description}</p>
-        <div className="grid grid-cols-2 gap-2 sm:gap-3">
-          <div className="bg-slate-950/50 rounded-lg p-2 sm:p-2.5">
-            <div className="text-[10px] text-slate-500 uppercase mb-1 flex items-center gap-1"><User className="w-3 h-3" /> Vendedor</div>
-            <div className="text-slate-200 text-xs font-medium">@{offer.sellerAlias}</div>
-            <div className="text-[10px] text-slate-600 font-mono mt-0.5">{offer.seller.slice(0, 8)}...{offer.seller.slice(-4)}</div>
+        <div className="flex-1 min-w-0">
+          <div className="bg-slate-800/60 border border-slate-700/50 rounded-lg p-2.5">
+            {isMultiline ? (
+              <pre className="text-[11px] text-slate-200 font-mono whitespace-pre-wrap leading-relaxed">{m.text}</pre>
+            ) : (
+              <p className="text-xs text-slate-200">{m.text}</p>
+            )}
           </div>
-          <div className="bg-slate-950/50 rounded-lg p-2 sm:p-2.5">
-            <div className="text-[10px] text-slate-500 uppercase mb-1 flex items-center gap-1"><Wallet className="w-3 h-3" /> Comprador</div>
-            <div className="text-slate-200 text-xs font-medium">@{offer.buyerAlias || "—"}</div>
-            <div className="text-[10px] text-slate-600 font-mono mt-0.5">{offer.buyer ? `${offer.buyer.slice(0, 8)}...${offer.buyer.slice(-4)}` : "—"}</div>
-          </div>
-        </div>
-        {offer.productData && (isBuyer || isSeller) && (
-          <div className="bg-slate-950/70 border border-slate-700/50 rounded-lg p-3">
-            <div className="text-[10px] uppercase text-amber-400 font-semibold mb-2 flex items-center gap-1.5"><FileCheck className="w-3 h-3" /> Producto entregado</div>
-            {offer.productData.code && <div className="mb-2"><div className="text-slate-500 text-[10px] mb-0.5">Código:</div><div className="text-slate-200 font-mono text-xs break-all bg-slate-900 p-2 rounded">{offer.productData.code}</div></div>}
-            {offer.productData.credentials && <div className="mb-2"><div className="text-slate-500 text-[10px] mb-0.5">Credenciales:</div><div className="text-slate-200 font-mono text-xs break-all bg-slate-900 p-2 rounded">{offer.productData.credentials}</div></div>}
-            {offer.productData.link && <div className="mb-2"><div className="text-slate-500 text-[10px] mb-0.5">Link:</div><a href={offer.productData.link} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 text-xs break-all">{offer.productData.link}</a></div>}
-            {offer.productData.instructions && <div className="mb-2"><div className="text-slate-500 text-[10px] mb-0.5">Instrucciones:</div><div className="text-slate-300 text-xs">{offer.productData.instructions}</div></div>}
-            <div className="mt-2 pt-2 border-t border-slate-700/50 flex items-center gap-2 text-[11px]">
-              {offer.validationStatus === "VALIDATED" ? <><Check className="w-3 h-3 text-emerald-400" /><span className="text-emerald-400">{offer.validationNote}</span></>
-              : offer.validationStatus === "INVALID" ? <><X className="w-3 h-3 text-red-400" /><span className="text-red-400">{offer.validationNote}</span></>
-              : <><Loader2 className="w-3 h-3 animate-spin text-amber-400" /><span className="text-amber-400">Pendiente</span></>}
-            </div>
-          </div>
-        )}
-        <div className="flex items-center gap-2 flex-wrap">
-          {canDeliver && <button onClick={() => setShowDeliver(!showDeliver)} className="flex items-center gap-1.5 text-xs px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition font-semibold"><Send className="w-3.5 h-3.5" /> Entregar</button>}
-          {canConfirm && <button onClick={() => onAction("confirm", offer.id)} className="flex items-center gap-1.5 text-xs px-3 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg transition font-semibold"><Check className="w-3.5 h-3.5" /> Confirmar</button>}
-          {canDispute && <button onClick={() => onAction("dispute", offer.id)} className="flex items-center gap-1.5 text-xs px-3 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg transition font-semibold"><AlertTriangle className="w-3.5 h-3.5" /> Disputa</button>}
-        </div>
-        {showDeliver && (
-          <div className="bg-slate-950/50 border border-emerald-700/30 rounded-lg p-3 space-y-2">
-            <div className="text-[10px] uppercase text-emerald-400 font-semibold mb-1 flex items-center gap-1"><Shield className="w-3 h-3" /> Entregar + Verificar</div>
-            {offer.type === "GIFT_CARD" && <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Código de gift card" className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-slate-100 text-xs font-mono" />}
-            {offer.type === "GAME_ACCOUNT" && <input value={credentials} onChange={(e) => setCredentials(e.target.value)} placeholder="usuario:password" className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-slate-100 text-xs font-mono" />}
-            {(offer.type === "DIGITAL_PRODUCT" || offer.type === "SUBSCRIPTION") && (
+          <div className="flex items-center gap-2 mt-0.5 text-[9px] text-slate-500">
+            <span>{m.senderAlias}</span>
+            <span>·</span>
+            <Clock className="w-2.5 h-2.5" />
+            <span>{time}</span>
+            {m.immutable && (
               <>
-                <input value={link} onChange={(e) => setLink(e.target.value)} placeholder="Link de descarga" className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-slate-100 text-xs" />
-                <input value={credentials} onChange={(e) => setCredentials(e.target.value)} placeholder="Credenciales (opcional)" className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-slate-100 text-xs font-mono" />
+                <span>·</span>
+                <Hash className="w-2.5 h-2.5" />
+                <span className="font-mono">{m.hash}</span>
               </>
             )}
-            <textarea value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="Instrucciones (opcional)" rows={2} className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-slate-100 text-xs resize-none" />
-            {/* Botón verificar */}
-            <button onClick={verify} disabled={verifying || (!code && !credentials && !link)} className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-semibold transition disabled:opacity-50">
-              {verifying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Shield className="w-3.5 h-3.5" />}
-              {verifying ? "Verificando..." : "Verificar producto"}
-            </button>
-            {verifyResult && (
-              <div className={`p-2 rounded text-[11px] flex items-start gap-1.5 ${verifyResult.valid ? "bg-emerald-950/30 border border-emerald-700/40 text-emerald-300" : "bg-red-950/30 border border-red-700/40 text-red-300"}`}>
-                {verifyResult.valid ? <Check className="w-3 h-3 shrink-0 mt-0.5" /> : <X className="w-3 h-3 shrink-0 mt-0.5" />}
-                <div><div className="font-medium">{verifyResult.message}</div>{verifyResult.details && <div className="text-[10px] mt-0.5 opacity-80">{verifyResult.details}</div>}</div>
-              </div>
+            {m.tag && m.tag !== "SISTEMA" && (
+              <span className="px-1 py-0 bg-amber-950/30 border border-amber-700/30 text-amber-400 rounded text-[8px]">
+                {m.tag}
+              </span>
             )}
-            <button onClick={deliver} className="w-full px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-semibold transition">Entregar y validar</button>
           </div>
-        )}
-        {(isBuyer || isSeller) && offer.buyer && (
-          <div className="bg-slate-950/50 border border-slate-700/50 rounded-lg p-3">
-            <div className="text-[10px] uppercase text-slate-400 font-semibold mb-2 flex items-center gap-1.5"><MessageSquare className="w-3 h-3" /> Mensajes</div>
-            <div className="space-y-2 max-h-40 overflow-y-auto">
-              {messages.length === 0 && <p className="text-[10px] text-slate-600 italic">Sin mensajes</p>}
-              {messages.map((msg: Message) => (
-                <div key={msg.id} className={`text-xs ${msg.sender === user?.walletAddress ? "text-right" : "text-left"}`}>
-                  <div className={`inline-block max-w-[85%] sm:max-w-[80%] px-2.5 py-1.5 rounded-lg ${msg.sender === user?.walletAddress ? "bg-amber-500/20 text-amber-100" : "bg-slate-800 text-slate-300"}`}>
-                    <div className="text-[9px] text-slate-500 mb-0.5">@{msg.senderAlias} · {new Date(msg.timestamp).toLocaleTimeString()}</div>{msg.text}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-2 flex gap-1">
-              <input value={messageText} onChange={(e) => setMessageText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && onSendMessage()} placeholder="Escribe..." className="flex-1 px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded text-slate-100 text-xs" />
-              <button onClick={onSendMessage} className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black rounded text-xs font-semibold transition"><Send className="w-3 h-3" /></button>
-            </div>
-          </div>
-        )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`flex items-start gap-2 max-w-[80%] ${isMine ? "ml-auto flex-row-reverse" : ""}`}>
+      <div className="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center shrink-0 mt-1 text-[10px] font-bold text-slate-200">
+        {m.senderAlias.slice(0, 2).toUpperCase()}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className={`rounded-lg p-2.5 ${isMine ? "bg-emerald-600/20 border border-emerald-600/30" : "bg-slate-800 border border-slate-700"}`}>
+          <p className="text-xs text-slate-100 whitespace-pre-wrap break-words">{m.text}</p>
+        </div>
+        <div className={`flex items-center gap-2 mt-0.5 text-[9px] text-slate-500 ${isMine ? "justify-end" : ""}`}>
+          <span>{m.senderAlias}</span>
+          <span>·</span>
+          <Clock className="w-2.5 h-2.5" />
+          <span>{time}</span>
+          {m.immutable && (
+            <>
+              <span>·</span>
+              <Hash className="w-2.5 h-2.5" />
+              <span className="font-mono">{m.hash}</span>
+            </>
+          )}
+        </div>
       </div>
     </div>
+  );
+}
+
+function QuickCmd({ label, cmd, onClick }: { label: string; cmd: string; onClick: (cmd: string) => void }) {
+  return (
+    <button
+      onClick={() => onClick(cmd)}
+      className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-[10px] text-slate-300 rounded whitespace-nowrap transition shrink-0"
+    >
+      {label}
+    </button>
   );
 }
